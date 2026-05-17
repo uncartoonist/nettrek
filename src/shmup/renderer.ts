@@ -1026,119 +1026,81 @@ export class ShmupRenderer {
           break;
         }
         case 'stationdebris': {
-          // Epic wrecked station — detailed hull with exposed internals
+          // Floating wreckage field — dark silhouettes that blend with the background
+          // Instead of one big hull mass, scatter realistic debris pieces on each side
           const leftEdge = gapCenter - gapHalf;
           const rightEdge = gapCenter + gapHalf;
+          const segSeed = seg.pos.y * 0.013;
 
-          // Left wreckage — layered hull
-          // Outer hull plating
-          const lGrad = ctx.createLinearGradient(0, sy - sh, leftEdge, sy);
-          lGrad.addColorStop(0, '#1a2a3a');
-          lGrad.addColorStop(0.6, '#2a3a4a');
-          lGrad.addColorStop(1, '#3a4a5a');
-          ctx.fillStyle = lGrad;
-          ctx.beginPath();
-          ctx.moveTo(0, sy - sh);
-          ctx.lineTo(leftEdge * 0.4, sy - sh * 0.9);
-          ctx.lineTo(leftEdge - 20, sy - sh * 0.4);
-          ctx.lineTo(leftEdge, sy - 8);
-          ctx.lineTo(leftEdge - 8, sy + 12);
-          ctx.lineTo(leftEdge * 0.5, sy + sh * 0.6);
-          ctx.lineTo(0, sy + sh);
-          ctx.closePath(); ctx.fill();
-
-          // Exposed internal structure (glowing conduits)
-          ctx.strokeStyle = '#44aaff';
-          ctx.lineWidth = 1.5;
-          ctx.globalAlpha = 0.3 + Math.sin(state.tick * 0.04) * 0.15;
-          for (let i = 0; i < 4; i++) {
-            const iy = sy - sh * 0.5 + i * sh * 0.3;
-            ctx.beginPath();
-            ctx.moveTo(leftEdge * 0.3, iy);
-            ctx.lineTo(leftEdge * 0.7, iy + 5);
-            ctx.lineTo(leftEdge - 15, iy + 2);
-            ctx.stroke();
-          }
-
-          // Hull panel lines
-          ctx.strokeStyle = '#4a6a7a';
-          ctx.lineWidth = 0.8;
-          ctx.globalAlpha = 0.4;
-          for (let i = 0; i < 3; i++) {
-            const py = sy - sh * 0.6 + i * sh * 0.4;
-            ctx.beginPath();
-            ctx.moveTo(5, py);
-            ctx.lineTo(leftEdge - 20, py + 3);
-            ctx.stroke();
-          }
-
-          // Right wreckage
-          const rGrad = ctx.createLinearGradient(rightEdge, sy, w, sy - sh);
-          rGrad.addColorStop(0, '#3a4a5a');
-          rGrad.addColorStop(0.4, '#2a3a4a');
-          rGrad.addColorStop(1, '#1a2a3a');
-          ctx.fillStyle = rGrad;
-          ctx.globalAlpha = 1;
-          ctx.beginPath();
-          ctx.moveTo(w, sy - sh);
-          ctx.lineTo(w - (w - rightEdge) * 0.5, sy - sh * 0.8);
-          ctx.lineTo(rightEdge + 15, sy - sh * 0.3);
-          ctx.lineTo(rightEdge, sy + 5);
-          ctx.lineTo(rightEdge + 20, sy + sh * 0.5);
-          ctx.lineTo(w, sy + sh * 0.9);
-          ctx.closePath(); ctx.fill();
-
-          // Right internal conduits
-          ctx.strokeStyle = '#ff6644';
-          ctx.lineWidth = 1.5;
-          ctx.globalAlpha = 0.25 + Math.sin(state.tick * 0.05 + 1) * 0.15;
-          for (let i = 0; i < 3; i++) {
-            const iy = sy - sh * 0.3 + i * sh * 0.3;
-            ctx.beginPath();
-            ctx.moveTo(rightEdge + 20, iy);
-            ctx.lineTo(w - 30, iy - 3);
-            ctx.stroke();
-          }
-
-          // Sparking effects — random electrical arcs
-          if (Math.random() < 0.15) {
-            ctx.strokeStyle = '#ffdd44';
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = 0.8;
-            const sparkSide = Math.random() < 0.5;
-            const sx2 = sparkSide ? leftEdge - 5 : rightEdge + 5;
-            const sy2 = sy + (Math.random() - 0.5) * sh;
-            ctx.beginPath();
-            ctx.moveTo(sx2, sy2);
-            ctx.lineTo(sx2 + (sparkSide ? 12 : -12), sy2 + (Math.random() - 0.5) * 15);
-            ctx.lineTo(sx2 + (sparkSide ? 8 : -8), sy2 + (Math.random() - 0.5) * 20);
-            ctx.stroke();
-            // Spark glow
-            ctx.fillStyle = '#ffee88';
-            ctx.globalAlpha = 0.6;
-            ctx.beginPath(); ctx.arc(sx2, sy2, 3, 0, Math.PI * 2); ctx.fill();
-          }
-
-          // Floating debris particles near the edges
-          ctx.fillStyle = '#5a6a7a';
-          ctx.globalAlpha = 0.5;
-          for (let i = 0; i < 3; i++) {
-            const dx = (Math.sin(state.tick * 0.02 + i * 3) * 15) + (i % 2 === 0 ? leftEdge + 10 : rightEdge - 10);
-            const dy = sy + Math.cos(state.tick * 0.015 + i * 2) * sh * 0.3;
+          // Helper — draw a single piece of floating wreckage (organic silhouette)
+          const drawWreck = (cx: number, cy: number, size: number, seed: number, hasLight: boolean) => {
             ctx.save();
-            ctx.translate(dx, dy);
-            ctx.rotate(state.tick * 0.01 + i);
-            ctx.fillRect(-3, -2, 6, 4);
+            ctx.translate(cx, cy);
+            ctx.rotate(seed * 0.7 + state.tick * 0.0008);
+            // Irregular angular silhouette (8-pt poly with variation)
+            const N = 8;
+            ctx.beginPath();
+            for (let i = 0; i < N; i++) {
+              const a = (Math.PI * 2 / N) * i;
+              const r = size * (0.7 + Math.sin(i * 2.3 + seed) * 0.25 + Math.sin(i * 4.7 + seed * 1.3) * 0.15);
+              if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+              else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.closePath();
+            // Dark silhouette gradient — blends into background
+            const wg = ctx.createRadialGradient(-size * 0.2, -size * 0.2, 0, 0, 0, size);
+            wg.addColorStop(0, 'rgba(40,48,58,0.85)');
+            wg.addColorStop(0.7, 'rgba(20,26,34,0.85)');
+            wg.addColorStop(1, 'rgba(10,14,20,0.85)');
+            ctx.fillStyle = wg;
+            ctx.fill();
+            // Edge rim light (subtle)
+            ctx.strokeStyle = 'rgba(90,110,130,0.35)';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+            // Occasional flickering damage light
+            if (hasLight) {
+              const flicker = Math.sin(state.tick * 0.18 + seed * 7);
+              if (flicker > 0.3) {
+                const lx = Math.cos(seed) * size * 0.3;
+                const ly = Math.sin(seed) * size * 0.3;
+                ctx.fillStyle = '#88aacc';
+                ctx.globalAlpha = (flicker - 0.3) * 0.6;
+                ctx.beginPath(); ctx.arc(lx, ly, 1.2, 0, Math.PI * 2); ctx.fill();
+                // Soft glow
+                ctx.globalAlpha = (flicker - 0.3) * 0.15;
+                ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill();
+              }
+            }
             ctx.restore();
+          };
+
+          // Left side wreckage pieces
+          for (let i = 0; i < 4; i++) {
+            const phase = i * 1.7 + segSeed;
+            const px = leftEdge * (0.15 + (i % 2) * 0.4) + Math.sin(phase) * 12;
+            const py = sy - sh * 0.7 + (sh * 1.5 / 4) * i + Math.cos(phase * 1.3) * 8;
+            const ps = 14 + Math.sin(phase) * 6;
+            drawWreck(px, py, ps, phase, i === 1);
+          }
+          // Right side wreckage pieces
+          for (let i = 0; i < 4; i++) {
+            const phase = i * 2.1 + segSeed + 3.7;
+            const px = w - (w - rightEdge) * (0.15 + (i % 2) * 0.4) + Math.sin(phase) * 12;
+            const py = sy - sh * 0.7 + (sh * 1.5 / 4) * i + Math.cos(phase * 1.1) * 8;
+            const ps = 14 + Math.cos(phase) * 6;
+            drawWreck(px, py, ps, phase, i === 2);
           }
 
-          // Window lights on intact sections
-          ctx.fillStyle = '#44aaff';
-          ctx.globalAlpha = 0.2 + Math.sin(state.tick * 0.08) * 0.1;
-          for (let i = 0; i < 3; i++) {
-            ctx.beginPath();
-            ctx.arc(leftEdge * 0.3 + i * 15, sy - sh * 0.2, 1.5, 0, Math.PI * 2);
-            ctx.fill();
+          // Tiny drifting debris specks (atmospheric depth)
+          ctx.fillStyle = 'rgba(70,82,96,0.5)';
+          for (let i = 0; i < 6; i++) {
+            const phase = i * 0.9 + segSeed * 3;
+            const dx = i % 2 === 0
+              ? leftEdge * 0.3 + Math.sin(state.tick * 0.012 + phase) * 30
+              : w - (w - rightEdge) * 0.3 + Math.sin(state.tick * 0.012 + phase) * 30;
+            const dy = sy - sh + Math.cos(state.tick * 0.008 + phase) * sh * 0.8 + (sh * 2 / 6) * i;
+            ctx.beginPath(); ctx.arc(dx, dy, 0.8 + Math.sin(phase) * 0.4, 0, Math.PI * 2); ctx.fill();
           }
           break;
         }
