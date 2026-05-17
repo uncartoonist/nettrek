@@ -508,12 +508,12 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
 
   // ── Obstacles — spawned exclusively by the music director ──
 
-  // Update obstacles — movement responds to music
+  // Update obstacles — calm, steady drift (no beat-driven rotation jolts)
   const musicPulse = state.beatPulse;
   for (const obs of state.obstacles) {
     obs.pos.x += obs.vel.x;
-    obs.pos.y += obs.vel.y * (0.8 + state.musicIntensity * 0.4);
-    obs.rotation += obs.rotSpeed * (1 + musicPulse * 2);
+    obs.pos.y += obs.vel.y;
+    obs.rotation += obs.rotSpeed;
 
     // Vortex — pull pulses with bass
     if (obs.type === 'vortex' && obs.pullStrength && p.alive && obs.hp > 0) {
@@ -784,8 +784,9 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   if (state.chainTimer > 0) state.chainTimer--;
   else state.chainLevel = Math.max(0, state.chainLevel - 1);
 
-  // Chain popup
-  if (state.chainLevel >= 3 && state.chainTimer === 49) {
+  // Chain popup — only at meaningful milestones (3, 5, 8) on the first frame
+  // they're reached, so we don't spam a popup on every kill in a long chain.
+  if (state.chainTimer === 49 && (state.chainLevel === 3 || state.chainLevel === 5 || state.chainLevel === 8)) {
     const chainText = state.chainLevel >= 8 ? 'UNSTOPPABLE!' : state.chainLevel >= 5 ? `CHAIN x${state.chainLevel}!!` : `CHAIN x${state.chainLevel}`;
     state.popups.push({
       pos: { x: state.screenW / 2, y: state.screenH * 0.3 },
@@ -1481,8 +1482,7 @@ function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
     });
     state.upgradeFlash = `${state.combo} KILL STREAK!`;
     state.upgradeFlashTimer = 60;
-    state.screenFlash = 0.2;
-    state.screenFlashColor = '#ffdd00';
+    // No screen flash for kill streaks — the popup carries the signal
   }
 
   // ═══ CHAIN REACTION — explosion damages nearby enemies ═══
@@ -1937,7 +1937,7 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
         }
       }
       if (evolved > 0) {
-        state.screenFlash = 0.3;
+        // No screen flash — the evolution particles + popup are enough signal
         state.screenFlashColor = '#bb44ff';
         state.popups.push({
           pos: { x: W / 2, y: state.screenH * 0.25 },

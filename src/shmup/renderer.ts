@@ -253,13 +253,7 @@ export class ShmupRenderer {
 
       ctx.restore();
 
-      // Beat pulse tint
-      if (state.beatPulse > 0.05) {
-        ctx.globalAlpha = state.beatPulse * 0.05;
-        ctx.fillStyle = stage?.faction === 'klingon' ? '#ff2200' : stage?.faction === 'romulan' ? '#22ff44' : stage?.faction === 'orion' ? '#ffaa00' : '#0088ff';
-        ctx.fillRect(0, 0, w, h);
-      }
-
+      // (removed: per-beat faction-colored screen tint)
       ctx.globalAlpha = 1;
     }
 
@@ -270,24 +264,16 @@ export class ShmupRenderer {
       ctx.fillRect(star.x * w, sy, 1, 1);
     }
 
-    // Near stars (faster parallax) — streak with music intensity
-    const musicStreak = state.musicIntensity > 0.8 ? 3 + (state.musicIntensity - 0.8) * 15 : 0;
+    // Near stars — calm parallax, no beat-driven brightness/streaking
     for (const star of this.stars) {
       const sy = ((star.y * h + state.scrollY * star.speed) % h + h) % h;
-      const bright = star.brightness * (0.8 + state.beatPulse * 0.5);
-      ctx.fillStyle = `rgba(200,220,255,${Math.min(1, bright)})`;
-      if (musicStreak > 0 && star.speed > 1.2) {
-        // Streak effect during intense music
-        ctx.fillRect(star.x * w, sy, 1, star.speed + musicStreak);
-      } else {
-        ctx.fillRect(star.x * w, sy, star.speed > 1.5 ? 2 : 1, star.speed > 1.5 ? 2 : 1);
-      }
+      ctx.fillStyle = `rgba(200,220,255,${star.brightness})`;
+      ctx.fillRect(star.x * w, sy, star.speed > 1.5 ? 2 : 1, star.speed > 1.5 ? 2 : 1);
     }
 
-    // ── Spectrum highway — FFT bars in perspective rushing toward player ──
-    this.drawSpectrumHighway(ctx, state, w, h);
+    // (removed spectrum highway — perspective frequency bars were strobing)
 
-    // ── Dynamic background events — distant battles, explosions ──
+    // ── Dynamic background events — distant battles ──
     this.drawBackgroundEvents(ctx, state, w, h);
 
     // Environment objects (scrolling terrain)
@@ -1458,31 +1444,25 @@ export class ShmupRenderer {
     }
 
     // ── Chain reaction shockwave rings ──
+    // Single subtle ring per kill (was two rings strobing white+orange).
     for (const zone of state.explosionZones) {
       const progress = 1 - zone.life / 8;
       const ringR = zone.radius * progress;
       ctx.strokeStyle = '#ffaa44';
-      ctx.lineWidth = 3 * (1 - progress);
-      ctx.globalAlpha = (1 - progress) * 0.6;
+      ctx.lineWidth = 2 * (1 - progress);
+      ctx.globalAlpha = (1 - progress) * 0.3;
       ctx.beginPath();
       ctx.arc(zone.pos.x, zone.pos.y, ringR, 0, Math.PI * 2);
-      ctx.stroke();
-      // Inner ring
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5 * (1 - progress);
-      ctx.globalAlpha = (1 - progress) * 0.4;
-      ctx.beginPath();
-      ctx.arc(zone.pos.x, zone.pos.y, ringR * 0.6, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
 
-    // ── Chain level indicator (top-center) ──
-    if (state.chainLevel >= 2) {
+    // ── Chain level indicator (top-center) — static, no strobing ──
+    if (state.chainLevel >= 3) {
       ctx.textAlign = 'center';
       ctx.fillStyle = state.chainLevel >= 8 ? '#ff4444' : state.chainLevel >= 5 ? '#ffaa00' : '#44ffaa';
-      ctx.globalAlpha = 0.7 + Math.sin(state.tick * 0.1) * 0.2;
-      ctx.font = `bold ${12 + state.chainLevel}px Courier New`;
+      ctx.globalAlpha = 0.75;
+      ctx.font = `bold ${12 + Math.min(state.chainLevel, 6)}px Courier New`;
       ctx.fillText(`⚡ CHAIN x${state.chainLevel}`, w / 2, h - 20);
       ctx.textAlign = 'left';
       ctx.globalAlpha = 1;
@@ -1554,34 +1534,10 @@ export class ShmupRenderer {
       this.drawBossHP(state);
     }
 
-    // ── Beat pulse visual — edge glow that breathes with the music ──
-    if (state.beatPulse > 0.05) {
-      const bp = state.beatPulse;
-      const factionColor = stage?.faction === 'klingon' ? '255,50,30' :
-        stage?.faction === 'romulan' ? '30,255,80' :
-        stage?.faction === 'orion' ? '255,170,30' : '0,150,255';
-      // Edge vignette that pulses with bass
-      const grad = ctx.createRadialGradient(w/2, h/2, h*0.3, w/2, h/2, h*0.75);
-      grad.addColorStop(0, 'transparent');
-      grad.addColorStop(1, `rgba(${factionColor},${bp * 0.08})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-      // Bottom glow bar (like a bass speaker visualizer)
-      ctx.fillStyle = `rgba(${factionColor},${bp * 0.12})`;
-      ctx.fillRect(0, h - 3, w * bp, 3);
-      ctx.fillRect(w * (1 - bp), h - 3, w * bp, 3);
-    }
-
-    // ── Music intensity — background energy visualization ──
-    if (state.musicIntensity > 0.6) {
-      const mi = (state.musicIntensity - 0.6) * 2.5; // 0-1 in high range
-      // Top and bottom edge glow lines
-      ctx.globalAlpha = mi * 0.15;
-      ctx.fillStyle = '#4488ff';
-      ctx.fillRect(0, 0, w, 2);
-      ctx.fillRect(0, h - 2, w, 2);
-      ctx.globalAlpha = 1;
-    }
+    // (removed: beat-pulse edge vignette, bottom bass bars, and music-intensity
+    // edge lines — they were strobing the entire screen on every beat. Music
+    // reactivity is still expressed through obstacle rotation, particle accents,
+    // and faction-specific subtle tinting.)
 
     // Armory icon bar — top center
     this.drawArmoryBar(ctx, state, w);
@@ -3094,72 +3050,22 @@ export class ShmupRenderer {
       ctx.fillRect(shipX - 50, shipY + 15, 30, 3);
     }
 
-    // Distant explosions — flashes of orange in the far background (on beat)
-    if (state.beatPulse > 0.15) {
-      const expX = (Math.sin(t * 0.7) * 0.5 + 0.5) * w;
-      const expY = Math.sin(t * 0.3 + 1) * h * 0.3 + h * 0.15;
-      const expR = 15 + state.beatPulse * 30;
-      const expGrad = ctx.createRadialGradient(expX, expY, 0, expX, expY, expR);
-      expGrad.addColorStop(0, `rgba(255,150,50,${state.beatPulse * 0.15})`);
-      expGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = expGrad;
-      ctx.fillRect(expX - expR, expY - expR, expR * 2, expR * 2);
-    }
+    // (removed: per-beat distant orange explosion flashes, nebula lightning
+    // flashes, bass-pulse purple throb from bottom, and high-energy corner
+    // lens flares. These were all strobing the screen on every beat or
+    // intensity threshold and made the game feel like a strobe light.)
 
-    // Nebula lightning (stages 2, 5) — random flashes during high energy
-    if ((state.currentStage === 1 || state.currentStage === 4) && state.musicIntensity > 0.7) {
-      if (Math.random() < 0.02) {
-        const lx = Math.random() * w;
-        const ly = Math.random() * h * 0.4;
-        ctx.strokeStyle = '#aaccff';
-        ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.moveTo(lx, ly);
-        let cx = lx, cy = ly;
-        for (let i = 0; i < 5; i++) {
-          cx += (Math.random() - 0.5) * 40;
-          cy += Math.random() * 30;
-          ctx.lineTo(cx, cy);
-        }
-        ctx.stroke();
-      }
-    }
-
-    // ── Music-reactive atmosphere — the screen breathes with the song ──
+    // Background energy wash — very subtle color tint based on intensity.
+    // Slow-changing so it doesn't strobe; this just shifts the mood over time.
     const mi = state.musicIntensity;
-    const bp = state.beatPulse;
-
-    // Background energy wash — color shifts with intensity
-    if (mi > 0.3) {
+    if (mi > 0.4) {
       const stage2 = state.stages[state.currentStage];
       const factionTint = stage2?.faction === 'klingon' ? [40,10,5] :
         stage2?.faction === 'romulan' ? [5,30,15] :
         stage2?.faction === 'orion' ? [30,20,5] : [5,15,30];
-      ctx.globalAlpha = (mi - 0.3) * 0.06;
+      ctx.globalAlpha = (mi - 0.4) * 0.04;
       ctx.fillStyle = `rgb(${factionTint[0]},${factionTint[1]},${factionTint[2]})`;
       ctx.fillRect(0, 0, w, h);
-    }
-
-    // Bass pulses — deep atmospheric throbs from bottom of screen
-    if (bp > 0.1) {
-      const bassGrad = ctx.createLinearGradient(0, h, 0, h * 0.6);
-      bassGrad.addColorStop(0, `rgba(30,10,60,${bp * 0.12})`);
-      bassGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = bassGrad;
-      ctx.fillRect(0, 0, w, h);
-    }
-
-    // High energy = lens flare in random corner
-    if (mi > 0.8 && t % 120 < 60) {
-      const flareX = Math.sin(t * 0.001) > 0 ? w * 0.85 : w * 0.15;
-      const flareY = h * 0.1;
-      const flareR = 40 + (mi - 0.8) * 200;
-      const flareGrad = ctx.createRadialGradient(flareX, flareY, 0, flareX, flareY, flareR);
-      flareGrad.addColorStop(0, `rgba(200,220,255,${(mi-0.8)*0.08})`);
-      flareGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = flareGrad;
-      ctx.fillRect(flareX - flareR, flareY - flareR, flareR * 2, flareR * 2);
     }
 
     ctx.globalAlpha = 1;
