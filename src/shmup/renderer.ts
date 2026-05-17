@@ -284,6 +284,9 @@ export class ShmupRenderer {
       }
     }
 
+    // ── Spectrum highway — FFT bars in perspective rushing toward player ──
+    this.drawSpectrumHighway(ctx, state, w, h);
+
     // ── Dynamic background events — distant battles, explosions ──
     this.drawBackgroundEvents(ctx, state, w, h);
 
@@ -1418,6 +1421,37 @@ export class ShmupRenderer {
     // Player
     if (state.player.alive) {
       this.drawPlayer(state);
+    }
+
+    // ── Chain reaction shockwave rings ──
+    for (const zone of state.explosionZones) {
+      const progress = 1 - zone.life / 8;
+      const ringR = zone.radius * progress;
+      ctx.strokeStyle = '#ffaa44';
+      ctx.lineWidth = 3 * (1 - progress);
+      ctx.globalAlpha = (1 - progress) * 0.6;
+      ctx.beginPath();
+      ctx.arc(zone.pos.x, zone.pos.y, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner ring
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5 * (1 - progress);
+      ctx.globalAlpha = (1 - progress) * 0.4;
+      ctx.beginPath();
+      ctx.arc(zone.pos.x, zone.pos.y, ringR * 0.6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Chain level indicator (top-center) ──
+    if (state.chainLevel >= 2) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = state.chainLevel >= 8 ? '#ff4444' : state.chainLevel >= 5 ? '#ffaa00' : '#44ffaa';
+      ctx.globalAlpha = 0.7 + Math.sin(state.tick * 0.1) * 0.2;
+      ctx.font = `bold ${12 + state.chainLevel}px Courier New`;
+      ctx.fillText(`⚡ CHAIN x${state.chainLevel}`, w / 2, h - 20);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
     }
 
     // Particles — with glow and trails for premium feel
@@ -2664,6 +2698,46 @@ export class ShmupRenderer {
 
     // Remove off-screen
     this.envObjects = this.envObjects.filter(o => o.pos.y < h + o.size * 2);
+  }
+
+  private drawSpectrumHighway(ctx: CanvasRenderingContext2D, state: ShmupState, w: number, h: number): void {
+    // Skip if no music data or quiet
+    if (state.musicIntensity < 0.1) return;
+
+    const t = state.tick;
+    const mi = state.musicIntensity;
+    const bp = state.beatPulse;
+    const bins = 32; // number of frequency bars
+    const vanishY = h * 0.05; // vanishing point near top
+    const baseY = h * 1.1;   // below screen for perspective depth
+    const centerX = w / 2;
+
+    ctx.save();
+    ctx.globalAlpha = mi * 0.12 + bp * 0.08; // subtle — music controls visibility
+
+    // Draw 4 depth rows rushing toward viewer
+    for (let row = 0; row < 4; row++) {
+      const rowDepth = ((state.scrollY * 0.03 + row * 0.25) % 1); // 0-1, scrolling
+      const rowY = vanishY + (baseY - vanishY) * rowDepth;
+      const spread = rowDepth * w * 0.5; // wider at bottom
+      const barMaxH = 40 * rowDepth * mi; // taller at bottom, scales with music
+      const rowAlpha = rowDepth * 0.7;
+
+      for (let i = 0; i < bins; i++) {
+        const binFrac = (i - bins / 2) / bins;
+        const x = centerX + binFrac * spread * 2;
+        // Simulate FFT data using music state (since raw data isn't directly in state)
+        const barH = barMaxH * (0.3 + Math.sin(i * 0.8 + t * 0.05 + row) * 0.3 + bp * 0.4);
+        const barW = Math.max(1, spread / bins * 0.8);
+
+        // Color: hue shifts per bin, brightness from beat
+        const hue = (i / bins * 180 + t * 0.3 + state.currentStage * 40) % 360;
+        ctx.fillStyle = `hsla(${hue}, 70%, ${40 + bp * 30}%, ${rowAlpha})`;
+        ctx.fillRect(x - barW / 2, rowY - barH, barW, barH);
+      }
+    }
+
+    ctx.restore();
   }
 
   private drawBackgroundEvents(ctx: CanvasRenderingContext2D, state: ShmupState, w: number, h: number): void {

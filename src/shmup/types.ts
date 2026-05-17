@@ -240,6 +240,19 @@ export interface ShmupState {
   // Adaptive difficulty
   deathCount: number;         // deaths this stage (eases difficulty)
   dominanceScore: number;     // running score of how well player is doing
+  // Chain reaction system
+  chainLevel: number;         // current chain multiplier (1-8)
+  chainTimer: number;         // frames until chain decays
+  explosionZones: ExplosionZone[];
+  // Music drop transformations
+  dropCount: number;          // drops detected this stage
+}
+
+export interface ExplosionZone {
+  pos: Vec2;
+  radius: number;
+  damage: number;
+  life: number; // frames remaining
 }
 
 export interface ScorePopup {

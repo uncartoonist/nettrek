@@ -51,6 +51,10 @@ export function createShmupState(): ShmupState {
     popups: [],
     deathCount: 0,
     dominanceScore: 0,
+    chainLevel: 0,
+    chainTimer: 0,
+    explosionZones: [],
+    dropCount: 0,
   };
 }
 
@@ -755,6 +759,42 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   state.popups = state.popups.filter(pop => pop.life > 0);
   if (state.popups.length > 12) state.popups = state.popups.slice(-12);
 
+  // ── Chain reaction — explosion zones damage nearby enemies ──
+  for (const zone of state.explosionZones) {
+    zone.life--;
+    if (zone.life === 7) { // only apply damage on first active frame
+      for (const enemy of state.enemies) {
+        if (!enemy.alive) continue;
+        const dx = enemy.pos.x - zone.pos.x;
+        const dy = enemy.pos.y - zone.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < zone.radius) {
+          const falloff = 1 - dist / zone.radius;
+          enemy.hp -= Math.ceil(zone.damage * falloff);
+          if (enemy.hp <= 0) {
+            killEnemy(state, enemy, events);
+          }
+        }
+      }
+    }
+  }
+  state.explosionZones = state.explosionZones.filter(z => z.life > 0);
+
+  // Chain timer decay
+  if (state.chainTimer > 0) state.chainTimer--;
+  else state.chainLevel = Math.max(0, state.chainLevel - 1);
+
+  // Chain popup
+  if (state.chainLevel >= 3 && state.chainTimer === 49) {
+    const chainText = state.chainLevel >= 8 ? 'UNSTOPPABLE!' : state.chainLevel >= 5 ? `CHAIN x${state.chainLevel}!!` : `CHAIN x${state.chainLevel}`;
+    state.popups.push({
+      pos: { x: state.screenW / 2, y: state.screenH * 0.3 },
+      text: chainText,
+      color: state.chainLevel >= 8 ? '#ff4444' : state.chainLevel >= 5 ? '#ffaa00' : '#44ffaa',
+      life: 40, maxLife: 40,
+    });
+  }
+
   // ── Adaptive difficulty — decay dominance toward neutral ──
   state.dominanceScore *= 0.998;
 
@@ -1445,6 +1485,20 @@ function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
     state.screenFlashColor = '#ffdd00';
   }
 
+  // ═══ CHAIN REACTION — explosion damages nearby enemies ═══
+  const blastRadius = { fighter: 45, bomber: 65, cruiser: 100, elite: 80, turret: 50, boss: 150 }[enemy.type] || 50;
+  // Music amplifies explosions — drops make 50% bigger blasts
+  const musicBoost = state.musicIntensity > 0.7 ? 1.5 : 1;
+  state.explosionZones.push({
+    pos: { ...enemy.pos },
+    radius: blastRadius * musicBoost,
+    damage: 3 + state.chainLevel,
+    life: 8,
+  });
+  // Increment chain
+  state.chainLevel = Math.min(8, state.chainLevel + 1);
+  state.chainTimer = 50;
+
   // ═══ EPIC EXPLOSION SYSTEM ═══
   const W = enemy.width, H = enemy.height;
   const cx = enemy.pos.x, cy = enemy.pos.y;
@@ -1857,6 +1911,42 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
   // Beat pulse (decays naturally in updateShmup)
   if (cmd.bgPulse > state.beatPulse) state.beatPulse = cmd.bgPulse;
   state.musicIntensity = cmd.scrollSpeedMult;
+
+  // Music drop transformation — evolve enemies on big moments
+  if (cmd.fleetEvent) {
+    state.dropCount++;
+    // Every 2nd drop: on-screen fighters evolve into elites (reality shift)
+    if (state.dropCount % 2 === 0) {
+      let evolved = 0;
+      for (const enemy of state.enemies) {
+        if (!enemy.alive || enemy.type !== 'fighter' || evolved >= 3) continue;
+        enemy.type = 'elite';
+        enemy.width = ENEMY_STATS.elite.width;
+        enemy.height = ENEMY_STATS.elite.height;
+        enemy.hp = Math.max(enemy.hp, 15);
+        enemy.maxHp = Math.max(enemy.maxHp, 15);
+        enemy.fireCooldown = ENEMY_STATS.elite.fireCooldown;
+        evolved++;
+        // Evolution flash
+        for (let i = 0; i < 10; i++) {
+          state.particles.push({
+            pos: { ...enemy.pos },
+            vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 },
+            life: 15, maxLife: 15, color: '#bb44ff', size: 3,
+          });
+        }
+      }
+      if (evolved > 0) {
+        state.screenFlash = 0.3;
+        state.screenFlashColor = '#bb44ff';
+        state.popups.push({
+          pos: { x: W / 2, y: state.screenH * 0.25 },
+          text: '⚡ ENEMIES EVOLVED',
+          color: '#bb44ff', life: 50, maxLife: 50,
+        });
+      }
+    }
+  }
 
   // Scroll speed modulation
   state.scrollSpeed = SCROLL_SPEED * cmd.scrollSpeedMult;
