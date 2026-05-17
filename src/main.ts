@@ -200,6 +200,10 @@ document.getElementById('menu-signup')!.addEventListener('click', async () => {
   } catch { status.textContent = 'Saved locally'; status.style.color = '#fa0'; }
 });
 
+// ── Pause state ──
+let paused = false;
+let pausedPhase: string = '';
+
 // Return to hangar on Enter after game over / victory
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Enter') {
@@ -211,19 +215,53 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
     }
   }
-  if (e.code === 'Escape') {
-    if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning') {
-      state.phase = 'hangar';
-      stopMusic();
-      setTimeout(() => playMainTheme(), 500);
-      hangar.show();
+  // Pause toggle — P or Escape
+  if (e.code === 'KeyP' || e.code === 'Escape') {
+    if (paused) {
+      // Unpause
+      paused = false;
+      state.phase = pausedPhase as any;
+      e.preventDefault();
+    } else if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning') {
+      // Pause
+      paused = true;
+      pausedPhase = state.phase;
       e.preventDefault();
     }
+  }
+  // Quit to hangar from pause (Q key)
+  if (e.code === 'KeyQ' && paused) {
+    paused = false;
+    state.phase = 'hangar';
+    stopMusic();
+    setTimeout(() => playMainTheme(), 500);
+    hangar.show();
+    e.preventDefault();
   }
 });
 
 // ── Game Loop ──────────────────────────────────────────────
 function loop() {
+  // Pause handling — still render but don't update
+  if (paused) {
+    renderer.render(state);
+    // Draw pause overlay
+    const ctx = (document.getElementById('game') as HTMLCanvasElement).getContext('2d')!;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px Courier New';
+    ctx.fillText('PAUSED', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+    ctx.fillStyle = '#888';
+    ctx.font = '13px Courier New';
+    ctx.fillText('P or ESC to resume', ctx.canvas.width / 2, ctx.canvas.height / 2 + 15);
+    ctx.fillText('Q to quit to hangar', ctx.canvas.width / 2, ctx.canvas.height / 2 + 35);
+    ctx.textAlign = 'left';
+    requestAnimationFrame(loop);
+    return;
+  }
+
   updateInput();
 
   if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning') {

@@ -25,7 +25,7 @@ export function resetDirector(): void {
   sBass = sMid = sOverall = 0;
   spawnCD = fireCD = puCD = fleetCD = obsCD = 0;
   diffAccum = 0;
-  guaranteedSpawnTimer = 120; // first enemy after 2 seconds
+  guaranteedSpawnTimer = 60; // first enemy after 1 second
 }
 
 function diff(state: ShmupState): number {

@@ -455,20 +455,42 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   }
   state.terrain = state.terrain.filter(seg => seg.life > 0 && seg.pos.y < H + 100);
 
-  // Terrain collision — player takes damage if touching walls
-  if (p.alive && p.invulnTimer <= 0) {
+  // Terrain collision + proximity sparks
+  if (p.alive) {
     for (const seg of state.terrain) {
-      if (!seg.damaging) continue;
       const dy = Math.abs(p.pos.y - seg.pos.y);
-      if (dy < seg.height / 2 + p.height / 2) {
-        // Player is at terrain height — check if outside the gap
-        const gapCenter = seg.gapX * W;
-        const gapHalf = seg.width / 2;
-        const dx = Math.abs(p.pos.x - gapCenter);
+      if (dy > seg.height / 2 + p.height) continue;
+
+      const gapCenter = seg.gapX * W;
+      const gapHalf = seg.width / 2;
+      const dx = Math.abs(p.pos.x - gapCenter);
+
+      // Damaging collision
+      if (seg.damaging && p.invulnTimer <= 0 && dy < seg.height / 2 + p.height / 2) {
         if (dx > gapHalf - p.width * 0.3) {
-          // Player hit the wall!
           hitPlayer(state, events);
           break;
+        }
+      }
+
+      // Proximity sparks — flying close to terrain walls looks cool and gives bonus
+      const edgeDist = gapHalf - dx;
+      if (edgeDist > 0 && edgeDist < 40 && dy < seg.height / 2 + p.height) {
+        // Near the wall edge — sparks!
+        if (state.tick % 4 === 0 && state.particles.length < 400) {
+          const sparkSide = p.pos.x < gapCenter ? -1 : 1;
+          const wallX = gapCenter + sparkSide * gapHalf;
+          state.particles.push({
+            pos: { x: wallX, y: p.pos.y + (Math.random() - 0.5) * 10 },
+            vel: { x: -sparkSide * (2 + Math.random() * 2), y: (Math.random() - 0.5) * 3 },
+            life: 12, maxLife: 12,
+            color: seg.type === 'crystalfield' ? '#44eeff' : seg.type === 'wormholetunnel' ? '#aa66ff' : '#ffaa44',
+            size: 1.5 + Math.random(),
+          });
+        }
+        // Score bonus for flying close (like grazing)
+        if (state.tick % 10 === 0) {
+          state.score += 10;
         }
       }
     }
@@ -1769,7 +1791,7 @@ function collectPowerUp(state: ShmupState, pu: PowerUp): void {
       break;
     case 'drone':
       p.droneActive = true;
-      p.droneTimer = 900; // 15 seconds
+      p.droneTimer = 1500; // 25 seconds
       flashText = '🛸 DRONE DEPLOYED';
       break;
     case 'score2x':
