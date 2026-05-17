@@ -43,6 +43,8 @@ export interface PlayerShip {
   // Shield burst (hard-push / long-press on touch) — defensive panic button
   shieldBurstCooldown: number;  // frames until next burst is allowed
   shieldBurstActive: number;    // frames remaining of active burst visual
+  // Tractor beam slow — T'VAK boss tractor pulse temporarily slows movement
+  tractorSlowTimer: number;
 }
 
 // ── Enemies ────────────────────────────────────────────────
@@ -70,6 +72,7 @@ export interface Enemy {
   phaseCount?: number;
   weakPoints?: WeakPoint[];
   bossType?: string;   // 'warbird', 'dreadnought', etc. — dispatches per-boss combat + visuals
+  deathSequence?: number; // when set, boss is in scripted death FX (frames elapsed)
 }
 
 export interface WeakPoint {
@@ -77,6 +80,13 @@ export interface WeakPoint {
   hp: number;
   maxHp: number;
   alive: boolean;
+  // Named weapon system (T'VAK and future bosses with per-weapon hardpoints).
+  // When set, weaponType drives both rendering color and fire pattern.
+  weaponType?: 'disruptor' | 'plasma' | 'tractor' | 'missile' | 'phaser' | 'torpedo';
+  label?: string;       // shown in the boss subsystem callouts
+  color?: string;       // overrides the default weak-point color
+  fireTimer?: number;   // per-weapon firing cadence
+  fireCooldown?: number;
 }
 
 export interface PathPoint {

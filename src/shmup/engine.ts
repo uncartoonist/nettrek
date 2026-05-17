@@ -96,6 +96,7 @@ function createPlayer(): PlayerShip {
     totalStars: parseInt(localStorage.getItem('nettrek-stars') || '0'),
     shieldBurstCooldown: 0,
     shieldBurstActive: 0,
+    tractorSlowTimer: 0,
   };
 }
 
@@ -216,8 +217,11 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
 
   // ── Player movement ──────────────────────────────────────
   if (p.alive) {
-    p.pos.x += input.moveX * PLAYER_SPEED;
-    p.pos.y += input.moveY * PLAYER_SPEED;
+    // T'VAK tractor beam pulse slows the player while the timer is hot.
+    if (p.tractorSlowTimer > 0) p.tractorSlowTimer--;
+    const speedMult = p.tractorSlowTimer > 0 ? 0.4 : 1;
+    p.pos.x += input.moveX * PLAYER_SPEED * speedMult;
+    p.pos.y += input.moveY * PLAYER_SPEED * speedMult;
     // Clamp to screen
     p.pos.x = Math.max(p.width / 2, Math.min(W - p.width / 2, p.pos.x));
     p.pos.y = Math.max(p.height / 2, Math.min(H - p.height / 2, p.pos.y));
@@ -1272,6 +1276,132 @@ function fireBossSignature(state: ShmupState, boss: Enemy) {
   });
 }
 
+// ── T'VAK multi-stage death sequence ───────────────────────────────
+// Runs for ~3 seconds. Weapons explode one by one across the hull,
+// reactor overloads, then a white flash + debris and the boss is
+// finally cleared. Called from updateEnemy for tvak bosses while
+// deathSequence > 0.
+function runTvakDeathSequence(state: ShmupState, boss: Enemy): void {
+  const t = (boss.deathSequence as number);
+  boss.deathSequence = t + 1;
+
+  // Tiny wobble + slow drift down to convey loss of control
+  boss.pos.x += Math.sin(t * 0.12) * 0.6;
+  boss.pos.y += 0.15;
+
+  // Clear enemy bullets gradually as systems fail
+  if (t % 6 === 0 && state.enemyBullets.length > 0) {
+    state.enemyBullets.pop();
+  }
+
+  // Stage 1 (0-40 frames): weapon ports fail one by one with sparks
+  if (t <= 40 && t % 7 === 0 && boss.weakPoints) {
+    const alive = boss.weakPoints.filter(wp => wp.alive);
+    if (alive.length > 0) {
+      const wp = alive[Math.floor(Math.random() * alive.length)];
+      wp.alive = false;
+      const wx = boss.pos.x + wp.offset.x;
+      const wy = boss.pos.y + wp.offset.y;
+      for (let i = 0; i < 18; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const spd = 2 + Math.random() * 5;
+        state.particles.push({
+          pos: { x: wx, y: wy },
+          vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+          life: 22 + Math.random() * 10, maxLife: 32,
+          color: Math.random() > 0.5 ? '#ffaa44' : '#ff4422',
+          size: 2.5 + Math.random() * 2,
+        });
+      }
+      state.screenShake = Math.max(state.screenShake, 4);
+    }
+  }
+
+  // Stage 2 (40-100 frames): ripple of explosions across the hull
+  if (t > 40 && t < 100 && t % 4 === 0) {
+    const ex = boss.pos.x + (Math.random() - 0.5) * boss.width * 0.9;
+    const ey = boss.pos.y + (Math.random() - 0.5) * boss.height * 0.9;
+    state.screenShake = Math.max(state.screenShake, 3);
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = 2 + Math.random() * 6;
+      state.particles.push({
+        pos: { x: ex, y: ey },
+        vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+        life: 18 + Math.random() * 12, maxLife: 30,
+        color: Math.random() > 0.6 ? '#ffffff' : Math.random() > 0.5 ? '#ffaa44' : '#ff4422',
+        size: 2.5 + Math.random() * 2.5,
+      });
+    }
+  }
+
+  // Stage 3 (100-140 frames): reactor overload — pulsing red glow + bigger booms
+  if (t >= 100 && t < 140) {
+    if (t % 3 === 0) {
+      const ex = boss.pos.x + (Math.random() - 0.5) * boss.width * 0.5;
+      const ey = boss.pos.y + (Math.random() - 0.5) * boss.height * 0.5;
+      for (let i = 0; i < 22; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const spd = 3 + Math.random() * 7;
+        state.particles.push({
+          pos: { x: ex, y: ey },
+          vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+          life: 25 + Math.random() * 15, maxLife: 40,
+          color: Math.random() > 0.5 ? '#ffffff' : '#ff4422',
+          size: 3 + Math.random() * 3,
+        });
+      }
+      state.screenShake = Math.max(state.screenShake, 5);
+    }
+  }
+
+  // Stage 4 (140 frame): WHITE FLASH and final detonation
+  if (t === 140) {
+    state.screenFlash = 1;
+    state.screenFlashColor = '#ffffff';
+    state.screenShake = 20;
+    // Massive radial particle burst
+    for (let i = 0; i < 120; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = 4 + Math.random() * 10;
+      state.particles.push({
+        pos: { ...boss.pos },
+        vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+        life: 40 + Math.random() * 30, maxLife: 70,
+        color: Math.random() > 0.5 ? '#ffffff' : Math.random() > 0.5 ? '#ffaa44' : '#ff4422',
+        size: 3 + Math.random() * 4,
+      });
+    }
+    // Expanding shockwave ring
+    state.explosionZones.push({
+      pos: { ...boss.pos },
+      radius: Math.max(state.screenW, state.screenH) * 0.7,
+      damage: 0,
+      life: 30,
+    });
+  }
+
+  // Stage 5 (140-180): debris drifts down + slow-mo
+  if (t > 140 && t < 180 && t % 5 === 0) {
+    // Drifting debris chunks
+    for (let i = 0; i < 3; i++) {
+      const a = Math.random() * Math.PI * 2;
+      state.particles.push({
+        pos: { x: boss.pos.x + (Math.random()-0.5)*boss.width*0.6, y: boss.pos.y + (Math.random()-0.5)*boss.height*0.6 },
+        vel: { x: Math.cos(a) * 1.5, y: 1 + Math.random() * 1.5 },
+        life: 80, maxLife: 80, color: '#5a5560', size: 3 + Math.random() * 2,
+      });
+    }
+  }
+
+  // Complete — call killEnemy for real
+  if (t >= 180) {
+    boss.hp = 0;
+    state.slowMotion = 90;
+    killEnemy(state, boss, { bossKilled: true });
+  }
+}
+
 // ── Per-boss-type combat ───────────────────────────────────────────
 
 function fireBossPattern(state: ShmupState, boss: Enemy): void {
@@ -1290,6 +1420,89 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
   if (pt > 0 && pt % 300 === 0) fireBossSignature(state, boss);
 
   switch (boss.bossType) {
+    // ── 0. T'VAK CLASS ASSAULT VESSEL (Klingon, stage 1) ───────
+    // Per-hardpoint firing: each weak point fires its own pattern on
+    // its own cooldown. Destroying a hardpoint disables that weapon.
+    // Phase gates which weapons are online:
+    //   phase 0 (100-75% HP): disruptor + plasma only (warmup)
+    //   phase 1 ( 75-50% HP): + missile + phaser  (weapons online)
+    //   phase 2 ( 50-25% HP): + tractor + torpedo (damage state)
+    //   phase 3 (<25% HP):    everything + faster cadence (final form)
+    case 'tvak': {
+      if (!boss.weakPoints) break;
+      const speedBoost = phase >= 3 ? 0.5 : 0; // rage mode fires harder
+      const rateBoost = phase >= 3 ? 0.55 : phase >= 2 ? 0.75 : 1; // smaller = faster
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        // Gate by phase
+        const w = wp.weaponType;
+        if (phase < 1 && (w === 'missile' || w === 'phaser')) continue;
+        if (phase < 2 && (w === 'tractor' || w === 'torpedo')) continue;
+
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (w === 'disruptor') {
+          // Aimed red beam shot — fast travel
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy, Math.cos(a) * (4.5 + speedBoost), Math.sin(a) * (4.5 + speedBoost),
+            { color: col, r: 5, trail: true, ttl: 90 });
+        } else if (w === 'missile') {
+          // Pink missile pair with downward arc — pseudo-homing via slow horizontal nudge
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.25;
+            bulletAt(c, wx + side * 4, wy + 6, Math.cos(a) * 1.8, Math.sin(a) * 2.6,
+              { color: col, r: 5, trail: true, ttl: 140 });
+          }
+        } else if (w === 'plasma') {
+          // Wide purple arc spread — 5 shots in a fan
+          for (let i = -2; i <= 2; i++) {
+            const a = Math.PI / 2 + i * 0.22;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.6, Math.sin(a) * 2.6,
+              { color: col, r: 5, ttl: 110 });
+          }
+        } else if (w === 'tractor') {
+          // Tractor pulse — visual purple ring + slow effect if player is near
+          for (let i = 0; i < 16; i++) {
+            const a = (Math.PI * 2 / 16) * i;
+            state.particles.push({
+              pos: { x: wx, y: wy },
+              vel: { x: Math.cos(a) * 3, y: Math.sin(a) * 3 },
+              life: 26, maxLife: 26, color: col, size: 3,
+            });
+          }
+          // Slow player if they're within range of the pulse
+          const dx = state.player.pos.x - wx;
+          const dy = state.player.pos.y - wy;
+          if (Math.sqrt(dx * dx + dy * dy) < 180) {
+            state.player.tractorSlowTimer = Math.max(state.player.tractorSlowTimer, 50);
+          }
+        } else if (w === 'phaser') {
+          // Rapid green scatter — 3 fast small shots
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.15 + (Math.random() - 0.5) * 0.1;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 3.6, Math.sin(a) * 3.6,
+              { color: col, r: 3, trail: true, ttl: 80 });
+          }
+        } else if (w === 'torpedo') {
+          // Heavy slow red torpedo — single big bomb
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 6, Math.cos(a) * 1.6, Math.sin(a) * 1.6,
+            { color: col, r: 7, trail: true, ttl: 180 });
+        }
+      }
+      // Final-form bonus: central reactor cannon — heavy aimed barrage
+      if (phase >= 3 && pt % 24 === 0) {
+        aimedSpread(c, 5, 0.4, 4 + speedBoost);
+      }
+      break;
+    }
+
     // ── 1. K'TAGH WARBIRD (curtain, klingon) ───────────────────
     case 'warbird':
       if (phase === 0) wingShots(c);
@@ -1600,21 +1813,59 @@ function spawnOutpost(state: ShmupState, W: number): void {
 
 function spawnBoss(state: ShmupState, config: any): void {
   const W = state.screenW;
-  // Create weak points based on boss type
   const weakPoints: import('./types').WeakPoint[] = [];
   const phaseCount = Math.max(1, config.phases || 3);
-  const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
-  for (let i = 0; i < numWP; i++) {
-    const angle = (Math.PI * 2 / numWP) * i - Math.PI / 2;
-    const rx = config.width * 0.35;
-    const ry = config.height * 0.3;
-    weakPoints.push({
-      offset: { x: Math.cos(angle) * rx, y: Math.sin(angle) * ry },
-      hp: Math.floor(config.hp * 0.15),
-      maxHp: Math.floor(config.hp * 0.15),
+
+  if (config.type === 'tvak') {
+    // T'VAK CLASS — 6 named weapon hardpoints, each destroyable, positioned
+    // to match the canonical Klingon War Bird layout from the concept art:
+    //   disruptor cannons   — top inner (red)
+    //   missile bays        — top outer (pink)
+    //   plasma turrets      — mid outer (purple swirls)
+    //   tractor beam        — far mid outer (purple swirls)
+    //   phaser arrays       — bottom inner (green)
+    //   forward torpedoes   — bottom-center cluster (red)
+    const cw = config.width;
+    const ch = config.height;
+    const hardpoint = (x: number, y: number, weapon: import('./types').WeakPoint['weaponType'], label: string, color: string, hpFrac: number, cooldown: number) => ({
+      offset: { x, y },
+      hp: Math.floor(config.hp * hpFrac),
+      maxHp: Math.floor(config.hp * hpFrac),
       alive: true,
+      weaponType: weapon,
+      label,
+      color,
+      fireTimer: Math.floor(Math.random() * cooldown),
+      fireCooldown: cooldown,
     });
+    weakPoints.push(
+      hardpoint(-cw * 0.16, -ch * 0.38, 'disruptor', 'DISRUPTOR', '#ff2a2a', 0.10, 95),
+      hardpoint( cw * 0.16, -ch * 0.38, 'missile',   'MISSILE',   '#ff44aa', 0.10, 140),
+      hardpoint(-cw * 0.34, -ch * 0.12, 'plasma',    'PLASMA',    '#bb44ff', 0.12, 85),
+      hardpoint( cw * 0.34, -ch * 0.12, 'tractor',   'TRACTOR',   '#9933ff', 0.12, 240),
+      hardpoint(-cw * 0.18,  ch * 0.30, 'phaser',    'PHASER',    '#44ff66', 0.10, 70),
+      hardpoint( cw * 0.18,  ch * 0.30, 'torpedo',   'TORPEDO',   '#ff3030', 0.10, 110),
+    );
+  } else {
+    // Generic boss: ring of evenly-spaced weak points
+    const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
+    for (let i = 0; i < numWP; i++) {
+      const angle = (Math.PI * 2 / numWP) * i - Math.PI / 2;
+      const rx = config.width * 0.35;
+      const ry = config.height * 0.3;
+      weakPoints.push({
+        offset: { x: Math.cos(angle) * rx, y: Math.sin(angle) * ry },
+        hp: Math.floor(config.hp * 0.15),
+        maxHp: Math.floor(config.hp * 0.15),
+        alive: true,
+      });
+    }
   }
+
+  // T'VAK has per-weapon cooldowns on its weak points, so the master
+  // fireCooldown runs every frame — fireBossPattern then dispatches to
+  // each active hardpoint based on the weapon's own cadence.
+  const isTvak = config.type === 'tvak';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -1627,8 +1878,8 @@ function spawnBoss(state: ShmupState, config: any): void {
     hp: config.hp,
     maxHp: config.hp,
     alive: true,
-    fireTimer: 60, // longer grace period on spawn
-    fireCooldown: 18,
+    fireTimer: isTvak ? 90 : 60, // grace period before first shot
+    fireCooldown: isTvak ? 1 : 18,
     pathIdx: 0,
     phase: 0,
     phaseTimer: 0,
@@ -1643,6 +1894,12 @@ function spawnBoss(state: ShmupState, config: any): void {
 
 function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): void {
   if (enemy.type === 'boss') {
+    // ── T'VAK death sequence — runs in place of normal combat ──
+    if (enemy.deathSequence !== undefined && enemy.deathSequence > 0) {
+      runTvakDeathSequence(state, enemy);
+      return;
+    }
+
     const targetY = enemy.height * 0.7 + 30;
     const t = state.tick;
 
@@ -1693,12 +1950,13 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           color: Math.random() > 0.5 ? FACTION_COLORS[enemy.faction] : '#ffffff', size: 3 + Math.random() * 4,
         });
       }
-      // Destroy a weak point on phase change
-      if (enemy.weakPoints) {
-        const aliveWP = enemy.weakPoints.filter(wp => wp.alive);
+      // Destroy a weak point on phase change — but ONLY for generic bosses
+      // with the default ring layout. T'VAK and any boss with named
+      // weaponType hardpoints requires the player to take them out.
+      if (enemy.weakPoints && enemy.bossType !== 'tvak') {
+        const aliveWP = enemy.weakPoints.filter(wp => wp.alive && !wp.weaponType);
         if (aliveWP.length > 0) {
           aliveWP[0].alive = false;
-          // Weak point destruction burst
           const wp = aliveWP[0];
           for (let i = 0; i < 20; i++) {
             const a = Math.random() * Math.PI * 2;
@@ -1778,6 +2036,23 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
 }
 
 function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
+  // T'VAK CLASS — multi-stage death sequence (3 seconds). First kill call
+  // pins HP at 1, starts the sequence, and silences combat. The sequence
+  // advances in updateBossDeathSequence below; when it completes it calls
+  // this function again with deathSequence already set, and we fall
+  // through to the standard kill path.
+  if (
+    enemy.type === 'boss' &&
+    enemy.bossType === 'tvak' &&
+    enemy.deathSequence === undefined
+  ) {
+    enemy.deathSequence = 1;
+    enemy.hp = 1;
+    // Freeze the boss's combat — clear all enemy bullets and stop firing
+    enemy.fireTimer = 99999;
+    return;
+  }
+
   enemy.alive = false;
   events.enemyKilled = { ...enemy.pos };
 

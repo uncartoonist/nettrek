@@ -1683,12 +1683,32 @@ export class ShmupRenderer {
     }
 
     // Boss warning banner
-    // Boss warning — just the red pulsating border, no overlay
+    // Red pulsating border. For T'VAK (and other future capital-class
+    // bosses) also drop a center-top "WARNING — CAPITAL CLASS VESSEL
+    // DETECTED" overlay so the player feels the scale of what's coming.
     if (state.bossWarning > 0) {
       const warnAlpha = Math.min(1, state.bossWarning / 30) * (0.5 + Math.sin(state.tick * 0.15) * 0.3);
       ctx.strokeStyle = `rgba(255,0,0,${warnAlpha * 0.6})`;
       ctx.lineWidth = 3;
       ctx.strokeRect(2, 2, w - 4, h - 4);
+
+      const stageNow = state.stages[state.currentStage];
+      if (stageNow?.boss?.type === 'tvak') {
+        ctx.textAlign = 'center';
+        const a = Math.min(1, state.bossWarning / 30) * (0.6 + Math.sin(state.tick * 0.18) * 0.3);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#ff2244';
+        ctx.font = 'bold 16px Courier New';
+        ctx.fillText('⚠  WARNING  ⚠', w / 2, h * 0.22);
+        ctx.font = 'bold 13px Courier New';
+        ctx.fillStyle = '#ff5566';
+        ctx.fillText('CAPITAL CLASS VESSEL DETECTED', w / 2, h * 0.22 + 22);
+        ctx.font = '10px Courier New';
+        ctx.fillStyle = '#aa8888';
+        ctx.fillText(stageNow.boss.name, w / 2, h * 0.22 + 42);
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'left';
+      }
     }
 
     // Boss entrance darkening
@@ -2471,40 +2491,51 @@ export class ShmupRenderer {
       for (const wp of enemy.weakPoints) {
         const wpX = wp.offset.x;
         const wpY = wp.offset.y;
+        // Named hardpoints (T'VAK) draw in their weapon's color; generic
+        // weak points keep the existing yellow.
+        const wpColor = wp.color || '#ffdd00';
+        const isBig = !!wp.weaponType; // bigger glow for boss weapon hardpoints
+        const ringR = isBig ? 14 : 12;
         if (wp.alive) {
-          // Glowing weak point
-          ctx.globalAlpha = 0.6 + Math.sin(tick * 0.08 + wpX) * 0.3;
-          ctx.fillStyle = '#ffdd00';
-          ctx.beginPath();
-          ctx.arc(wpX, wpY, 10, 0, Math.PI * 2);
-          ctx.fill();
-          // Inner core
-          ctx.globalAlpha = 0.9;
+          // Outer aura
+          const auraG = ctx.createRadialGradient(wpX, wpY, 0, wpX, wpY, ringR * 1.6);
+          auraG.addColorStop(0, wpColor);
+          auraG.addColorStop(1, 'transparent');
+          ctx.fillStyle = auraG;
+          ctx.globalAlpha = 0.45 + Math.sin(tick * 0.1 + wpX * 0.04) * 0.25;
+          ctx.beginPath(); ctx.arc(wpX, wpY, ringR * 1.6, 0, Math.PI * 2); ctx.fill();
+          // Bright body
+          ctx.globalAlpha = 0.95;
+          ctx.fillStyle = wpColor;
+          ctx.beginPath(); ctx.arc(wpX, wpY, isBig ? 7 : 5, 0, Math.PI * 2); ctx.fill();
+          // White-hot core
+          ctx.globalAlpha = 0.85;
           ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(wpX, wpY, 5, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(wpX, wpY, isBig ? 3 : 2.2, 0, Math.PI * 2); ctx.fill();
           // HP ring
-          ctx.globalAlpha = 0.7;
-          ctx.strokeStyle = '#ffdd00';
+          ctx.globalAlpha = 0.75;
+          ctx.strokeStyle = wpColor;
           ctx.lineWidth = 2;
-          ctx.beginPath();
           const wpPct = wp.maxHp > 0 ? Math.max(0, Math.min(1, wp.hp / wp.maxHp)) : 0;
-          ctx.arc(wpX, wpY, 12, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * wpPct));
+          ctx.beginPath();
+          ctx.arc(wpX, wpY, ringR, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * wpPct));
           ctx.stroke();
         } else {
           // Destroyed — smoking crater
-          ctx.globalAlpha = 0.4 + Math.sin(tick * 0.05) * 0.15;
+          ctx.globalAlpha = 0.4 + Math.sin(tick * 0.05 + wpX) * 0.15;
           ctx.fillStyle = '#331100';
-          ctx.beginPath();
-          ctx.arc(wpX, wpY, 8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 0.3;
+          ctx.beginPath(); ctx.arc(wpX, wpY, 8, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 0.35;
           ctx.fillStyle = '#ff4400';
-          ctx.beginPath();
-          ctx.arc(wpX, wpY, 5, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(wpX, wpY, 5, 0, Math.PI * 2); ctx.fill();
+          // Occasional sparks
+          if (Math.random() < 0.18) {
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = '#ffaa44';
+            ctx.beginPath(); ctx.arc(wpX + (Math.random()-0.5)*6, wpY + (Math.random()-0.5)*6, 1.5, 0, Math.PI*2); ctx.fill();
+          }
         }
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -2540,6 +2571,7 @@ export class ShmupRenderer {
     const md = this.darkenColor(color, 0.7);
 
     switch (bossType) {
+      case 'tvak':            this.bossHullTvak(ctx, W, H, color, dk, md, tick, phase); break;
       case 'warbird':         this.bossHullWarbird(ctx, W, H, color, dk, md, tick, phase); break;
       case 'dreadnought':     this.bossHullDreadnought(ctx, W, H, color, dk, md, tick, phase); break;
       case 'flagship':        this.bossHullFlagship(ctx, W, H, color, dk, md, tick, phase); break;
@@ -2587,6 +2619,255 @@ export class ShmupRenderer {
     ctx.fillStyle = color; ctx.globalAlpha = 0.5 + Math.sin(tick * 0.05) * 0.3;
     ctx.beginPath(); ctx.arc(0, 0, W * 0.1, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
+  }
+
+  // ── 0. T'VAK CLASS ASSAULT VESSEL — screen-filling Klingon warbird ─
+  // Symmetric capital ship. Layered armor lobes with green energy
+  // conduit strips, central command tower with vertical red core slot,
+  // chevron reactor core. 6 weapon hardpoint glows positioned to match
+  // the engine's weak-point layout. In phase 3 (final form) the wing
+  // armor plates slide outward and the core glows white-hot.
+  private bossHullTvak(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, _dk: string, _md: string, tick: number, phase: number) {
+    // Tunable colors (gunmetal black armor)
+    const armorDark = '#0a0a10';
+    const armorMid = '#1a1a22';
+    const armorLight = '#262630';
+    const conduitGreen = '#22cc44';
+    const conduitGreenDim = '#0a4a18';
+    const coreRed = '#ff2020';
+    const corePulse = 0.6 + Math.sin(tick * 0.08) * 0.3;
+
+    // Final-form armor open: at phase 3, wings rotate slightly outward.
+    const armorSpread = phase >= 3 ? Math.min(1, (tick - (tick - 60)) / 60) * 1.0 : 0;
+    const spreadOff = armorSpread * W * 0.05;
+
+    // ── Outer raptor silhouette — full sweep ──
+    ctx.fillStyle = armorDark;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5);
+    // Right side
+    ctx.lineTo(W * 0.08, -H * 0.45);
+    ctx.lineTo(W * 0.18, -H * 0.32);
+    ctx.lineTo(W * 0.26, -H * 0.18);
+    ctx.lineTo(W * 0.34 + spreadOff, -H * 0.05);
+    ctx.lineTo(W * 0.48 + spreadOff,  H * 0.05);
+    ctx.lineTo(W * 0.46 + spreadOff,  H * 0.18);
+    ctx.lineTo(W * 0.38,  H * 0.30);
+    ctx.lineTo(W * 0.28,  H * 0.34);
+    ctx.lineTo(W * 0.18,  H * 0.32);
+    ctx.lineTo(W * 0.12,  H * 0.42);
+    ctx.lineTo(W * 0.08,  H * 0.5);
+    ctx.lineTo(-W * 0.08, H * 0.5);
+    ctx.lineTo(-W * 0.12, H * 0.42);
+    ctx.lineTo(-W * 0.18, H * 0.32);
+    ctx.lineTo(-W * 0.28, H * 0.34);
+    ctx.lineTo(-W * 0.38, H * 0.30);
+    ctx.lineTo(-W * 0.46 - spreadOff, H * 0.18);
+    ctx.lineTo(-W * 0.48 - spreadOff, H * 0.05);
+    ctx.lineTo(-W * 0.34 - spreadOff, -H * 0.05);
+    ctx.lineTo(-W * 0.26, -H * 0.18);
+    ctx.lineTo(-W * 0.18, -H * 0.32);
+    ctx.lineTo(-W * 0.08, -H * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    // ── Mid armor highlight (subtle plating definition) ──
+    ctx.fillStyle = armorMid;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.42);
+    ctx.lineTo(W * 0.22, -H * 0.2);
+    ctx.lineTo(W * 0.4 + spreadOff, 0);
+    ctx.lineTo(W * 0.32, H * 0.22);
+    ctx.lineTo(0, H * 0.42);
+    ctx.lineTo(-W * 0.32, H * 0.22);
+    ctx.lineTo(-W * 0.4 - spreadOff, 0);
+    ctx.lineTo(-W * 0.22, -H * 0.2);
+    ctx.closePath();
+    ctx.fill();
+
+    // ── Inner armor (rim highlight) ──
+    ctx.strokeStyle = '#3a3a44';
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.42);
+    ctx.lineTo(W * 0.22, -H * 0.2);
+    ctx.lineTo(W * 0.4 + spreadOff, 0);
+    ctx.lineTo(W * 0.32, H * 0.22);
+    ctx.lineTo(0, H * 0.42);
+    ctx.lineTo(-W * 0.32, H * 0.22);
+    ctx.lineTo(-W * 0.4 - spreadOff, 0);
+    ctx.lineTo(-W * 0.22, -H * 0.2);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Wing energy conduits — vertical green strips on each wing ──
+    const drawConduit = (cx: number, cy: number, w: number, h: number, bars: number) => {
+      ctx.fillStyle = conduitGreenDim;
+      ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+      ctx.fillStyle = conduitGreen;
+      ctx.globalAlpha = 0.7 + Math.sin(tick * 0.1 + cx * 0.02) * 0.25;
+      const barH = h / bars - 1;
+      for (let i = 0; i < bars; i++) {
+        ctx.fillRect(cx - w / 2 + 1, cy - h / 2 + i * (barH + 1) + 1, w - 2, barH);
+      }
+      ctx.globalAlpha = 1;
+    };
+    drawConduit(-W * 0.22, H * 0.05, 8, H * 0.32, 7);
+    drawConduit( W * 0.22, H * 0.05, 8, H * 0.32, 7);
+    drawConduit(-W * 0.34, -H * 0.02, 6, H * 0.22, 5);
+    drawConduit( W * 0.34, -H * 0.02, 6, H * 0.22, 5);
+
+    // ── Central command tower (top) ──
+    ctx.fillStyle = armorLight;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5);
+    ctx.lineTo(W * 0.07, -H * 0.45);
+    ctx.lineTo(W * 0.06, -H * 0.32);
+    ctx.lineTo(-W * 0.06, -H * 0.32);
+    ctx.lineTo(-W * 0.07, -H * 0.45);
+    ctx.closePath();
+    ctx.fill();
+    // Tower light (top eye)
+    ctx.fillStyle = coreRed;
+    ctx.globalAlpha = 0.85 + Math.sin(tick * 0.1) * 0.15;
+    ctx.beginPath(); ctx.arc(0, -H * 0.46, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Cyclops eye below tower
+    ctx.fillStyle = '#100000';
+    ctx.beginPath(); ctx.arc(0, -H * 0.28, W * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = coreRed;
+    ctx.globalAlpha = corePulse;
+    ctx.beginPath(); ctx.arc(0, -H * 0.28, W * 0.025, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffaaaa';
+    ctx.globalAlpha = corePulse * 0.7;
+    ctx.beginPath(); ctx.arc(0, -H * 0.28, W * 0.012, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── Central core slot — vertical chevron reactor (the iconic feature) ──
+    const slotTop = -H * 0.15;
+    const slotBot =  H * 0.18;
+    const slotW = W * 0.07 + (armorSpread * W * 0.03); // widens in final form
+    // Slot recess
+    ctx.fillStyle = '#050008';
+    ctx.fillRect(-slotW, slotTop, slotW * 2, slotBot - slotTop);
+    // Chevron stack (5 vertical chevrons pointing up)
+    const chevronCount = 5;
+    const chevSpacing = (slotBot - slotTop) / (chevronCount + 0.5);
+    for (let i = 0; i < chevronCount; i++) {
+      const cy = slotTop + chevSpacing * (i + 0.5);
+      const flow = (tick * 0.04 + i * 0.7) % 1;
+      const intensity = 0.5 + 0.5 * Math.sin(flow * Math.PI);
+      ctx.fillStyle = phase >= 3 ? '#ffffff' : coreRed;
+      ctx.globalAlpha = (phase >= 3 ? 0.85 : 0.75) * intensity;
+      ctx.beginPath();
+      ctx.moveTo(0, cy - chevSpacing * 0.4);
+      ctx.lineTo(slotW * 0.85, cy + chevSpacing * 0.2);
+      ctx.lineTo(slotW * 0.5, cy + chevSpacing * 0.25);
+      ctx.lineTo(0, cy + chevSpacing * 0.05);
+      ctx.lineTo(-slotW * 0.5, cy + chevSpacing * 0.25);
+      ctx.lineTo(-slotW * 0.85, cy + chevSpacing * 0.2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Core glow (final form makes this much brighter)
+    const coreGlow = ctx.createRadialGradient(0, H * 0.02, 0, 0, H * 0.02, W * 0.18);
+    coreGlow.addColorStop(0, `rgba(255,40,40,${phase >= 3 ? 0.7 : 0.35})`);
+    coreGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = coreGlow;
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(0, H * 0.02, W * 0.18, 0, Math.PI * 2); ctx.fill();
+
+    // ── Engine cluster at the bottom (impulse drives) ──
+    for (let i = -1; i <= 1; i++) {
+      const ex = i * W * 0.06;
+      const ey = H * 0.46;
+      ctx.fillStyle = armorMid;
+      ctx.fillRect(ex - 3, ey - H * 0.04, 6, H * 0.08);
+      // Glow
+      ctx.fillStyle = coreRed;
+      ctx.globalAlpha = 0.7 + Math.sin(tick * 0.18 + i) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, ey + H * 0.04, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── 6 weapon hardpoint glows (positions must match spawnBoss layout) ──
+    // Each glow renders LARGER if its weak point is still alive.
+    const drawHardpoint = (x: number, y: number, c: string, online: boolean, big: boolean) => {
+      if (!online) {
+        // Destroyed — sparking ruin
+        ctx.fillStyle = '#332210';
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+        if (Math.random() < 0.25) {
+          ctx.fillStyle = '#ffaa44';
+          ctx.beginPath(); ctx.arc(x + (Math.random()-0.5)*4, y + (Math.random()-0.5)*4, 1.5, 0, Math.PI*2); ctx.fill();
+        }
+        return;
+      }
+      const r1 = big ? 9 : 6;
+      const r2 = big ? 5 : 3.5;
+      // Outer glow
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r1 * 2.2);
+      g.addColorStop(0, c);
+      g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g;
+      ctx.globalAlpha = 0.55 + Math.sin(tick * 0.12 + x * 0.05) * 0.25;
+      ctx.beginPath(); ctx.arc(x, y, r1 * 2.2, 0, Math.PI * 2); ctx.fill();
+      // Bright core
+      ctx.fillStyle = c;
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath(); ctx.arc(x, y, r2, 0, Math.PI * 2); ctx.fill();
+      // White-hot center dot
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.arc(x, y, r2 * 0.35, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    };
+    // (The actual hardpoint draw is taken care of by the generic
+    // weakPoint renderer that runs after drawBossHull — see drawBoss.
+    // We don't double-draw the glow circles here. The hull just shows
+    // the structural mount points.)
+    // Mount sockets (small dark recesses under each hardpoint)
+    const sockets = [
+      { x: -W * 0.16, y: -H * 0.38 }, { x:  W * 0.16, y: -H * 0.38 },
+      { x: -W * 0.34, y: -H * 0.12 }, { x:  W * 0.34, y: -H * 0.12 },
+      { x: -W * 0.18, y:  H * 0.30 }, { x:  W * 0.18, y:  H * 0.30 },
+    ];
+    ctx.fillStyle = '#050508';
+    for (const s of sockets) { ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI * 2); ctx.fill(); }
+
+    // ── Bottom torpedo cluster (3 launch tubes — purely decorative,
+    // the actual TORPEDO weapon glow sits on top via weakPoints) ──
+    for (let i = -1; i <= 1; i++) {
+      const tx = i * W * 0.05 + W * 0.18;
+      ctx.fillStyle = armorMid;
+      ctx.fillRect(tx - 2.5, H * 0.34, 5, H * 0.1);
+      ctx.fillStyle = coreRed;
+      ctx.globalAlpha = 0.7 + Math.sin(tick * 0.2 + i * 1.7) * 0.25;
+      ctx.beginPath(); ctx.arc(tx, H * 0.42, 2, 0, Math.PI * 2); ctx.fill();
+      // Mirror left side too
+      const txL = -tx;
+      ctx.fillStyle = armorMid;
+      ctx.fillRect(txL - 2.5, H * 0.34, 5, H * 0.1);
+      ctx.fillStyle = coreRed;
+      ctx.beginPath(); ctx.arc(txL, H * 0.42, 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Subtle scanline overlay on the hull (retro-arcade feel) ──
+    ctx.globalAlpha = 0.05;
+    ctx.fillStyle = '#000000';
+    for (let y = -H * 0.5; y < H * 0.5; y += 3) {
+      ctx.fillRect(-W * 0.5, y, W, 1);
+    }
+    ctx.globalAlpha = 1;
+
+    // Reference: hardpoint glow circles are added by the generic
+    // weakPoint renderer downstream in drawBoss — see how it iterates
+    // enemy.weakPoints. The 'drawHardpoint' helper above is reserved
+    // for future use and intentionally not called here to avoid double-rendering.
+    void drawHardpoint;
   }
 
   // ── 1. K'TAGH WARBIRD — Klingon, swept wings, brutal angles ──────
@@ -3477,10 +3758,52 @@ export class ShmupRenderer {
 
     // Weak points remaining
     if (boss?.weakPoints) {
-      const alive = boss.weakPoints.filter((wp: any) => wp.alive).length;
       const total = boss.weakPoints.length;
-      if (total > 0) {
+      // T'VAK and other named-weapon bosses show color-coded subsystem
+      // callouts rather than a row of dots.
+      const named = boss.weakPoints.filter((wp: any) => wp.weaponType);
+      if (named.length > 0) {
+        ctx.font = 'bold 9px Courier New';
+        const labels: string[] = [];
+        for (const wp of named) {
+          if (!wp.alive) continue;
+          labels.push(wp.label || (wp.weaponType as string).toUpperCase());
+        }
+        const subY = barY + barH + 14;
+        ctx.fillStyle = '#666';
+        ctx.fillText('SUBSYSTEMS', w / 2, subY);
+        // Render colored chips for each living subsystem in a centered row
+        let chipX = 0;
+        ctx.font = 'bold 8px Courier New';
+        const chips: { text: string; color: string; }[] = [];
+        for (const wp of named) {
+          if (!wp.alive) continue;
+          chips.push({ text: wp.label || '', color: wp.color || '#ffdd00' });
+        }
+        if (chips.length === 0) {
+          ctx.fillStyle = '#664';
+          ctx.fillText('ALL SUBSYSTEMS OFFLINE', w / 2, subY + 12);
+        } else {
+          // Lay out chips
+          const padX = 4;
+          const widths = chips.map(c => ctx.measureText(c.text).width + padX * 2);
+          const totalChipW = widths.reduce((s, x) => s + x + 4, -4);
+          let cx = w / 2 - totalChipW / 2;
+          for (let i = 0; i < chips.length; i++) {
+            const cw = widths[i];
+            ctx.fillStyle = chips[i].color;
+            ctx.globalAlpha = 0.18;
+            ctx.fillRect(cx, subY + 4, cw, 11);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = chips[i].color;
+            ctx.textAlign = 'center';
+            ctx.fillText(chips[i].text, cx + cw / 2, subY + 13);
+            cx += cw + 4;
+          }
+        }
+      } else if (total > 0) {
         ctx.font = '9px Courier New';
+        const alive = boss.weakPoints.filter((wp: any) => wp.alive).length;
         ctx.fillStyle = alive > 0 ? '#ffdd00' : '#666';
         ctx.fillText(`WEAK POINTS: ${'◉'.repeat(alive)}${'◎'.repeat(total - alive)}`, w / 2, barY + barH + 14);
       }
