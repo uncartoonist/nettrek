@@ -698,14 +698,6 @@ export class ShmupRenderer {
         ctx.beginPath(); ctx.arc(-R*0.04, -R*0.04, R*0.04, 0, Math.PI*2); ctx.fill();
         ctx.globalAlpha = 1;
 
-      } else if (obs.type === 'staticturret' || obs.type === 'lasergate') {
-        // Legacy types — render as simple energy node if they somehow exist
-        const R = obs.radius;
-        ctx.fillStyle = '#2a2a3a';
-        ctx.beginPath(); ctx.arc(0, 0, R * 0.7, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#4a4a6a'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(0, 0, R * 0.7, 0, Math.PI*2); ctx.stroke();
-
       } else if (obs.type === 'vortex') {
         // Gravitational anomaly — swirling accretion disk
         const R = obs.radius;
@@ -759,6 +751,106 @@ export class ShmupRenderer {
         ctx.globalAlpha = 0.3 + Math.sin(t*0.1)*0.15;
         ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI*2); ctx.fill();
         ctx.globalAlpha = 1;
+
+      } else if (obs.type === 'comet') {
+        // Comet — bright head with long luminous tail
+        const R = obs.radius;
+        const t = state.tick;
+        // Tail glow (rendered at angle of movement)
+        const moveAngle = Math.atan2(-obs.vel.y, -obs.vel.x);
+        ctx.save(); ctx.rotate(moveAngle + Math.PI/2);
+        // Tail gradient
+        const tailGrad = ctx.createLinearGradient(0, 0, 0, R * 6);
+        tailGrad.addColorStop(0, 'rgba(150,200,255,0.5)');
+        tailGrad.addColorStop(0.3, 'rgba(100,160,255,0.25)');
+        tailGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = tailGrad;
+        ctx.beginPath();
+        ctx.moveTo(-R * 0.8, 0);
+        ctx.quadraticCurveTo(-R * 0.3, R * 3, 0, R * 6);
+        ctx.quadraticCurveTo(R * 0.3, R * 3, R * 0.8, 0);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        // Head — bright core
+        const headGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+        headGrad.addColorStop(0, '#ffffff');
+        headGrad.addColorStop(0.3, '#aaddff');
+        headGrad.addColorStop(0.7, '#4488cc');
+        headGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = headGrad;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI*2); ctx.fill();
+        // Sparkle
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.6 + Math.sin(t * 0.2) * 0.3;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.3, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+
+      } else if (obs.type === 'energyribbon') {
+        // Energy ribbon — flowing sine wave trail through space
+        const t = state.tick;
+        const points = obs.ribbonPoints || [];
+        if (points.length > 2) {
+          // Draw the ribbon as a gradient stroke
+          ctx.save();
+          // Reset translation since ribbon uses absolute positions
+          ctx.restore(); ctx.save();
+          ctx.translate(-obs.pos.x, -obs.pos.y); // undo the obs translate
+          ctx.strokeStyle = `hsla(${(t * 0.5) % 360}, 80%, 60%, 0.6)`;
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length; i++) {
+            const prev = points[i-1];
+            const curr = points[i];
+            const cpx = (prev.x + curr.x) / 2;
+            const cpy = (prev.y + curr.y) / 2;
+            ctx.quadraticCurveTo(prev.x, prev.y, cpx, cpy);
+          }
+          ctx.stroke();
+          // Glow pass
+          ctx.strokeStyle = `hsla(${(t * 0.5) % 360}, 80%, 70%, 0.15)`;
+          ctx.lineWidth = 8;
+          ctx.stroke();
+          // Head glow
+          const head = points[points.length - 1];
+          ctx.fillStyle = `hsla(${(t * 0.5) % 360}, 90%, 80%, 0.7)`;
+          ctx.beginPath(); ctx.arc(head.x, head.y, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.restore(); ctx.save(); ctx.translate(obs.pos.x, obs.pos.y);
+        }
+        ctx.globalAlpha = 1;
+
+      } else if (obs.type === 'splitter') {
+        // Splitter asteroid — cracked rock that breaks apart
+        const R = obs.radius;
+        const s = obs.rotation * 100;
+        // Irregular shape with visible crack lines
+        const N = 10;
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) {
+          const a = (Math.PI * 2 / N) * i;
+          const wobble = Math.sin(i * 3.1 + s) * 0.2 + Math.sin(i * 5.7 + s * 1.2) * 0.1;
+          const r = R * (0.75 + wobble);
+          if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath();
+        // Stage-colored fill
+        const sc = ['#5a5045','#4a6a5a','#7a6a4a','#5a5570','#5a4a7a','#6a4a4a','#3a3050','#4a6a6a','#6a5040'][state.currentStage % 9];
+        ctx.fillStyle = sc;
+        ctx.fill();
+        // Crack lines — shows it's about to break
+        ctx.strokeStyle = '#ffaa44';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.4 + Math.sin(state.tick * 0.08) * 0.2;
+        ctx.beginPath(); ctx.moveTo(-R*0.3, -R*0.4); ctx.lineTo(R*0.2, R*0.3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(R*0.1, -R*0.3); ctx.lineTo(-R*0.2, R*0.2); ctx.stroke();
+        // Glowing fissure core
+        ctx.fillStyle = '#ff8844';
+        ctx.globalAlpha = 0.2 + Math.sin(state.tick * 0.1) * 0.1;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+
       } else {
         // Energy nexus — elegant floating energy sphere that pulses with the music
         const R = obs.radius;

@@ -87,7 +87,7 @@ export interface Bullet {
 }
 
 // ── Obstacles ──────────────────────────────────────────────
-export type ObstacleType = 'rock' | 'mine' | 'barrier' | 'lasergate' | 'vortex' | 'staticturret';
+export type ObstacleType = 'rock' | 'mine' | 'barrier' | 'vortex' | 'comet' | 'energyribbon' | 'splitter';
 
 export interface Obstacle {
   pos: Vec2;
@@ -97,10 +97,9 @@ export interface Obstacle {
   type: ObstacleType;
   rotation: number;
   rotSpeed: number;
-  fireTimer?: number;    // for static turrets
-  laserActive?: boolean; // for laser gates
-  laserPhase?: number;   // pulse timing
   pullStrength?: number; // for vortex
+  ribbonPoints?: Vec2[]; // for energy ribbons — trail of points
+  splitCount?: number;   // for splitter rocks — how many times it splits
 }
 
 // ── Outposts — hover to loot ──────────────────────────────

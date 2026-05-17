@@ -502,56 +502,82 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     }
   }
 
-  // ── Obstacles — spawned by music director, not randomly ──
-  const obstacleRate = 0; // disabled — director handles this now
-  if (!state.bossActive && Math.random() < obstacleRate) {
-    const roll = Math.random();
-    const radius = 12 + Math.random() * 25;
-    let obsType: 'rock' | 'mine' | 'barrier' | 'lasergate' | 'vortex' | 'staticturret';
-    if (roll < 0.55) obsType = 'rock';
-    else if (roll < 0.7) obsType = 'mine';
-    else if (roll < 0.8) obsType = 'barrier';
-    else if (roll < 0.88 && state.currentStage >= 2) obsType = 'staticturret';
-    else if (roll < 0.94 && state.currentStage >= 3) obsType = 'lasergate';
-    else if (state.currentStage >= 4) obsType = 'vortex';
-    else obsType = 'rock';
-
-    state.obstacles.push({
-      pos: { x: 40 + Math.random() * (W - 80), y: -radius * 2 },
-      vel: { x: (Math.random() - 0.5) * 1, y: obsType === 'staticturret' ? 1.2 : obsType === 'lasergate' ? 0.8 : 1 + Math.random() * 2 },
-      radius: obsType === 'lasergate' ? W * 0.3 : obsType === 'staticturret' ? 20 : radius,
-      hp: obsType === 'staticturret' ? 12 : obsType === 'lasergate' ? 8 : Math.ceil(radius / 5),
-      type: obsType,
-      rotation: Math.random() * Math.PI * 2,
-      rotSpeed: obsType === 'vortex' ? 0.08 : (Math.random() - 0.5) * 0.04,
-      fireTimer: obsType === 'staticturret' ? 60 + Math.floor(Math.random() * 30) : undefined,
-      laserActive: obsType === 'lasergate' ? false : undefined,
-      laserPhase: obsType === 'lasergate' ? Math.random() * Math.PI * 2 : undefined,
-      pullStrength: obsType === 'vortex' ? 0.3 + Math.random() * 0.4 : undefined,
-    });
-  }
+  // ── Obstacles — spawned exclusively by the music director ──
 
   // Update obstacles — movement responds to music
   const musicPulse = state.beatPulse;
   for (const obs of state.obstacles) {
     obs.pos.x += obs.vel.x;
-    obs.pos.y += obs.vel.y * (0.8 + state.musicIntensity * 0.4); // drift faster when music is intense
-    obs.rotation += obs.rotSpeed * (1 + musicPulse * 2); // spin faster on beat
+    obs.pos.y += obs.vel.y * (0.8 + state.musicIntensity * 0.4);
+    obs.rotation += obs.rotSpeed * (1 + musicPulse * 2);
 
-    // Vortex — pull strength pulses with bass (stronger on beat)
+    // Vortex — pull pulses with bass
     if (obs.type === 'vortex' && obs.pullStrength && p.alive && obs.hp > 0) {
       const dx = obs.pos.x - p.pos.x;
       const dy = obs.pos.y - p.pos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 130 && dist > 5) {
-        const musicBoost = 1 + musicPulse * 1.5; // stronger on beat
-        const pull = obs.pullStrength * (1 - dist / 130) * musicBoost;
+        const pull = obs.pullStrength * (1 - dist / 130) * (1 + musicPulse * 1.5);
         p.pos.x += (dx / dist) * pull * 1.5;
         p.pos.y += (dy / dist) * pull * 1.5;
       }
     }
+
+    // Comet — trail particles
+    if (obs.type === 'comet' && state.tick % 2 === 0 && state.particles.length < 450) {
+      state.particles.push({
+        pos: { x: obs.pos.x + (Math.random()-0.5)*4, y: obs.pos.y + obs.radius },
+        vel: { x: (Math.random()-0.5)*0.8, y: -obs.vel.y * 0.3 },
+        life: 18 + Math.random()*12, maxLife: 30,
+        color: Math.random() > 0.5 ? '#88ccff' : '#aaddff', size: 2 + Math.random()*2,
+      });
+    }
+
+    // Energy ribbon — snakes through space, builds trail
+    if (obs.type === 'energyribbon' && obs.ribbonPoints) {
+      // Sinusoidal movement
+      obs.pos.x += Math.sin(state.tick * 0.04 + obs.rotation * 10) * 1.5;
+      // Store trail points
+      if (state.tick % 3 === 0) {
+        obs.ribbonPoints.push({ x: obs.pos.x, y: obs.pos.y });
+        if (obs.ribbonPoints.length > 25) obs.ribbonPoints.shift();
+      }
+    }
   }
-  state.obstacles = state.obstacles.filter(o => o.pos.y < H + 60 && o.hp > 0);
+
+  // Splitter — when destroyed, breaks into smaller rocks
+  const newSplits: typeof state.obstacles = [];
+  state.obstacles = state.obstacles.filter(o => {
+    if (o.hp <= 0 && o.type === 'splitter' && o.splitCount && o.splitCount > 0) {
+      // Spawn 2-3 smaller rocks
+      const count = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + Math.random() * 0.5;
+        newSplits.push({
+          pos: { x: o.pos.x + Math.cos(angle) * 10, y: o.pos.y + Math.sin(angle) * 10 },
+          vel: { x: Math.cos(angle) * 1.5 + o.vel.x, y: Math.sin(angle) * 1 + o.vel.y },
+          radius: o.radius * 0.5,
+          hp: Math.ceil(o.radius * 0.5 / 4),
+          type: o.splitCount > 1 ? 'splitter' : 'rock',
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.06,
+          splitCount: o.splitCount - 1,
+        });
+      }
+      // Mini explosion
+      for (let i = 0; i < 8; i++) {
+        const a = Math.random() * Math.PI * 2;
+        state.particles.push({
+          pos: { ...o.pos }, vel: { x: Math.cos(a)*3, y: Math.sin(a)*3 },
+          life: 12, maxLife: 12, color: '#887766', size: 2,
+        });
+      }
+      state.score += 30;
+      return false;
+    }
+    return o.pos.y < H + 60 && o.hp > 0;
+  });
+  state.obstacles.push(...newSplits);
 
   // Player bullets vs obstacles
   for (const bullet of state.playerBullets) {
@@ -1874,28 +1900,46 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
 
   // Spawn obstacle from director
   // Spawn obstacles driven by music mood
-  if (cmd.spawnObstacle && W > 0 && state.obstacles.length < 6) {
-    // Choose type based on music intensity — calm = graceful rocks, intense = energy/vortex
+  if (cmd.spawnObstacle && W > 0 && state.obstacles.length < 8) {
     const intensity = state.musicIntensity;
-    let obsType: 'rock' | 'mine' | 'barrier' | 'vortex';
-    if (intensity > 0.7) obsType = Math.random() < 0.4 ? 'vortex' : 'barrier';
-    else if (intensity > 0.4) obsType = Math.random() < 0.3 ? 'barrier' : Math.random() < 0.5 ? 'mine' : 'rock';
-    else obsType = 'rock'; // quiet = just floating asteroids
+    const roll = Math.random();
+    let obsType: 'rock' | 'mine' | 'barrier' | 'vortex' | 'comet' | 'energyribbon' | 'splitter';
+
+    if (intensity > 0.8) {
+      // Peak energy — spectacular obstacles
+      obsType = roll < 0.3 ? 'vortex' : roll < 0.5 ? 'comet' : roll < 0.7 ? 'energyribbon' : 'barrier';
+    } else if (intensity > 0.5) {
+      // Moderate — mix of interesting types
+      obsType = roll < 0.25 ? 'splitter' : roll < 0.45 ? 'comet' : roll < 0.65 ? 'barrier' : roll < 0.85 ? 'mine' : 'energyribbon';
+    } else if (intensity > 0.25) {
+      // Low-moderate — mostly rocks with occasional interest
+      obsType = roll < 0.5 ? 'rock' : roll < 0.7 ? 'splitter' : roll < 0.85 ? 'mine' : 'comet';
+    } else {
+      // Quiet — graceful floating rocks
+      obsType = roll < 0.8 ? 'rock' : 'comet';
+    }
 
     const radius = obsType === 'vortex' ? 25 + Math.random() * 15
-      : obsType === 'barrier' ? 18 + Math.random() * 12
-      : 16 + Math.random() * 22;
+      : obsType === 'comet' ? 10 + Math.random() * 8
+      : obsType === 'energyribbon' ? 5
+      : obsType === 'splitter' ? 20 + Math.random() * 15
+      : 14 + Math.random() * 20;
 
-    // Graceful, slow drift — not thrown at the player
+    // Comets streak fast, everything else drifts gracefully
+    const vy = obsType === 'comet' ? 3 + Math.random() * 3 : 0.4 + Math.random() * 0.7;
+    const vx = obsType === 'comet' ? (Math.random() - 0.5) * 2 : (Math.random() - 0.5) * 0.5;
+
     state.obstacles.push({
       pos: { x: 40 + Math.random() * (W - 80), y: -radius * 2 },
-      vel: { x: (Math.random() - 0.5) * 0.6, y: 0.5 + Math.random() * 0.8 },
+      vel: { x: vx, y: vy },
       radius,
-      hp: Math.ceil(radius / 4),
+      hp: obsType === 'energyribbon' ? 999 : obsType === 'comet' ? 2 : Math.ceil(radius / 4),
       type: obsType,
       rotation: Math.random() * Math.PI * 2,
-      rotSpeed: obsType === 'vortex' ? 0.06 : (Math.random() - 0.5) * 0.02,
-      pullStrength: obsType === 'vortex' ? 0.2 + intensity * 0.3 : undefined,
+      rotSpeed: obsType === 'vortex' ? 0.06 : obsType === 'comet' ? 0.15 : (Math.random() - 0.5) * 0.02,
+      pullStrength: obsType === 'vortex' ? 0.15 + intensity * 0.25 : undefined,
+      ribbonPoints: obsType === 'energyribbon' ? [] : undefined,
+      splitCount: obsType === 'splitter' ? 2 : undefined,
     });
   }
 }

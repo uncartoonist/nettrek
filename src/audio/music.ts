@@ -8,12 +8,14 @@ const STAGE_TRACKS: string[] = [
   '/music/Bass Barcode.mp3',            // Stage 1: Neutral Zone
   '/music/Circuit Synesthesia.mp3',     // Stage 2: Romulan Nebula
   '/music/Loop Circuit Love.mp3',       // Stage 3: Orion Syndicate
-  '/music/Static Pulse.mp3',            // Stage 4: Deep Space Anomaly
-  '/music/Ultrasonic Pilgrimage.mp3',   // Stage 5: Wormhole Transit
-  '/music/Nebula Drumline.mp3',         // Stage 6: Final Fortress
-  '/music/Dark Lattice Groove.mp3',     // Stage 7: Black Hole Perimeter
-  '/music/Subglobe Drone.mp3',          // Stage 8: Subspace Rift
-  '/music/Static Pulse.mp3',            // Stage 9: Omega Citadel (reprise, intense)
+  '/music/Gravitational Lull.mp3',      // Stage 4: Gravity Well (NEW)
+  '/music/Static Pulse.mp3',            // Stage 5: Deep Space Anomaly
+  '/music/Ultrasonic Pilgrimage.mp3',   // Stage 6: Wormhole Transit
+  '/music/Nebula Drumline.mp3',         // Stage 7: Final Fortress
+  '/music/Dark Lattice Groove.mp3',     // Stage 8: Black Hole Perimeter
+  '/music/Gravitational Lull1.mp3',     // Stage 9: Singularity Core (NEW)
+  '/music/Subglobe Drone.mp3',          // Stage 10: Subspace Rift
+  '/music/Static Pulse.mp3',            // Stage 11: Omega Citadel
 ];
 
 let currentAudio: HTMLAudioElement | null = null;
