@@ -199,9 +199,30 @@ export const STAGES: Stage[] = [
     boss: { name: 'Orion Flagship', type: 'flagship', hp: 500, width: 180, height: 110, phases: 5, faction: 'orion' },
   },
 
-  // ── Stage 4: Deep Space Anomaly ───────────────────────────
+  // ── Stage 4: Gravity Well ─────────────────────────────────
+  // Music: Gravitational Lull. Ambient, slow, ominous. Signature: vortex_storm.
   {
     id: 4,
+    name: 'GRAVITY WELL',
+    subtitle: 'Caught in the Pull — Singularity Sector',
+    faction: 'romulan',
+    background: '#080510',
+    duration: 2400,
+    waves: [
+      { time: 120, enemies: [
+        { type: 'cruiser', faction: 'romulan', x: 0.5, path: straight(0.5), dropType: 'shield' },
+      ]},
+      { time: 600, enemies: [
+        { type: 'elite', faction: 'romulan', x: 0.3, path: zigzag(0.3), dropType: 'star' },
+        { type: 'elite', faction: 'romulan', x: 0.7, path: zigzag(0.7), dropType: 'weapon' },
+      ]},
+    ],
+    boss: { name: 'Singularity Marauder', type: 'gravitymarauder', hp: 650, width: 170, height: 110, phases: 4, faction: 'romulan' },
+  },
+
+  // ── Stage 5: Deep Space Anomaly ───────────────────────────
+  {
+    id: 5,
     name: 'DEEP SPACE ANOMALY',
     subtitle: 'Uncharted Sector — Mixed Hostiles',
     faction: 'klingon',
@@ -258,9 +279,9 @@ export const STAGES: Stage[] = [
     boss: { name: 'Anomaly Guardian', type: 'guardian', hp: 600, width: 160, height: 100, phases: 4, faction: 'klingon' },
   },
 
-  // ── Stage 5: Wormhole Transit ─────────────────────────────
+  // ── Stage 6: Wormhole Transit ─────────────────────────────
   {
-    id: 5,
+    id: 6,
     name: 'WORMHOLE TRANSIT',
     subtitle: 'Dimensional Rift — Reality Distortion',
     faction: 'romulan',
@@ -306,9 +327,9 @@ export const STAGES: Stage[] = [
     boss: { name: 'Rift Sovereign', type: 'sovereign', hp: 700, width: 170, height: 110, phases: 4, faction: 'romulan' },
   },
 
-  // ── Stage 6: Final Fortress ───────────────────────────────
+  // ── Stage 7: Final Fortress ───────────────────────────────
   {
-    id: 6,
+    id: 7,
     name: 'FINAL FORTRESS',
     subtitle: 'Enemy Stronghold — All-Out Assault',
     faction: 'orion',
@@ -376,9 +397,9 @@ export const STAGES: Stage[] = [
     boss: { name: 'Fortress Command', type: 'fortress', hp: 1000, width: 200, height: 130, phases: 5, faction: 'orion' },
   },
 
-  // ── Stage 7: Black Hole Perimeter ─────────────────────────
+  // ── Stage 8: Black Hole Perimeter ─────────────────────────
   {
-    id: 7,
+    id: 8,
     name: 'BLACK HOLE PERIMETER',
     subtitle: 'Event Horizon — Gravitational Collapse',
     faction: 'klingon',
@@ -436,9 +457,30 @@ export const STAGES: Stage[] = [
     boss: { name: 'Singularity Dreadnought', type: 'singularity', hp: 1200, width: 220, height: 140, phases: 5, faction: 'klingon' },
   },
 
-  // ── Stage 8: Subspace Rift ────────────────────────────────
+  // ── Stage 9: Singularity Core ─────────────────────────────
+  // Music: Gravitational Lull 1. Tension building, reality bending. Signature: vortex_storm.
   {
-    id: 8,
+    id: 9,
+    name: 'SINGULARITY CORE',
+    subtitle: 'Event Horizon — Reality Bends',
+    faction: 'klingon',
+    background: '#050208',
+    duration: 2700,
+    waves: [
+      { time: 60, enemies: [
+        { type: 'elite', faction: 'klingon', x: 0.3, path: straight(0.3), dropType: 'shield' },
+        { type: 'elite', faction: 'klingon', x: 0.7, path: straight(0.7), dropType: 'weapon' },
+      ]},
+      { time: 600, enemies: [
+        { type: 'cruiser', faction: 'klingon', x: 0.5, path: straight(0.5), dropType: 'life' },
+      ]},
+    ],
+    boss: { name: 'Event Horizon Tyrant', type: 'voidtyrant', hp: 1500, width: 220, height: 135, phases: 5, faction: 'klingon' },
+  },
+
+  // ── Stage 10: Subspace Rift ───────────────────────────────
+  {
+    id: 10,
     name: 'SUBSPACE RIFT',
     subtitle: 'Between Dimensions — Phase Shifted',
     faction: 'romulan',
@@ -497,9 +539,9 @@ export const STAGES: Stage[] = [
     boss: { name: 'Phase Wraith', type: 'wraith', hp: 1400, width: 200, height: 120, phases: 5, faction: 'romulan' },
   },
 
-  // ── Stage 9: Omega Citadel ────────────────────────────────
+  // ── Stage 11: Omega Citadel ───────────────────────────────
   {
-    id: 9,
+    id: 11,
     name: 'OMEGA CITADEL',
     subtitle: 'The Final Stand — All Factions United Against You',
     faction: 'orion',
