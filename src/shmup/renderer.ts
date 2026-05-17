@@ -2237,47 +2237,36 @@ export class ShmupRenderer {
     }
     ctx.stroke();
 
-    // ── Muzzle glow at the ship ──
-    const muzzleGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, 14);
-    muzzleGrad.addColorStop(0, `rgba(255,255,200,${0.9 * intensity})`);
-    muzzleGrad.addColorStop(0.5, `rgba(255,140,40,${0.5 * intensity})`);
-    muzzleGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = muzzleGrad;
-    ctx.globalAlpha = 1;
-    ctx.beginPath(); ctx.arc(sx, sy, 14, 0, Math.PI * 2); ctx.fill();
+    // (Removed: muzzle-glow + impact-scorch radial gradients. On big
+    // targets — bosses especially — those gradients bloomed into a
+    // giant orange disc that ate the screen. The beam itself reads as
+    // 'phaser hitting that thing' just fine.)
 
-    // ── Impact scorch at target (radial gradient) ──
-    const impactR = 18 + Math.sin(t * 0.4) * 3;
-    const impGrad = ctx.createRadialGradient(tx, ty, 0, tx, ty, impactR);
-    impGrad.addColorStop(0, `rgba(255,255,200,${0.85 * intensity})`);
-    impGrad.addColorStop(0.4, `rgba(255,140,40,${0.55 * intensity})`);
-    impGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = impGrad;
-    ctx.globalAlpha = 1;
-    ctx.beginPath(); ctx.arc(tx, ty, impactR, 0, Math.PI * 2); ctx.fill();
-
-    // ── Lock-on reticle on target ──
+    // ── Lock-on reticle — small fixed-size cross, never blooms ──
+    // Capped so even on a giant T'VAK boss the reticle stays compact
+    // and doesn't pretend to wrap the whole hull.
+    const r = Math.min(28, target.width * 0.5 + 6);
     ctx.strokeStyle = '#ff8833';
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.7;
-    const r = target.width * 0.5 + 8;
-    ctx.beginPath(); ctx.arc(tx, ty, r, 0, Math.PI * 2); ctx.stroke();
-    // Crosshair ticks
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.85;
+    // Just 4 corner ticks (no full ring) — much cleaner read
+    const tick4 = 6;
     ctx.beginPath();
-    ctx.moveTo(tx - r - 5, ty); ctx.lineTo(tx - r + 3, ty);
-    ctx.moveTo(tx + r - 3, ty); ctx.lineTo(tx + r + 5, ty);
-    ctx.moveTo(tx, ty - r - 5); ctx.lineTo(tx, ty - r + 3);
-    ctx.moveTo(tx, ty + r - 3); ctx.lineTo(tx, ty + r + 5);
+    // TL, TR, BL, BR corners with a small dash
+    ctx.moveTo(tx - r, ty - r + tick4); ctx.lineTo(tx - r, ty - r); ctx.lineTo(tx - r + tick4, ty - r);
+    ctx.moveTo(tx + r - tick4, ty - r); ctx.lineTo(tx + r, ty - r); ctx.lineTo(tx + r, ty - r + tick4);
+    ctx.moveTo(tx - r, ty + r - tick4); ctx.lineTo(tx - r, ty + r); ctx.lineTo(tx - r + tick4, ty + r);
+    ctx.moveTo(tx + r - tick4, ty + r); ctx.lineTo(tx + r, ty + r); ctx.lineTo(tx + r, ty + r - tick4);
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
-    // ── Target HP bar (so the player sees their work draining the enemy) ──
+    // ── Target HP bar — sits below the reticle ──
     if (target.maxHp > 0) {
       const hpPct = Math.max(0, target.hp / target.maxHp);
-      const barW = Math.max(28, target.width * 0.9);
+      const barW = Math.max(28, Math.min(60, target.width * 0.6));
       const barX = tx - barW / 2;
       const barY = ty + r + 6;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(barX - 1, barY - 1, barW + 2, 4);
       ctx.fillStyle = '#ff8833';
       ctx.fillRect(barX, barY, barW * hpPct, 2);
