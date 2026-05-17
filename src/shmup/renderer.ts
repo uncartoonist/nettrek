@@ -294,10 +294,10 @@ export class ShmupRenderer {
     this.updateEnvironment(state, w, h);
     this.drawEnvironment(ctx, state, w, h);
 
-    // Power-ups
+    // Power-ups — unique iconic shapes, no flat circles
     for (const pu of state.powerUps) {
       if (pu.type === 'star') {
-        // Coin rendering — golden spinning coin
+        // Coin — golden spinning coin (kept as-is, already elegant)
         const spin = Math.sin(state.tick * 0.12 + pu.pos.x * 0.1);
         const coinW = 7 * Math.abs(spin) + 2;
         ctx.fillStyle = '#ffdd00';
@@ -305,47 +305,15 @@ export class ShmupRenderer {
         ctx.beginPath();
         ctx.ellipse(pu.pos.x, pu.pos.y, coinW, 7, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Coin highlight
-        ctx.fillStyle = '#fff8aa';
-        ctx.globalAlpha = 0.6;
-        ctx.beginPath();
-        ctx.ellipse(pu.pos.x - 1, pu.pos.y - 2, coinW * 0.4, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Coin edge
-        ctx.strokeStyle = '#aa8800';
-        ctx.globalAlpha = 0.7;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.ellipse(pu.pos.x, pu.pos.y, coinW, 7, 0, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.fillStyle = '#fff8aa'; ctx.globalAlpha = 0.6;
+        ctx.beginPath(); ctx.ellipse(pu.pos.x - 1, pu.pos.y - 2, coinW * 0.4, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#aa8800'; ctx.globalAlpha = 0.7; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(pu.pos.x, pu.pos.y, coinW, 7, 0, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;
-      } else {
-        // Other power-ups — glowing orb with icon
-        const color = POWERUP_COLORS[pu.type];
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.85 + Math.sin(state.tick * 0.1) * 0.15;
-        ctx.beginPath();
-        ctx.arc(pu.pos.x, pu.pos.y, 12, 0, Math.PI * 2);
-        ctx.fill();
-        // Outer glow
-        ctx.globalAlpha = 0.15;
-        ctx.beginPath();
-        ctx.arc(pu.pos.x, pu.pos.y, 18, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        // Inner highlight
-        ctx.fillStyle = '#fff';
-        ctx.globalAlpha = 0.3;
-        ctx.beginPath();
-        ctx.arc(pu.pos.x - 3, pu.pos.y - 3, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        // Label
-        ctx.fillStyle = '#000';
-        ctx.font = 'bold 10px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText(POWERUP_LABELS[pu.type], pu.pos.x, pu.pos.y + 4);
+        continue;
       }
+
+      this.drawPowerUpIcon(ctx, pu.pos.x, pu.pos.y, pu.type, state.tick);
     }
 
     // Enemy bullets — unique shapes per enemy type (color-coded)
@@ -997,30 +965,64 @@ export class ShmupRenderer {
           break;
         }
         case 'asteroidcorridor': {
-          // Clusters of asteroids on each side
+          // Organic asteroid field — proper rocky shapes, not flat circles
           const leftEdge = gapCenter - gapHalf;
           const rightEdge = gapCenter + gapHalf;
-          ctx.fillStyle = '#3a3025';
-          // Left asteroid cluster
+          const drawAsteroid = (cx: number, cy: number, R: number, seed: number) => {
+            const N = 9;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(seed);
+            // Organic shape via bezier
+            ctx.beginPath();
+            for (let i = 0; i < N; i++) {
+              const a = (Math.PI * 2 / N) * i;
+              const r = R * (0.82 + Math.sin(i * 2.4 + seed) * 0.12 + Math.sin(i * 5.1 + seed * 1.3) * 0.06);
+              const a2 = (Math.PI * 2 / N) * (i + 0.5);
+              const r2 = R * (0.86 + Math.cos(i * 3.6 + seed) * 0.1);
+              if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+              else ctx.quadraticCurveTo(Math.cos(a2) * r2, Math.sin(a2) * r2, Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.closePath();
+            // Gradient fill — lit from upper-left
+            const ag = ctx.createRadialGradient(-R * 0.3, -R * 0.3, R * 0.05, 0, 0, R);
+            ag.addColorStop(0, '#6a5a48');
+            ag.addColorStop(0.5, '#3a2e22');
+            ag.addColorStop(1, '#1a1410');
+            ctx.fillStyle = ag;
+            ctx.fill();
+            // Craters
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.arc(R * 0.25, -R * 0.15, R * 0.18, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-R * 0.2, R * 0.22, R * 0.13, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-R * 0.35, -R * 0.1, R * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          };
+          // Left cluster
           for (let i = 0; i < 5; i++) {
             const ax = Math.sin(i * 4.3 + seg.pos.y * 0.03) * 30 + leftEdge * 0.5;
             const ay = sy + Math.sin(i * 2.7) * sh * 0.6;
             const ar = 15 + Math.sin(i * 1.9) * 10;
-            ctx.beginPath(); ctx.arc(ax, ay, ar, 0, Math.PI * 2); ctx.fill();
+            drawAsteroid(ax, ay, ar, i * 1.7 + seg.pos.y * 0.01);
           }
           // Right cluster
           for (let i = 0; i < 5; i++) {
             const ax = w - Math.sin(i * 3.1 + seg.pos.y * 0.03) * 30 - (w - rightEdge) * 0.5;
             const ay = sy + Math.cos(i * 2.3) * sh * 0.6;
             const ar = 15 + Math.cos(i * 1.7) * 10;
-            ctx.beginPath(); ctx.arc(ax, ay, ar, 0, Math.PI * 2); ctx.fill();
+            drawAsteroid(ax, ay, ar, i * 2.3 + seg.pos.y * 0.02);
           }
-          // Danger glow near gap edge
-          ctx.strokeStyle = '#ff4422';
-          ctx.lineWidth = 1;
-          ctx.globalAlpha = 0.2 + Math.sin(state.tick * 0.05) * 0.1;
-          ctx.beginPath(); ctx.moveTo(leftEdge, sy - sh); ctx.lineTo(leftEdge, sy + sh); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(rightEdge, sy - sh); ctx.lineTo(rightEdge, sy + sh); ctx.stroke();
+          // Subtle danger glow near gap edge (replaces harsh red line)
+          const dgGradL = ctx.createLinearGradient(leftEdge - 8, 0, leftEdge, 0);
+          dgGradL.addColorStop(0, 'transparent');
+          dgGradL.addColorStop(1, `rgba(255,80,40,${0.12 + Math.sin(state.tick * 0.05) * 0.05})`);
+          ctx.fillStyle = dgGradL;
+          ctx.fillRect(leftEdge - 8, sy - sh, 8, sh * 2);
+          const dgGradR = ctx.createLinearGradient(rightEdge, 0, rightEdge + 8, 0);
+          dgGradR.addColorStop(0, `rgba(255,80,40,${0.12 + Math.sin(state.tick * 0.05) * 0.05})`);
+          dgGradR.addColorStop(1, 'transparent');
+          ctx.fillStyle = dgGradR;
+          ctx.fillRect(rightEdge, sy - sh, 8, sh * 2);
           break;
         }
         case 'stationdebris': {
@@ -1281,22 +1283,70 @@ export class ShmupRenderer {
       // Draw based on type
       switch (op.type) {
         case 'station': {
-          // Space station — rotating ring with central hub
+          // Orbital station — detailed habitat ring with docking spokes
+          const R = op.radius;
           ctx.save();
           ctx.rotate(op.rotation);
-          ctx.strokeStyle = '#667788';
-          ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.arc(0, 0, op.radius * 0.8, 0, Math.PI * 2); ctx.stroke();
-          ctx.fillStyle = '#334455';
-          ctx.beginPath(); ctx.arc(0, 0, op.radius * 0.35, 0, Math.PI * 2); ctx.fill();
-          // Solar panels
-          ctx.fillStyle = '#223344';
-          ctx.fillRect(-op.radius * 0.9, -3, op.radius * 1.8, 6);
-          ctx.fillRect(-3, -op.radius * 0.9, 6, op.radius * 1.8);
-          // Lights
+          // Outer habitat ring (thick torus)
+          const ringGrad = ctx.createRadialGradient(0, 0, R * 0.7, 0, 0, R * 0.92);
+          ringGrad.addColorStop(0, '#55677a');
+          ringGrad.addColorStop(0.5, '#8aa0b8');
+          ringGrad.addColorStop(1, '#33455a');
+          ctx.fillStyle = ringGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, R * 0.92, 0, Math.PI * 2);
+          ctx.arc(0, 0, R * 0.7, 0, Math.PI * 2, true);
+          ctx.fill('evenodd');
+          // Ring detail — habitat windows around outer edge
+          ctx.fillStyle = '#ffe89c';
+          ctx.globalAlpha = 0.6;
+          for (let i = 0; i < 16; i++) {
+            const a = (Math.PI * 2 / 16) * i;
+            const wx = Math.cos(a) * R * 0.82;
+            const wy = Math.sin(a) * R * 0.82;
+            ctx.beginPath(); ctx.arc(wx, wy, 1.2, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          // Docking spokes — connecting ring to hub
+          ctx.strokeStyle = '#445566';
+          ctx.lineWidth = 4;
+          for (let i = 0; i < 4; i++) {
+            const a = (Math.PI / 2) * i;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * R * 0.7, Math.sin(a) * R * 0.7);
+            ctx.lineTo(Math.cos(a) * R * 0.3, Math.sin(a) * R * 0.3);
+            ctx.stroke();
+          }
+          // Spoke highlight
+          ctx.strokeStyle = '#8899aa';
+          ctx.lineWidth = 1;
+          for (let i = 0; i < 4; i++) {
+            const a = (Math.PI / 2) * i;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * R * 0.7, Math.sin(a) * R * 0.7);
+            ctx.lineTo(Math.cos(a) * R * 0.3, Math.sin(a) * R * 0.3);
+            ctx.stroke();
+          }
+          // Central hub
+          const hubGrad = ctx.createRadialGradient(-R * 0.08, -R * 0.08, 0, 0, 0, R * 0.32);
+          hubGrad.addColorStop(0, '#7a8d9e');
+          hubGrad.addColorStop(0.7, '#3a4554');
+          hubGrad.addColorStop(1, '#1a2230');
+          ctx.fillStyle = hubGrad;
+          ctx.beginPath(); ctx.arc(0, 0, R * 0.3, 0, Math.PI * 2); ctx.fill();
+          // Hub command dome (slightly off-center for depth)
+          ctx.fillStyle = '#44ddff';
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath(); ctx.arc(0, 0, R * 0.18, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#aaeeff';
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath(); ctx.arc(-R * 0.05, -R * 0.05, R * 0.08, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+          // Beacon strobe
           ctx.fillStyle = '#44ffaa';
-          ctx.globalAlpha = 0.6 + Math.sin(state.tick * 0.08) * 0.3;
-          ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 0.6 + Math.sin(state.tick * 0.12) * 0.4;
+          ctx.beginPath(); ctx.arc(0, -R * 0.92, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
           ctx.restore();
           break;
         }
@@ -2398,6 +2448,303 @@ export class ShmupRenderer {
     ctx.globalAlpha = 1;
   }
 
+  private drawPowerUpIcon(ctx: CanvasRenderingContext2D, x: number, y: number, type: PowerUpType, tick: number): void {
+    const color = POWERUP_COLORS[type];
+    const pulse = 0.85 + Math.sin(tick * 0.08 + x * 0.05) * 0.15;
+    const bob = Math.sin(tick * 0.05 + x * 0.03) * 1.5;
+    const yy = y + bob;
+
+    ctx.save();
+    ctx.translate(x, yy);
+
+    // Soft aura (every type) — subtle, no flat circle
+    const auraGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, 22);
+    auraGrad.addColorStop(0, color);
+    auraGrad.addColorStop(1, 'transparent');
+    ctx.globalAlpha = 0.25 * pulse;
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    switch (type) {
+      case 'weapon': {
+        // Crystal energy capsule — vertical hexagonal prism
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(0, -11);
+        ctx.lineTo(6, -6); ctx.lineTo(6, 6);
+        ctx.lineTo(0, 11);
+        ctx.lineTo(-6, 6); ctx.lineTo(-6, -6);
+        ctx.closePath(); ctx.fill();
+        // Inner facet highlight
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(3, -5); ctx.lineTo(3, 5); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill();
+        // Edge stroke
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, -11); ctx.lineTo(6, -6); ctx.lineTo(6, 6); ctx.lineTo(0, 11);
+        ctx.lineTo(-6, 6); ctx.lineTo(-6, -6); ctx.closePath(); ctx.stroke();
+        break;
+      }
+      case 'shield': {
+        // Heraldic shield — pointed bottom, rounded top
+        ctx.fillStyle = color; ctx.globalAlpha = 0.85 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.quadraticCurveTo(9, -10, 9, -3);
+        ctx.quadraticCurveTo(9, 7, 0, 12);
+        ctx.quadraticCurveTo(-9, 7, -9, -3);
+        ctx.quadraticCurveTo(-9, -10, 0, -10);
+        ctx.closePath(); ctx.fill();
+        // Inner highlight
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(0, -7); ctx.quadraticCurveTo(5, -7, 5, -2);
+        ctx.quadraticCurveTo(5, 4, 0, 7); ctx.closePath(); ctx.fill();
+        // Cross emblem
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.75;
+        ctx.fillRect(-1, -4, 2, 8);
+        ctx.fillRect(-3.5, -1, 7, 2);
+        break;
+      }
+      case 'bomb': {
+        // Spherical bomb with lit fuse
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath(); ctx.arc(0, 1, 9, 0, Math.PI * 2); ctx.fill();
+        // Highlight
+        ctx.fillStyle = '#444'; ctx.globalAlpha = 0.8;
+        ctx.beginPath(); ctx.arc(-3, -2, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        // Fuse
+        ctx.strokeStyle = '#886644'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(3, -7); ctx.quadraticCurveTo(7, -10, 5, -12); ctx.stroke();
+        // Spark at fuse tip
+        const sparkR = 2 + Math.sin(tick * 0.4) * 1.5;
+        ctx.fillStyle = '#ffaa00';
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.arc(5, -12, sparkR, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(5, -12, sparkR * 0.4, 0, Math.PI * 2); ctx.fill();
+        // Bomb glint
+        ctx.fillStyle = color; ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.arc(2, 4, 2, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'magnet': {
+        // Horseshoe magnet
+        ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.lineCap = 'butt';
+        ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.arc(0, 1, 7, Math.PI, 0, false);
+        ctx.stroke();
+        // Pole tips (silver)
+        ctx.fillStyle = '#ddd'; ctx.globalAlpha = 0.9;
+        ctx.fillRect(-9, 1, 4, 5);
+        ctx.fillRect(5, 1, 4, 5);
+        // Magnetic field lines
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.8;
+        ctx.globalAlpha = 0.35 + Math.sin(tick * 0.15) * 0.2;
+        for (let i = 0; i < 3; i++) {
+          const r = 11 + i * 2.5;
+          ctx.beginPath();
+          ctx.arc(0, 1, r, Math.PI * 1.15, Math.PI * 1.85, true);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'missile': {
+        // Stylized rocket
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(0, -11);
+        ctx.lineTo(4, -3); ctx.lineTo(4, 7); ctx.lineTo(-4, 7); ctx.lineTo(-4, -3);
+        ctx.closePath(); ctx.fill();
+        // Nose cone
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -11); ctx.lineTo(2, -5); ctx.lineTo(-2, -5); ctx.closePath(); ctx.fill();
+        // Fins
+        ctx.fillStyle = this.darkenColor(color, 0.6); ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.moveTo(-4, 4); ctx.lineTo(-8, 9); ctx.lineTo(-4, 9); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(4, 4); ctx.lineTo(8, 9); ctx.lineTo(4, 9); ctx.closePath(); ctx.fill();
+        // Exhaust flame
+        ctx.fillStyle = '#ffaa00'; ctx.globalAlpha = 0.6 + Math.sin(tick * 0.3) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(-2, 7); ctx.lineTo(0, 11 + Math.sin(tick * 0.5)); ctx.lineTo(2, 7); ctx.closePath(); ctx.fill();
+        // Center stripe
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.55;
+        ctx.fillRect(-0.7, -2, 1.4, 7);
+        break;
+      }
+      case 'laser': {
+        // Diamond prism with internal beam
+        ctx.fillStyle = color; ctx.globalAlpha = 0.85 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(0, -11); ctx.lineTo(8, 0); ctx.lineTo(0, 11); ctx.lineTo(-8, 0);
+        ctx.closePath(); ctx.fill();
+        // Inner refraction highlight
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -7); ctx.lineTo(4, 0); ctx.lineTo(0, 7); ctx.lineTo(-4, 0); ctx.closePath(); ctx.fill();
+        // Beam shaft through center
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8;
+        ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(0, 11); ctx.stroke();
+        // Edge highlight
+        ctx.strokeStyle = color; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(0, -11); ctx.lineTo(8, 0); ctx.lineTo(0, 11); ctx.lineTo(-8, 0); ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+      case 'phaser': {
+        // Triangular beam emitter pointing forward
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(0, -10); ctx.lineTo(10, 8); ctx.lineTo(-10, 8); ctx.closePath();
+        ctx.fill();
+        // Inner detail
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.moveTo(0, -6); ctx.lineTo(6, 5); ctx.lineTo(-6, 5); ctx.closePath(); ctx.fill();
+        // Vent lines
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.6;
+        ctx.beginPath(); ctx.moveTo(-5, 4); ctx.lineTo(5, 4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-7, 7); ctx.lineTo(7, 7); ctx.stroke();
+        // Emitter glow at tip
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.2) * 0.2;
+        ctx.beginPath(); ctx.arc(0, -8, 2, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'life': {
+        // Pulsing heart-shaped gem
+        const beat = 1 + Math.sin(tick * 0.18) * 0.08;
+        ctx.scale(beat, beat);
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(0, 10);
+        ctx.bezierCurveTo(-12, 0, -10, -10, -4, -8);
+        ctx.bezierCurveTo(-2, -7, 0, -4, 0, -4);
+        ctx.bezierCurveTo(0, -4, 2, -7, 4, -8);
+        ctx.bezierCurveTo(10, -10, 12, 0, 0, 10);
+        ctx.closePath(); ctx.fill();
+        // Highlight
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.ellipse(-3, -4, 2, 3, -0.5, 0, Math.PI * 2); ctx.fill();
+        // Edge
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, 10);
+        ctx.bezierCurveTo(-12, 0, -10, -10, -4, -8);
+        ctx.bezierCurveTo(-2, -7, 0, -4, 0, -4);
+        ctx.bezierCurveTo(0, -4, 2, -7, 4, -8);
+        ctx.bezierCurveTo(10, -10, 12, 0, 0, 10);
+        ctx.closePath(); ctx.stroke();
+        break;
+      }
+      case 'emp': {
+        // Lightning bolt
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(3, -11);
+        ctx.lineTo(-5, 1);
+        ctx.lineTo(0, 1);
+        ctx.lineTo(-3, 11);
+        ctx.lineTo(6, -2);
+        ctx.lineTo(1, -2);
+        ctx.lineTo(3, -11);
+        ctx.closePath(); ctx.fill();
+        // Inner glow
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(3, -11); ctx.lineTo(-3, 0); ctx.lineTo(2, 0); ctx.lineTo(-2, 9);
+        ctx.lineTo(4, -1); ctx.lineTo(0, -1); ctx.lineTo(3, -11);
+        ctx.closePath(); ctx.fill();
+        // Edge crackle
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.8;
+        ctx.globalAlpha = 0.4 + Math.sin(tick * 0.4) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(3, -11); ctx.lineTo(-5, 1); ctx.lineTo(0, 1); ctx.lineTo(-3, 11);
+        ctx.lineTo(6, -2); ctx.lineTo(1, -2); ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+      case 'overdrive': {
+        // Flame
+        const flicker = Math.sin(tick * 0.25);
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.quadraticCurveTo(7, -6, 6, 2);
+        ctx.quadraticCurveTo(7 + flicker, 8, 0, 11);
+        ctx.quadraticCurveTo(-7 - flicker, 8, -6, 2);
+        ctx.quadraticCurveTo(-7, -6, 0, -12);
+        ctx.closePath(); ctx.fill();
+        // Inner flame
+        ctx.fillStyle = '#ffaa00'; ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(0, -7);
+        ctx.quadraticCurveTo(4, -3, 3, 3);
+        ctx.quadraticCurveTo(4, 7, 0, 9);
+        ctx.quadraticCurveTo(-4, 7, -3, 3);
+        ctx.quadraticCurveTo(-4, -3, 0, -7);
+        ctx.closePath(); ctx.fill();
+        // Core
+        ctx.fillStyle = '#ffffaa'; ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'drone': {
+        // Tiny ship icon (4-pointed star ship)
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(0, -10); ctx.lineTo(3, -2); ctx.lineTo(10, 0); ctx.lineTo(3, 2);
+        ctx.lineTo(0, 10); ctx.lineTo(-3, 2); ctx.lineTo(-10, 0); ctx.lineTo(-3, -2);
+        ctx.closePath(); ctx.fill();
+        // Inner glow
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.6;
+        ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+        // Rotating accents
+        const rot = tick * 0.05;
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.4;
+        for (let i = 0; i < 4; i++) {
+          const a = rot + (Math.PI / 2) * i;
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * 6, Math.sin(a) * 6, 1, 0, Math.PI * 2); ctx.fill();
+        }
+        break;
+      }
+      case 'score2x': {
+        // ×2 ribbon badge
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(-11, -3);
+        ctx.lineTo(11, -3);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(11, 3);
+        ctx.lineTo(-11, 3);
+        ctx.lineTo(-8, 0);
+        ctx.closePath(); ctx.fill();
+        // Highlight
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.3;
+        ctx.fillRect(-9, -2, 18, 1.2);
+        // ×2 text
+        ctx.fillStyle = '#000'; ctx.globalAlpha = 0.9;
+        ctx.font = 'bold 9px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('×2', 0, 3);
+        ctx.textAlign = 'left';
+        break;
+      }
+    }
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   private darkenColor(hex: string, factor: number): string {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -2941,15 +3288,34 @@ export class ShmupRenderer {
           ctx.fill();
           break;
 
-        case 'debris':
-          ctx.strokeStyle = obj.color;
-          ctx.lineWidth = 1;
+        case 'debris': {
+          // Ship hull fragment — angular metal shard, not a wireframe line
+          const R = obj.size;
+          ctx.fillStyle = '#2a3540';
           ctx.beginPath();
-          ctx.moveTo(-obj.size, -obj.size * 0.3);
-          ctx.lineTo(obj.size * 0.5, obj.size * 0.2);
-          ctx.lineTo(-obj.size * 0.3, obj.size);
-          ctx.stroke();
+          ctx.moveTo(-R * 0.9, -R * 0.2);
+          ctx.lineTo(R * 0.3, -R * 0.5);
+          ctx.lineTo(R * 0.8, 0.1 * R);
+          ctx.lineTo(R * 0.2, R * 0.4);
+          ctx.lineTo(-R * 0.5, R * 0.6);
+          ctx.closePath();
+          ctx.fill();
+          // Hull plating highlight
+          ctx.strokeStyle = '#445a6e';
+          ctx.lineWidth = 0.8;
+          ctx.globalAlpha = obj.opacity * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(-R * 0.7, -R * 0.1); ctx.lineTo(R * 0.4, -R * 0.3); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(-R * 0.3, R * 0.2); ctx.lineTo(R * 0.4, R * 0.1); ctx.stroke();
+          // Bent edge
+          ctx.fillStyle = '#556a7a';
+          ctx.globalAlpha = obj.opacity * 0.4;
+          ctx.beginPath();
+          ctx.moveTo(R * 0.3, -R * 0.5); ctx.lineTo(R * 0.8, 0.1 * R); ctx.lineTo(R * 0.55, -R * 0.2);
+          ctx.closePath(); ctx.fill();
           break;
+        }
 
         case 'planet-bg':
           const pGrad = ctx.createRadialGradient(-obj.size * 0.3, -obj.size * 0.3, obj.size * 0.1, 0, 0, obj.size);
@@ -2968,27 +3334,78 @@ export class ShmupRenderer {
           ctx.stroke();
           break;
 
-        case 'ring':
-          ctx.strokeStyle = obj.color;
-          ctx.lineWidth = obj.size * 0.15;
-          ctx.globalAlpha = obj.opacity * 0.5;
+        case 'ring': {
+          // Planetary ring — banded layers with subtle gradient, no cheesy orange ellipse
+          const R = obj.size;
+          ctx.globalAlpha = obj.opacity * 0.4;
+          for (let band = 0; band < 4; band++) {
+            const bandR = R * (0.65 + band * 0.12);
+            const bandW = R * 0.04;
+            const bandAlpha = 0.7 - band * 0.12;
+            ctx.strokeStyle = band % 2 === 0 ? '#6677aa' : '#8899bb';
+            ctx.globalAlpha = obj.opacity * bandAlpha * 0.5;
+            ctx.lineWidth = bandW;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, bandR, bandR * 0.18, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          // Dust glow
+          ctx.globalAlpha = obj.opacity * 0.15;
+          ctx.strokeStyle = '#aabbdd';
+          ctx.lineWidth = R * 0.04;
           ctx.beginPath();
-          ctx.ellipse(0, 0, obj.size, obj.size * 0.3, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, R * 0.85, R * 0.22, 0, 0, Math.PI * 2);
           ctx.stroke();
           break;
+        }
 
-        case 'satellite':
-          ctx.fillStyle = obj.color;
-          ctx.fillRect(-obj.size * 0.15, -obj.size * 0.5, obj.size * 0.3, obj.size);
-          ctx.fillStyle = '#224466';
-          ctx.fillRect(-obj.size * 0.7, -obj.size * 0.1, obj.size * 1.4, obj.size * 0.2);
-          // Dish
-          ctx.strokeStyle = '#88aacc';
-          ctx.lineWidth = 1;
+        case 'satellite': {
+          // Detailed comm satellite — main body, solar arrays, dish, antenna
+          const S = obj.size;
+          // Solar panels (with grid)
+          ctx.fillStyle = '#1a2a44';
+          ctx.fillRect(-S * 0.75, -S * 0.12, S * 0.5, S * 0.24);
+          ctx.fillRect(S * 0.25, -S * 0.12, S * 0.5, S * 0.24);
+          // Panel cell grid
+          ctx.strokeStyle = '#33558a';
+          ctx.lineWidth = 0.6;
+          ctx.globalAlpha = obj.opacity * 0.5;
+          for (let i = 0; i < 4; i++) {
+            const px = -S * 0.75 + (S * 0.5 / 4) * i;
+            ctx.beginPath(); ctx.moveTo(px, -S * 0.12); ctx.lineTo(px, S * 0.12); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(S * 0.25 + (S * 0.5 / 4) * i, -S * 0.12);
+            ctx.lineTo(S * 0.25 + (S * 0.5 / 4) * i, S * 0.12); ctx.stroke();
+          }
+          ctx.globalAlpha = obj.opacity;
+          // Panel struts
+          ctx.strokeStyle = '#556677'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(-S * 0.25, 0); ctx.lineTo(-S * 0.18, 0); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(S * 0.18, 0); ctx.lineTo(S * 0.25, 0); ctx.stroke();
+          // Main body — boxy
+          ctx.fillStyle = '#566878';
+          ctx.fillRect(-S * 0.18, -S * 0.22, S * 0.36, S * 0.44);
+          // Body detail panels
+          ctx.fillStyle = '#3a4854';
+          ctx.fillRect(-S * 0.14, -S * 0.18, S * 0.28, S * 0.1);
+          ctx.fillRect(-S * 0.14, S * 0.04, S * 0.28, S * 0.14);
+          // Dish (parabolic)
+          ctx.fillStyle = '#7a8c9c';
           ctx.beginPath();
-          ctx.arc(0, -obj.size * 0.5, obj.size * 0.2, Math.PI, 0);
-          ctx.stroke();
+          ctx.ellipse(0, -S * 0.34, S * 0.18, S * 0.06, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#2a3540';
+          ctx.beginPath();
+          ctx.ellipse(0, -S * 0.32, S * 0.15, S * 0.04, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Dish post
+          ctx.strokeStyle = '#445566'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(0, -S * 0.22); ctx.lineTo(0, -S * 0.32); ctx.stroke();
+          // Status light
+          ctx.fillStyle = '#44ddff';
+          ctx.globalAlpha = obj.opacity * (0.5 + Math.sin(Date.now() * 0.003) * 0.4);
+          ctx.beginPath(); ctx.arc(0, S * 0.16, 1.2, 0, Math.PI * 2); ctx.fill();
           break;
+        }
       }
 
       ctx.globalAlpha = 1;
