@@ -1232,9 +1232,9 @@ function spawnTerrain(state: ShmupState, W: number, H: number): void {
   switch (type) {
     case 'canyon':
       gapWidth = 250 + Math.random() * 120;
-      color = '#4a3a2a';
+      color = '#2a2530';   // dark space-rock, matches background better
       height = 50 + Math.random() * 30;
-      damaging = false; // scenic — fly through freely
+      damaging = true;     // solid rock walls — touching = death
       break;
     case 'asteroidcorridor':
       gapWidth = 280 + Math.random() * 100;

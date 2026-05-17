@@ -887,48 +887,106 @@ export class ShmupRenderer {
 
       switch (seg.type) {
         case 'canyon': {
-          // Rocky canyon walls — left and right with jagged edges
+          // Solid rock canyon walls — dark stone that blends with the nebula
+          // background. Smooth organic silhouette (no cardboard jags),
+          // subtle rim light, and a red danger glow at the gap edge so the
+          // player reads them as "wall = death".
           const leftEdge = gapCenter - gapHalf;
           const rightEdge = gapCenter + gapHalf;
-          // Left wall
-          ctx.fillStyle = seg.color;
+          const STEPS = 16;
+          const seed = seg.pos.y * 0.04;
+          // Per-step inner X for each wall — organic noise, small amplitude
+          // so the visible silhouette matches the collision rectangle.
+          const leftPts: { x: number; y: number }[] = [];
+          const rightPts: { x: number; y: number }[] = [];
+          for (let i = 0; i <= STEPS; i++) {
+            const t = i / STEPS;
+            const y = sy - sh + sh * 2 * t;
+            // Two octaves of sine give an irregular rocky outline
+            const wobbleL = Math.sin(i * 0.9 + seed) * 6 + Math.sin(i * 2.3 + seed * 1.7) * 3;
+            const wobbleR = Math.sin(i * 1.1 + seed * 1.3 + 2) * 6 + Math.sin(i * 2.7 + seed * 0.8) * 3;
+            leftPts.push({ x: leftEdge - wobbleL, y });
+            rightPts.push({ x: rightEdge + wobbleR, y });
+          }
+
+          // ── Left wall body — dark gradient fill (matches nebula tone) ──
+          const lGrad = ctx.createLinearGradient(0, sy, leftEdge, sy);
+          lGrad.addColorStop(0, '#0a0a14');
+          lGrad.addColorStop(0.5, '#1a1820');
+          lGrad.addColorStop(1, '#2a2530');
+          ctx.fillStyle = lGrad;
           ctx.beginPath();
           ctx.moveTo(0, sy - sh);
-          for (let i = 0; i <= 8; i++) {
-            const jag = Math.sin(i * 3.7 + seg.pos.y * 0.05) * 12;
-            ctx.lineTo(leftEdge + jag, sy - sh + (sh * 2 / 8) * i);
-          }
+          for (const p of leftPts) ctx.lineTo(p.x, p.y);
           ctx.lineTo(0, sy + sh);
           ctx.closePath();
           ctx.fill();
-          // Right wall
+
+          // Stone-texture noise — three darker patches scattered on the wall
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          for (let i = 0; i < 3; i++) {
+            const yy = sy - sh + (sh * 2 / 3) * i + sh * 0.3;
+            const xx = leftEdge * (0.3 + i * 0.15);
+            ctx.beginPath();
+            ctx.ellipse(xx, yy, 18 + (i % 2) * 6, 10 + (i % 2) * 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Subtle rim highlight on the inner edge (catches light)
+          ctx.strokeStyle = 'rgba(170,170,200,0.25)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(leftPts[0].x, leftPts[0].y);
+          for (let i = 1; i < leftPts.length; i++) ctx.lineTo(leftPts[i].x, leftPts[i].y);
+          ctx.stroke();
+
+          // ── Right wall body ──
+          const rGrad = ctx.createLinearGradient(w, sy, rightEdge, sy);
+          rGrad.addColorStop(0, '#0a0a14');
+          rGrad.addColorStop(0.5, '#1a1820');
+          rGrad.addColorStop(1, '#2a2530');
+          ctx.fillStyle = rGrad;
           ctx.beginPath();
           ctx.moveTo(w, sy - sh);
-          for (let i = 0; i <= 8; i++) {
-            const jag = Math.sin(i * 2.9 + seg.pos.y * 0.04) * 12;
-            ctx.lineTo(rightEdge - jag, sy - sh + (sh * 2 / 8) * i);
-          }
+          for (const p of rightPts) ctx.lineTo(p.x, p.y);
           ctx.lineTo(w, sy + sh);
           ctx.closePath();
           ctx.fill();
-          // Highlight edges
-          ctx.strokeStyle = '#7a6a5a';
-          ctx.lineWidth = 1.5;
-          ctx.globalAlpha = 0.4;
-          ctx.beginPath();
-          for (let i = 0; i <= 8; i++) {
-            const jag = Math.sin(i * 3.7 + seg.pos.y * 0.05) * 12;
-            if (i === 0) ctx.moveTo(leftEdge + jag, sy - sh + (sh * 2 / 8) * i);
-            else ctx.lineTo(leftEdge + jag, sy - sh + (sh * 2 / 8) * i);
+
+          // Right wall noise
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          for (let i = 0; i < 3; i++) {
+            const yy = sy - sh + (sh * 2 / 3) * i + sh * 0.3;
+            const xx = rightEdge + (w - rightEdge) * (0.3 + i * 0.15);
+            ctx.beginPath();
+            ctx.ellipse(xx, yy, 18 + (i % 2) * 6, 10 + (i % 2) * 4, 0, 0, Math.PI * 2);
+            ctx.fill();
           }
-          ctx.stroke();
+
+          // Right rim highlight
+          ctx.strokeStyle = 'rgba(170,170,200,0.25)';
+          ctx.lineWidth = 1.2;
           ctx.beginPath();
-          for (let i = 0; i <= 8; i++) {
-            const jag = Math.sin(i * 2.9 + seg.pos.y * 0.04) * 12;
-            if (i === 0) ctx.moveTo(rightEdge - jag, sy - sh + (sh * 2 / 8) * i);
-            else ctx.lineTo(rightEdge - jag, sy - sh + (sh * 2 / 8) * i);
-          }
+          ctx.moveTo(rightPts[0].x, rightPts[0].y);
+          for (let i = 1; i < rightPts.length; i++) ctx.lineTo(rightPts[i].x, rightPts[i].y);
           ctx.stroke();
+
+          // ── Danger glow at the inner edge — tells the player WALL = DEATH ──
+          const pulse = 0.45 + Math.sin(state.tick * 0.08 + seg.pos.y * 0.02) * 0.15;
+          // Left inner glow (red bleed inward from the wall)
+          const lDanger = ctx.createLinearGradient(leftEdge - 18, 0, leftEdge + 6, 0);
+          lDanger.addColorStop(0, 'rgba(255,40,20,0)');
+          lDanger.addColorStop(0.65, `rgba(255,60,30,${0.22 * pulse})`);
+          lDanger.addColorStop(1, `rgba(255,100,60,${0.05 * pulse})`);
+          ctx.fillStyle = lDanger;
+          ctx.fillRect(leftEdge - 18, sy - sh, 24, sh * 2);
+          // Right inner glow
+          const rDanger = ctx.createLinearGradient(rightEdge - 6, 0, rightEdge + 18, 0);
+          rDanger.addColorStop(0, `rgba(255,100,60,${0.05 * pulse})`);
+          rDanger.addColorStop(0.35, `rgba(255,60,30,${0.22 * pulse})`);
+          rDanger.addColorStop(1, 'rgba(255,40,20,0)');
+          ctx.fillStyle = rDanger;
+          ctx.fillRect(rightEdge - 6, sy - sh, 24, sh * 2);
           break;
         }
         case 'asteroidcorridor': {
