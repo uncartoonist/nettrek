@@ -698,146 +698,13 @@ export class ShmupRenderer {
         ctx.beginPath(); ctx.arc(-R*0.04, -R*0.04, R*0.04, 0, Math.PI*2); ctx.fill();
         ctx.globalAlpha = 1;
 
-      } else if (obs.type === 'staticturret') {
-        // Defense platform — armored octagonal base with tracking cannon
+      } else if (obs.type === 'staticturret' || obs.type === 'lasergate') {
+        // Legacy types — render as simple energy node if they somehow exist
         const R = obs.radius;
-        const t = state.tick;
-
-        // Base platform — layered octagonal armor
-        const baseGrad = ctx.createRadialGradient(-R*0.15, -R*0.15, 0, 0, 0, R);
-        baseGrad.addColorStop(0, '#3a3a44');
-        baseGrad.addColorStop(0.6, '#1a1a22');
-        baseGrad.addColorStop(1, '#0a0a10');
-        ctx.fillStyle = baseGrad;
-        ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const a = (Math.PI*2/8)*i + Math.PI/8;
-          if (i===0) ctx.moveTo(Math.cos(a)*R, Math.sin(a)*R);
-          else ctx.lineTo(Math.cos(a)*R, Math.sin(a)*R);
-        }
-        ctx.closePath(); ctx.fill();
-
-        // Armor panel lines
-        ctx.strokeStyle = '#4a4a55';
-        ctx.lineWidth = 0.8;
-        ctx.globalAlpha = 0.4;
-        for (let i = 0; i < 8; i++) {
-          const a = (Math.PI*2/8)*i + Math.PI/8;
-          ctx.beginPath(); ctx.moveTo(0, 0);
-          ctx.lineTo(Math.cos(a)*R*0.9, Math.sin(a)*R*0.9); ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-
-        // Inner ring
-        ctx.strokeStyle = '#3a3a44';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(0, 0, R*0.55, 0, Math.PI*2); ctx.stroke();
-
-        // Tracking barrel
-        ctx.save();
-        const aimAngle = Math.atan2(state.player.pos.y - obs.pos.y, state.player.pos.x - obs.pos.x) - obs.rotation;
-        ctx.rotate(aimAngle);
-        // Barrel body
-        ctx.fillStyle = '#2a2a33';
-        ctx.fillRect(-3, -R*0.85, 6, R*0.55);
-        // Barrel tip housing
-        ctx.fillStyle = '#1a1a22';
-        ctx.beginPath(); ctx.arc(0, -R*0.85, 5, 0, Math.PI*2); ctx.fill();
-        // Muzzle glow
-        ctx.fillStyle = '#ff6644';
-        ctx.globalAlpha = 0.4 + Math.sin(t*0.1)*0.3;
-        ctx.beginPath(); ctx.arc(0, -R*0.88, 3, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.restore();
-
-        // Central hub — targeting sensor
-        const hubGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, R*0.2);
-        hubGrad.addColorStop(0, '#ff8855');
-        hubGrad.addColorStop(0.5, '#cc4422');
-        hubGrad.addColorStop(1, '#441100');
-        ctx.fillStyle = hubGrad;
-        ctx.globalAlpha = 0.7 + Math.sin(t*0.06)*0.2;
-        ctx.beginPath(); ctx.arc(0, 0, R*0.18, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Scanning ring
-        ctx.strokeStyle = '#ff6644';
-        ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath(); ctx.arc(0, 0, R*0.4, t*0.03, t*0.03+Math.PI*0.8); ctx.stroke();
-        ctx.globalAlpha = 1;
-
-      } else if (obs.type === 'lasergate') {
-        // Energy gate — floating pylons with plasma beam
-        const R = obs.radius;
-        const t = state.tick;
-        const active = obs.laserActive;
-
-        // Pylon bases — detailed floating towers
-        for (const side of [-1, 1]) {
-          const px = side * R;
-          ctx.save();
-          ctx.translate(px, 0);
-
-          // Pylon body
-          const pylonGrad = ctx.createLinearGradient(-6, -14, 6, 14);
-          pylonGrad.addColorStop(0, '#3a2244');
-          pylonGrad.addColorStop(0.5, '#2a1133');
-          pylonGrad.addColorStop(1, '#1a0822');
-          ctx.fillStyle = pylonGrad;
-          ctx.beginPath();
-          ctx.moveTo(-5, -14); ctx.lineTo(5, -14);
-          ctx.lineTo(7, -4); ctx.lineTo(7, 4);
-          ctx.lineTo(5, 14); ctx.lineTo(-5, 14);
-          ctx.lineTo(-7, 4); ctx.lineTo(-7, -4);
-          ctx.closePath(); ctx.fill();
-
-          // Emitter lens
-          ctx.fillStyle = active ? '#ff44ff' : '#442244';
-          ctx.globalAlpha = active ? 0.9 : 0.4;
-          ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
-          // Lens glow
-          if (active) {
-            ctx.fillStyle = '#ff88ff';
-            ctx.globalAlpha = 0.3 + Math.sin(t*0.15)*0.15;
-            ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
-          }
-
-          // Top/bottom accent lights
-          ctx.fillStyle = '#6633aa';
-          ctx.globalAlpha = 0.5;
-          ctx.beginPath(); ctx.arc(0, -10, 2, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(0, 10, 2, 0, Math.PI*2); ctx.fill();
-          ctx.globalAlpha = 1;
-          ctx.restore();
-        }
-
-        // Beam — layered plasma effect
-        if (active) {
-          // Outer glow
-          ctx.strokeStyle = '#ff88ff';
-          ctx.lineWidth = 10;
-          ctx.globalAlpha = 0.08 + Math.sin(t*0.12)*0.04;
-          ctx.beginPath(); ctx.moveTo(-R + 8, 0); ctx.lineTo(R - 8, 0); ctx.stroke();
-          // Mid beam
-          ctx.strokeStyle = '#ff44ff';
-          ctx.lineWidth = 4;
-          ctx.globalAlpha = 0.6 + Math.sin(t*0.2)*0.2;
-          ctx.beginPath(); ctx.moveTo(-R + 8, 0); ctx.lineTo(R - 8, 0); ctx.stroke();
-          // Core beam
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.5;
-          ctx.globalAlpha = 0.7;
-          ctx.beginPath(); ctx.moveTo(-R + 8, 0); ctx.lineTo(R - 8, 0); ctx.stroke();
-          // Crackling energy nodes along beam
-          ctx.fillStyle = '#ffffff';
-          ctx.globalAlpha = 0.5;
-          for (let i = 0; i < 3; i++) {
-            const nx = -R + 8 + (R*2 - 16) * ((Math.sin(t*0.08 + i*2) + 1) / 2);
-            ctx.beginPath(); ctx.arc(nx, Math.sin(t*0.3+i)*2, 2, 0, Math.PI*2); ctx.fill();
-          }
-        }
-        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#2a2a3a';
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.7, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#4a4a6a'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.7, 0, Math.PI*2); ctx.stroke();
 
       } else if (obs.type === 'vortex') {
         // Gravitational anomaly — swirling accretion disk
@@ -893,19 +760,45 @@ export class ShmupRenderer {
         ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI*2); ctx.fill();
         ctx.globalAlpha = 1;
       } else {
-        // Energy barrier — translucent forcefield
-        const bGrad = ctx.createRadialGradient(0, 0, obs.radius*0.2, 0, 0, obs.radius);
-        bGrad.addColorStop(0, 'rgba(60,120,220,0.15)');
-        bGrad.addColorStop(1, 'rgba(40,80,180,0.05)');
-        ctx.fillStyle = bGrad;
-        ctx.beginPath(); ctx.arc(0, 0, obs.radius, 0, Math.PI*2); ctx.fill();
-        // Shimmering edge
-        ctx.strokeStyle = '#4488ff'; ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.3+Math.sin(state.tick*0.06)*0.2;
-        ctx.beginPath(); ctx.arc(0, 0, obs.radius, 0, Math.PI*2); ctx.stroke();
-        // Energy crackle
-        ctx.globalAlpha = 0.15+Math.sin(state.tick*0.1+obs.rotation)*0.1;
-        ctx.beginPath(); ctx.arc(0, 0, obs.radius*0.7, state.tick*0.03, state.tick*0.03+1.5); ctx.stroke();
+        // Energy nexus — elegant floating energy sphere that pulses with the music
+        const R = obs.radius;
+        const t = state.tick;
+        const mp = state.beatPulse; // music pulse
+
+        // Outer aura — soft, breathes with music
+        const auraSize = R * (1 + mp * 0.3);
+        const aGrad = ctx.createRadialGradient(0, 0, R * 0.3, 0, 0, auraSize);
+        aGrad.addColorStop(0, `rgba(80,140,255,${0.12 + mp * 0.08})`);
+        aGrad.addColorStop(0.6, `rgba(60,100,200,${0.06 + mp * 0.04})`);
+        aGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = aGrad;
+        ctx.beginPath(); ctx.arc(0, 0, auraSize, 0, Math.PI * 2); ctx.fill();
+
+        // Inner core — crystalline solid
+        const cGrad = ctx.createRadialGradient(-R*0.15, -R*0.15, 0, 0, 0, R*0.6);
+        cGrad.addColorStop(0, '#aaccff');
+        cGrad.addColorStop(0.5, '#4488cc');
+        cGrad.addColorStop(1, '#1a3355');
+        ctx.fillStyle = cGrad;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.55, 0, Math.PI * 2); ctx.fill();
+
+        // Orbital rings — multiple, different speeds, music-reactive
+        ctx.globalAlpha = 0.25 + mp * 0.15;
+        ctx.strokeStyle = '#88bbff';
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 3; i++) {
+          const ringR = R * (0.65 + i * 0.12);
+          const speed = (0.02 + i * 0.01) * (1 + mp);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, ringR, ringR * (0.3 + i * 0.15), t * speed + i * 1.5, 0, Math.PI * 1.5);
+          ctx.stroke();
+        }
+
+        // Center bright point
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.5 + mp * 0.3;
+        ctx.beginPath(); ctx.arc(0, 0, 2 + mp * 2, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1;
       }
 

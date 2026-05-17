@@ -502,9 +502,8 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     }
   }
 
-  // ── Obstacles ───────────────────────────────────────────────
-  // Obstacles — almost none early, gradual increase
-  const obstacleRate = (0.0005 + progress * progress * 0.003) + state.currentStage * 0.0005;
+  // ── Obstacles — spawned by music director, not randomly ──
+  const obstacleRate = 0; // disabled — director handles this now
   if (!state.bossActive && Math.random() < obstacleRate) {
     const roll = Math.random();
     const radius = 12 + Math.random() * 25;
@@ -532,50 +531,23 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     });
   }
 
-  // Update obstacles
+  // Update obstacles — movement responds to music
+  const musicPulse = state.beatPulse;
   for (const obs of state.obstacles) {
     obs.pos.x += obs.vel.x;
-    obs.pos.y += obs.vel.y;
-    obs.rotation += obs.rotSpeed;
+    obs.pos.y += obs.vel.y * (0.8 + state.musicIntensity * 0.4); // drift faster when music is intense
+    obs.rotation += obs.rotSpeed * (1 + musicPulse * 2); // spin faster on beat
 
-    // Static turret — fires at player
-    if (obs.type === 'staticturret' && obs.fireTimer !== undefined && p.alive && obs.hp > 0) {
-      obs.fireTimer--;
-      if (obs.fireTimer <= 0) {
-        obs.fireTimer = 70 + Math.floor(Math.random() * 20);
-        const angle = Math.atan2(p.pos.y - obs.pos.y, p.pos.x - obs.pos.x);
-        if (state.enemyBullets.length < 40) {
-          state.enemyBullets.push({
-            pos: { ...obs.pos },
-            vel: { x: Math.cos(angle) * 3.5, y: Math.sin(angle) * 3.5 },
-            damage: 1, radius: 4, isPlayer: false, color: '#ff6644', trail: true, ttl: 80, maxTtl: 80,
-          });
-        }
-      }
-    }
-
-    // Laser gate — pulses on/off
-    if (obs.type === 'lasergate' && obs.laserPhase !== undefined) {
-      obs.laserActive = Math.sin(state.tick * 0.03 + obs.laserPhase) > 0;
-      // Damage player if laser is active and they're in the beam
-      if (obs.laserActive && p.alive && p.invulnTimer <= 0) {
-        const dy = Math.abs(p.pos.y - obs.pos.y);
-        const dx = Math.abs(p.pos.x - obs.pos.x);
-        if (dy < 10 && dx < obs.radius) {
-          hitPlayer(state, events);
-        }
-      }
-    }
-
-    // Vortex — pulls player toward it
+    // Vortex — pull strength pulses with bass (stronger on beat)
     if (obs.type === 'vortex' && obs.pullStrength && p.alive && obs.hp > 0) {
       const dx = obs.pos.x - p.pos.x;
       const dy = obs.pos.y - p.pos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 150 && dist > 5) {
-        const pull = obs.pullStrength * (1 - dist / 150);
-        p.pos.x += (dx / dist) * pull * 2;
-        p.pos.y += (dy / dist) * pull * 2;
+      if (dist < 130 && dist > 5) {
+        const musicBoost = 1 + musicPulse * 1.5; // stronger on beat
+        const pull = obs.pullStrength * (1 - dist / 130) * musicBoost;
+        p.pos.x += (dx / dist) * pull * 1.5;
+        p.pos.y += (dy / dist) * pull * 1.5;
       }
     }
   }
@@ -1901,17 +1873,29 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
   }
 
   // Spawn obstacle from director
-  if (cmd.spawnObstacle && W > 0) {
-    const types: ('rock'|'mine'|'barrier')[] = ['rock','rock','rock','mine','barrier'];
-    const obsType = types[Math.floor(Math.random() * types.length)];
-    const radius = 14 + Math.random() * 28;
+  // Spawn obstacles driven by music mood
+  if (cmd.spawnObstacle && W > 0 && state.obstacles.length < 6) {
+    // Choose type based on music intensity — calm = graceful rocks, intense = energy/vortex
+    const intensity = state.musicIntensity;
+    let obsType: 'rock' | 'mine' | 'barrier' | 'vortex';
+    if (intensity > 0.7) obsType = Math.random() < 0.4 ? 'vortex' : 'barrier';
+    else if (intensity > 0.4) obsType = Math.random() < 0.3 ? 'barrier' : Math.random() < 0.5 ? 'mine' : 'rock';
+    else obsType = 'rock'; // quiet = just floating asteroids
+
+    const radius = obsType === 'vortex' ? 25 + Math.random() * 15
+      : obsType === 'barrier' ? 18 + Math.random() * 12
+      : 16 + Math.random() * 22;
+
+    // Graceful, slow drift — not thrown at the player
     state.obstacles.push({
-      pos: { x: 30 + Math.random() * (W - 60), y: -radius * 2 },
-      vel: { x: (Math.random() - 0.5) * 1.5, y: 0.8 + Math.random() * 1.5 },
-      radius, hp: Math.ceil(radius / 5),
+      pos: { x: 40 + Math.random() * (W - 80), y: -radius * 2 },
+      vel: { x: (Math.random() - 0.5) * 0.6, y: 0.5 + Math.random() * 0.8 },
+      radius,
+      hp: Math.ceil(radius / 4),
       type: obsType,
       rotation: Math.random() * Math.PI * 2,
-      rotSpeed: (Math.random() - 0.5) * 0.03,
+      rotSpeed: obsType === 'vortex' ? 0.06 : (Math.random() - 0.5) * 0.02,
+      pullStrength: obsType === 'vortex' ? 0.2 + intensity * 0.3 : undefined,
     });
   }
 }
