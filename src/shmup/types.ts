@@ -276,6 +276,23 @@ export interface ShmupState {
   pulseWalls: PulseWall[];     // scanning energy walls (for 'pulse_walls' signature)
   signatureLabel: string;      // text shown briefly when a signature fires
   signatureLabelTimer: number; // frames remaining
+  // Per-stage stats — captured for the end-of-stage debrief screen
+  stageStats: StageStats;
+  victoryTimer: number;        // frames since boss died (drives stats reveal + flyaway)
+  flyawayActive: boolean;      // true once the player ship begins exiting
+  flyawayProgress: number;     // 0-1, animation progress of the ship leaving
+}
+
+export interface StageStats {
+  startTick: number;       // state.tick when stage began
+  startStars: number;      // coins the player had when stage began
+  kills: number;           // enemies killed this stage
+  bossKilled: boolean;     // boss destroyed this stage
+  subsystemsDestroyed: number; // boss weak points destroyed
+  shotsHit: number;        // count of enemyHit / obstacleHit / weakPointHit events
+  damageTaken: number;     // count of playerHit events
+  endTick: number;         // captured when boss dies — for the stage-time display
+  finalCoins: number;      // captured at the same moment
 }
 
 export interface BulletCurtain {

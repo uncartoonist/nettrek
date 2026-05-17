@@ -61,6 +61,14 @@ export function createShmupState(): ShmupState {
     pulseWalls: [],
     signatureLabel: '',
     signatureLabelTimer: 0,
+    stageStats: {
+      startTick: 0, startStars: 0, kills: 0, bossKilled: false,
+      subsystemsDestroyed: 0, shotsHit: 0, damageTaken: 0,
+      endTick: 0, finalCoins: 0,
+    },
+    victoryTimer: 0,
+    flyawayActive: false,
+    flyawayProgress: 0,
   };
 }
 
@@ -147,6 +155,22 @@ export function startStage(state: ShmupState, stageIdx: number): void {
   p.maxShields = p.shields;
   p.magnetActive = false;
   p.bombCount = 1 + (state.upgrades['bomb'] || 0);
+
+  // Reset per-stage stats + the post-victory flyaway sequence
+  state.stageStats = {
+    startTick: 0,
+    startStars: p.stars,
+    kills: 0,
+    bossKilled: false,
+    subsystemsDestroyed: 0,
+    shotsHit: 0,
+    damageTaken: 0,
+    endTick: 0,
+    finalCoins: 0,
+  };
+  state.victoryTimer = 0;
+  state.flyawayActive = false;
+  state.flyawayProgress = 0;
 }
 
 export interface ShmupInput {
@@ -1080,6 +1104,30 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     state.enemyBullets = [];
     saveProgress(state);
     events.bossKilled = true;
+    // Freeze stage-time and coin totals at the moment of victory
+    state.stageStats.endTick = state.tick;
+    state.stageStats.finalCoins = state.player.stars - state.stageStats.startStars;
+  }
+
+  // ── Per-stage stat tracking — aggregate from this frame's events ──
+  if (events.enemyHit || events.obstacleHit || events.weakPointHit) state.stageStats.shotsHit++;
+  if (events.playerHit) state.stageStats.damageTaken++;
+
+  // ── Post-victory sequence: stats reveal → ship flyaway ──
+  // Victory transition fires above; from there we tick a timer that
+  // drives the stats reveal and then the player ship's exit animation.
+  if (state.phase === 'victory') {
+    state.victoryTimer++;
+    // After ~4.5s of stats display, start flying the ship off-screen
+    if (state.victoryTimer >= 270 && !state.flyawayActive) {
+      state.flyawayActive = true;
+    }
+    if (state.flyawayActive) {
+      state.flyawayProgress = Math.min(1, state.flyawayProgress + 0.012);
+      // Accelerate the ship upward off-screen
+      const p = state.player;
+      p.pos.y -= 3 + state.flyawayProgress * 14;
+    }
   }
 
   return events;
@@ -2219,6 +2267,13 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
 }
 
 function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
+  // Stats tracking — count kills (boss death sequence calls killEnemy twice
+  // so we guard against double counting)
+  if (enemy.alive) {
+    state.stageStats.kills++;
+    if (enemy.type === 'boss') state.stageStats.bossKilled = true;
+  }
+
   // T'VAK CLASS — multi-stage death sequence (3 seconds). First kill call
   // pins HP at 1, starts the sequence, and silences combat. The sequence
   // advances in updateBossDeathSequence below; when it completes it calls
@@ -2685,6 +2740,7 @@ function handleBossWeakPointHits(state: ShmupState, events: ShmupEvents): void {
 
       if (wp.hp <= 0) {
         wp.alive = false;
+        state.stageStats.subsystemsDestroyed++;
         if (!wp.weaponType) {
           // Anonymous weak point: bonus 5% hull damage on destruction
           boss.hp -= Math.floor(boss.maxHp * 0.05);

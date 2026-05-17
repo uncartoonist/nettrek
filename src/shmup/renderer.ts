@@ -1805,106 +1805,103 @@ export class ShmupRenderer {
       ctx.fillRect(0, 0, w, h);
     }
 
-    // Boss warning banner — elegant amber alert with cyan corner brackets.
-    // Deliberately NOT red so it can't be confused with the damage vignette.
+    // Boss arrival — compact RADAR BEACON in the upper-right corner.
+    // Sweeping radar arm with a bright red blip at the top representing
+    // the incoming boss. Replaces the full-screen scanline + classification
+    // card which felt like a HUD takeover. Now the alert sits in its own
+    // corner like a real ship's sensor display.
     if (state.bossWarning > 0) {
       const stageNow = state.stages[state.currentStage];
-      const isCapital = stageNow?.boss?.type === 'tvak';
-      const t0 = 120 - state.bossWarning; // frames since warning started (0 → 120)
-      const intro = Math.min(1, t0 / 18);  // 0-1 ease-in over 18 frames
+      const t0 = 120 - state.bossWarning;
+      const intro = Math.min(1, t0 / 18);
+      const outro = Math.min(1, state.bossWarning / 18);
+      const fade = intro * outro;
 
-      // ── Corner brackets — sweep in from the four corners ──
-      const bracketColor = 'rgba(120, 220, 255, ';
-      const bracketLen = 28 + intro * 20;
-      const inset = 18 - intro * 6;
-      const lw = 2;
-      ctx.lineWidth = lw;
-      ctx.strokeStyle = bracketColor + (0.6 * intro) + ')';
-      // Top-left
-      ctx.beginPath();
-      ctx.moveTo(inset, inset + bracketLen);
-      ctx.lineTo(inset, inset);
-      ctx.lineTo(inset + bracketLen, inset);
-      ctx.stroke();
-      // Top-right
-      ctx.beginPath();
-      ctx.moveTo(w - inset - bracketLen, inset);
-      ctx.lineTo(w - inset, inset);
-      ctx.lineTo(w - inset, inset + bracketLen);
-      ctx.stroke();
-      // Bottom-left
-      ctx.beginPath();
-      ctx.moveTo(inset, h - inset - bracketLen);
-      ctx.lineTo(inset, h - inset);
-      ctx.lineTo(inset + bracketLen, h - inset);
-      ctx.stroke();
-      // Bottom-right
-      ctx.beginPath();
-      ctx.moveTo(w - inset - bracketLen, h - inset);
-      ctx.lineTo(w - inset, h - inset);
-      ctx.lineTo(w - inset, h - inset - bracketLen);
-      ctx.stroke();
+      // Radar position — top-right, just under the HUD bar
+      const rR = Math.min(64, w * 0.09);   // radar radius
+      const rCx = w - rR - 24;
+      const rCy = rR + 56;
 
-      // ── Slow amber scanline that sweeps down the screen once ──
-      // Only during the first half of the warning, single pass.
-      if (t0 < 60) {
-        const sy = (t0 / 60) * h;
-        const scanGrad = ctx.createLinearGradient(0, sy - 14, 0, sy + 14);
-        scanGrad.addColorStop(0, 'rgba(255,180,60,0)');
-        scanGrad.addColorStop(0.5, 'rgba(255,180,60,0.18)');
-        scanGrad.addColorStop(1, 'rgba(255,180,60,0)');
-        ctx.fillStyle = scanGrad;
-        ctx.fillRect(0, sy - 14, w, 28);
-      }
+      ctx.save();
+      ctx.globalAlpha = fade;
 
-      // ── Centered classification card ──
-      const cardW = Math.min(360, w - 80);
-      const cardH = isCapital ? 86 : 56;
-      const cardX = (w - cardW) / 2;
-      const cardY = h * 0.32 - cardH / 2;
+      // Backplate (dark glass disc)
+      const bg = ctx.createRadialGradient(rCx, rCy, 0, rCx, rCy, rR);
+      bg.addColorStop(0, 'rgba(10, 24, 32, 0.85)');
+      bg.addColorStop(1, 'rgba(6, 14, 20, 0.92)');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(rCx, rCy, rR, 0, Math.PI * 2); ctx.fill();
 
-      // Card background (dark glass)
-      ctx.globalAlpha = intro * 0.85;
-      ctx.fillStyle = 'rgba(8, 14, 22, 0.85)';
-      ctx.fillRect(cardX, cardY, cardW, cardH);
-      // Card border (thin cyan)
-      ctx.strokeStyle = `rgba(140, 220, 255, ${intro * 0.85})`;
+      // Concentric rings (radar grid)
+      ctx.strokeStyle = 'rgba(80, 200, 140, 0.35)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardW - 1, cardH - 1);
-      // Top stripe (amber)
-      ctx.fillStyle = `rgba(255, 180, 60, ${intro * 0.85})`;
-      ctx.fillRect(cardX, cardY, cardW, 3);
-      // Bottom rule (thinner)
-      ctx.fillStyle = `rgba(140, 220, 255, ${intro * 0.6})`;
-      ctx.fillRect(cardX + 12, cardY + cardH - 1, cardW - 24, 1);
-
-      ctx.textAlign = 'center';
-      ctx.globalAlpha = intro;
-
-      if (isCapital) {
-        // Capital-class layout — 3 lines
-        ctx.fillStyle = '#ffb84a';
-        ctx.font = 'bold 13px Courier New';
-        ctx.fillText('◤ ALERT — CAPITAL CLASS ◢', w / 2, cardY + 22);
-        ctx.fillStyle = '#e8f4ff';
-        ctx.font = 'bold 15px Courier New';
-        ctx.fillText(stageNow?.boss?.name || 'UNKNOWN VESSEL', w / 2, cardY + 46);
-        // Classification line
-        ctx.fillStyle = '#88aacc';
-        ctx.font = '9px Courier New';
-        ctx.fillText('THREAT LEVEL: EXTREME · SUBSYSTEMS: 6', w / 2, cardY + 66);
-      } else {
-        // Standard boss
-        ctx.fillStyle = '#ffb84a';
-        ctx.font = 'bold 12px Courier New';
-        ctx.fillText('◤ HOSTILE COMMAND VESSEL ◢', w / 2, cardY + 22);
-        ctx.fillStyle = '#e8f4ff';
-        ctx.font = 'bold 13px Courier New';
-        ctx.fillText(stageNow?.boss?.name || 'UNKNOWN', w / 2, cardY + 42);
+      for (let i = 1; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.arc(rCx, rCy, rR * (i / 3), 0, Math.PI * 2);
+        ctx.stroke();
       }
+      // Crosshair
+      ctx.beginPath();
+      ctx.moveTo(rCx - rR, rCy); ctx.lineTo(rCx + rR, rCy);
+      ctx.moveTo(rCx, rCy - rR); ctx.lineTo(rCx, rCy + rR);
+      ctx.stroke();
 
-      ctx.globalAlpha = 1;
+      // Outer ring (bright)
+      ctx.strokeStyle = '#33ee99';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(rCx, rCy, rR, 0, Math.PI * 2); ctx.stroke();
+
+      // Sweeping radar arm
+      const sweepA = (state.tick * 0.06) % (Math.PI * 2);
+      const sweepGrad = ctx.createConicGradient(sweepA - Math.PI / 4, rCx, rCy);
+      sweepGrad.addColorStop(0, 'rgba(60, 240, 140, 0.0)');
+      sweepGrad.addColorStop(0.05, 'rgba(60, 240, 140, 0.55)');
+      sweepGrad.addColorStop(0.15, 'rgba(60, 240, 140, 0.0)');
+      sweepGrad.addColorStop(1, 'rgba(60, 240, 140, 0.0)');
+      ctx.fillStyle = sweepGrad;
+      ctx.beginPath();
+      ctx.moveTo(rCx, rCy);
+      ctx.arc(rCx, rCy, rR, sweepA - Math.PI / 4, sweepA);
+      ctx.closePath();
+      ctx.fill();
+
+      // Boss approach blip — pulses, sits at top of radar
+      const blipP = 0.6 + Math.sin(state.tick * 0.25) * 0.4;
+      const blipX = rCx + Math.sin(state.tick * 0.02) * 4;
+      const blipY = rCy - rR * 0.75;
+      // Outer pulse ring
+      ctx.strokeStyle = '#ff3344';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = fade * (1 - (state.tick % 40) / 40);
+      ctx.beginPath();
+      ctx.arc(blipX, blipY, 4 + (state.tick % 40) / 40 * 14, 0, Math.PI * 2);
+      ctx.stroke();
+      // Solid blip
+      ctx.globalAlpha = fade * blipP;
+      ctx.fillStyle = '#ff2244';
+      ctx.beginPath(); ctx.arc(blipX, blipY, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffeeee';
+      ctx.beginPath(); ctx.arc(blipX, blipY, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = fade;
+
+      // Player ship dot at the radar center
+      ctx.fillStyle = '#44aaff';
+      ctx.beginPath(); ctx.arc(rCx, rCy, 2.2, 0, Math.PI * 2); ctx.fill();
+
+      // "INCOMING" label below the radar
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ff8888';
+      ctx.font = 'bold 10px Courier New';
+      ctx.fillText('▼ INCOMING ▼', rCx, rCy + rR + 14);
+      // Boss name (compact)
+      ctx.fillStyle = '#aaccdd';
+      ctx.font = '8px Courier New';
+      const bname = stageNow?.boss?.name || 'HOSTILE';
+      ctx.fillText(bname, rCx, rCy + rR + 26);
+
       ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
+      ctx.restore();
     }
 
     // Boss entrance darkening
@@ -3318,6 +3315,100 @@ export class ShmupRenderer {
     }
     ctx.globalAlpha = 1;
 
+    // ── Mechanical detail pass — antennae, mount brackets, hex panels ──
+    // Bolted-on machinery that gives the ship a real "built by engineers"
+    // feel rather than a clean procedural blob.
+
+    // Sensor antennae on the top of the command tower
+    ctx.strokeStyle = armorAccent;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.03, -H * 0.50); ctx.lineTo(-W * 0.06, -H * 0.54);
+    ctx.moveTo( W * 0.03, -H * 0.50); ctx.lineTo( W * 0.06, -H * 0.54);
+    ctx.moveTo(0, -H * 0.50); ctx.lineTo(0, -H * 0.56);
+    ctx.stroke();
+    // Antenna tip lights
+    ctx.fillStyle = '#ff6644';
+    ctx.globalAlpha = 0.7 + Math.sin(tick * 0.18) * 0.3;
+    ctx.beginPath(); ctx.arc(0, -H * 0.56, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-W * 0.06, -H * 0.54, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( W * 0.06, -H * 0.54, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Mount brackets around each major weapon hardpoint
+    ctx.strokeStyle = armorAccent;
+    ctx.lineWidth = 1.2;
+    const mountPos = [
+      { x: -W * 0.22, y: -H * 0.40, r: 9 }, // L disruptor
+      { x:  W * 0.22, y: -H * 0.40, r: 9 }, // R disruptor (mirror display)
+      { x: -W * 0.36, y: -H * 0.34, r: 9 }, // L missile
+      { x:  W * 0.36, y: -H * 0.34, r: 9 }, // R missile
+      { x: -W * 0.40, y: -H * 0.06, r: 18 }, // L plasma
+      { x:  W * 0.40, y: -H * 0.06, r: 18 }, // R plasma
+      { x: -W * 0.42, y:  H * 0.18, r: 18 }, // L tractor
+      { x:  W * 0.42, y:  H * 0.18, r: 18 }, // R tractor
+    ];
+    for (const m of mountPos) {
+      // 4 small bracket ticks at the cardinal points
+      for (let i = 0; i < 4; i++) {
+        const a = (Math.PI / 2) * i + Math.PI / 4;
+        const x0 = m.x + Math.cos(a) * (m.r + 2);
+        const y0 = m.y + Math.sin(a) * (m.r + 2);
+        const x1 = m.x + Math.cos(a) * (m.r + 5);
+        const y1 = m.y + Math.sin(a) * (m.r + 5);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      }
+    }
+
+    // Hex-panel texture on the central body (subtle, suggests heavy plating)
+    ctx.strokeStyle = '#3a3a44';
+    ctx.lineWidth = 0.6;
+    ctx.globalAlpha = 0.5;
+    for (let row = 0; row < 4; row++) {
+      const py = -H * 0.10 + row * H * 0.08;
+      const offset = (row % 2 === 0 ? 0 : W * 0.022);
+      for (let col = -2; col <= 2; col++) {
+        const px = col * W * 0.045 + offset;
+        // Small hexagon outline
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI * 2 / 6) * i + Math.PI / 6;
+          const hx = px + Math.cos(a) * W * 0.020;
+          const hy = py + Math.sin(a) * W * 0.020;
+          if (i === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Battle-damage hairline cracks (subtle, scattered across the hull)
+    ctx.strokeStyle = '#080810';
+    ctx.lineWidth = 0.8;
+    ctx.globalAlpha = 0.55;
+    const cracks = [
+      [-W * 0.28, -H * 0.10, -W * 0.18, -H * 0.04],
+      [ W * 0.30,  H * 0.04,  W * 0.20,  H * 0.10],
+      [-W * 0.10,  H * 0.22, -W * 0.05,  H * 0.30],
+      [ W * 0.08, -H * 0.20,  W * 0.14, -H * 0.12],
+    ];
+    for (const [x1, y1, x2, y2] of cracks) {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Tiny amber service lights along the central spine
+    ctx.fillStyle = '#ffaa44';
+    for (let i = 0; i < 6; i++) {
+      const py = -H * 0.05 + i * H * 0.06;
+      const pulse = 0.4 + 0.5 * Math.sin(tick * 0.05 + i * 1.7);
+      ctx.globalAlpha = pulse;
+      ctx.fillRect(-W * 0.10, py, 1.5, 1.5);
+      ctx.fillRect( W * 0.10 - 1.5, py, 1.5, 1.5);
+    }
+    ctx.globalAlpha = 1;
+
     // ── Subtle scanline overlay on the hull (retro-arcade feel) ──
     ctx.globalAlpha = 0.05;
     ctx.fillStyle = '#000000';
@@ -4343,16 +4434,17 @@ export class ShmupRenderer {
   private drawVictory(state: ShmupState): void {
     const { ctx, w, h } = this;
     const t = state.tick;
+    const vt = state.victoryTimer; // frames since boss died
 
-    // Dramatic fade-in
-    const fadeIn = Math.min(1, (t % 1000) / 60);
-    ctx.fillStyle = `rgba(0,0,10,${0.7 * fadeIn})`;
+    // Dramatic fade-in based on victoryTimer (not wall-clock tick)
+    const fadeIn = Math.min(1, vt / 30);
+    ctx.fillStyle = `rgba(0,0,10,${0.75 * fadeIn})`;
     ctx.fillRect(0, 0, w, h);
 
-    // Celebratory rays radiating from center
+    // Celebratory rays
     ctx.save();
-    ctx.translate(w / 2, h / 2);
-    ctx.globalAlpha = 0.08 * fadeIn;
+    ctx.translate(w / 2, h * 0.4);
+    ctx.globalAlpha = 0.06 * fadeIn;
     for (let i = 0; i < 12; i++) {
       const a = (Math.PI * 2 / 12) * i + t * 0.005;
       ctx.fillStyle = i % 2 === 0 ? '#00ccff' : '#ffdd00';
@@ -4365,53 +4457,128 @@ export class ShmupRenderer {
     }
     ctx.restore();
 
-    // Main text with glow
+    // ── Stats panel — animated in over time ──
     ctx.textAlign = 'center';
     ctx.globalAlpha = fadeIn;
 
-    // Glow behind text
+    // Title
     ctx.shadowColor = '#00ccff';
     ctx.shadowBlur = 20;
     ctx.fillStyle = '#00ccff';
-    ctx.font = 'bold 36px Courier New';
-    ctx.fillText('SECTOR CLEARED', w / 2, h / 2 - 40);
+    ctx.font = 'bold 32px Courier New';
+    ctx.fillText('SECTOR CLEARED', w / 2, h * 0.25);
     ctx.shadowBlur = 0;
 
     // Stage name
     const stage = state.stages[state.currentStage];
     if (stage) {
       ctx.fillStyle = '#ffffff';
-      ctx.font = '14px Courier New';
-      ctx.fillText(stage.name, w / 2, h / 2 - 10);
+      ctx.font = 'bold 14px Courier New';
+      ctx.fillText(stage.name, w / 2, h * 0.25 + 26);
+      ctx.fillStyle = '#88aacc';
+      ctx.font = '10px Courier New';
+      ctx.fillText(stage.subtitle, w / 2, h * 0.25 + 42);
     }
 
-    // Score with golden glow
-    ctx.shadowColor = '#ffdd00';
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = '#ffdd00';
-    ctx.font = 'bold 20px Courier New';
-    ctx.fillText(`SCORE: ${state.score.toLocaleString()}`, w / 2, h / 2 + 25);
-    ctx.shadowBlur = 0;
+    // ── Stats card — fixed-width panel centered ──
+    const ss = state.stageStats;
+    const elapsedFrames = Math.max(0, ss.endTick - ss.startTick);
+    const elapsedSec = Math.floor(elapsedFrames / 60);
+    const mm = Math.floor(elapsedSec / 60).toString().padStart(2, '0');
+    const sss = (elapsedSec % 60).toString().padStart(2, '0');
+    const coinsThisStage = ss.finalCoins;
 
-    // Stats
-    ctx.fillStyle = '#44ff44';
-    ctx.font = '14px Courier New';
-    ctx.fillText(`★ ${state.player.stars} COINS EARNED`, w / 2, h / 2 + 55);
+    // Each row reveals one at a time as victoryTimer climbs
+    const rows: { label: string; value: string; color: string; revealAt: number }[] = [
+      { label: 'TIME',              value: `${mm}:${sss}`,                       color: '#aaccee', revealAt: 30 },
+      { label: 'SCORE',             value: state.score.toLocaleString(),         color: '#ffdd00', revealAt: 50 },
+      { label: 'ENEMIES DOWN',      value: String(ss.kills),                     color: '#ff8866', revealAt: 70 },
+      { label: 'SUBSYSTEMS DESTROYED', value: String(ss.subsystemsDestroyed),    color: '#ff44aa', revealAt: 90 },
+      { label: 'SHOTS LANDED',      value: String(ss.shotsHit),                  color: '#44ddff', revealAt: 110 },
+      { label: 'DAMAGE TAKEN',      value: String(ss.damageTaken),               color: ss.damageTaken === 0 ? '#44ff44' : '#aa8866', revealAt: 130 },
+      { label: 'COINS COLLECTED',   value: `★ ${coinsThisStage}`,                color: '#ffdd00', revealAt: 150 },
+    ];
 
-    // Rank
-    const rank = state.score > 50000 ? 'S' : state.score > 30000 ? 'A' : state.score > 15000 ? 'B' : 'C';
-    const rankColor = rank === 'S' ? '#ffdd00' : rank === 'A' ? '#00ccff' : rank === 'B' ? '#44ff44' : '#888';
-    ctx.fillStyle = rankColor;
-    ctx.font = 'bold 48px Courier New';
-    ctx.fillText(rank, w / 2, h / 2 + 110);
-    ctx.font = '10px Courier New';
-    ctx.fillStyle = '#666';
-    ctx.fillText('RANK', w / 2, h / 2 + 125);
+    const cardW = Math.min(420, w * 0.78);
+    const cardX = (w - cardW) / 2;
+    const rowH = 24;
+    const cardY = h * 0.40;
+    const cardH = rows.length * rowH + 28;
 
-    // Continue prompt (pulsing)
-    ctx.fillStyle = `rgba(136,136,136,${0.5 + Math.sin(t * 0.05) * 0.3})`;
+    // Card background
+    ctx.fillStyle = 'rgba(8, 16, 26, 0.85)';
+    ctx.fillRect(cardX, cardY, cardW, cardH);
+    ctx.strokeStyle = 'rgba(120,200,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardW - 1, cardH - 1);
+    // Top accent stripe
+    ctx.fillStyle = '#00ccff';
+    ctx.fillRect(cardX, cardY, cardW, 2);
+
+    // "DEBRIEF" header
+    ctx.fillStyle = '#88ddff';
+    ctx.font = 'bold 11px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('— STAGE DEBRIEF —', w / 2, cardY + 18);
+
+    // Rows
+    ctx.textAlign = 'left';
     ctx.font = '12px Courier New';
-    ctx.fillText('PRESS ENTER TO CONTINUE', w / 2, h / 2 + 160);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (vt < r.revealAt) continue;
+      const rowAlpha = Math.min(1, (vt - r.revealAt) / 12);
+      ctx.globalAlpha = fadeIn * rowAlpha;
+      const ry = cardY + 28 + i * rowH + 16;
+      // Label
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillText(r.label, cardX + 22, ry);
+      // Dotted leader
+      ctx.fillStyle = '#3a4a5a';
+      const labelW = ctx.measureText(r.label).width;
+      for (let dx = cardX + 28 + labelW; dx < cardX + cardW - 90; dx += 6) {
+        ctx.fillRect(dx, ry - 3, 2, 2);
+      }
+      // Value
+      ctx.fillStyle = r.color;
+      ctx.textAlign = 'right';
+      ctx.fillText(r.value, cardX + cardW - 22, ry);
+      ctx.textAlign = 'left';
+    }
+    ctx.globalAlpha = fadeIn;
+
+    // Rank computed from score (reveals after all rows)
+    if (vt >= 180) {
+      const rankAlpha = Math.min(1, (vt - 180) / 30);
+      ctx.globalAlpha = fadeIn * rankAlpha;
+      const rank = state.score > 80000 ? 'S' : state.score > 50000 ? 'A' : state.score > 25000 ? 'B' : 'C';
+      const rankColor = rank === 'S' ? '#ffdd00' : rank === 'A' ? '#00ccff' : rank === 'B' ? '#44ff44' : '#888888';
+      ctx.shadowColor = rankColor;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = rankColor;
+      ctx.font = 'bold 56px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(rank, w / 2, cardY + cardH + 64);
+      ctx.shadowBlur = 0;
+      ctx.font = '10px Courier New';
+      ctx.fillStyle = '#888';
+      ctx.fillText('RANK', w / 2, cardY + cardH + 80);
+    }
+
+    // Continue prompt — only after flyaway sequence has been kicked off
+    if (state.flyawayActive) {
+      ctx.globalAlpha = fadeIn * (0.6 + Math.sin(t * 0.08) * 0.3);
+      ctx.fillStyle = '#aaccee';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('PRESS ENTER TO CONTINUE', w / 2, h * 0.93);
+    } else if (vt >= 220) {
+      ctx.globalAlpha = fadeIn * (0.4 + Math.sin(t * 0.08) * 0.2);
+      ctx.fillStyle = '#557788';
+      ctx.font = '10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('▼ DEPARTING SECTOR ▼', w / 2, h * 0.93);
+    }
     ctx.textAlign = 'left';
     ctx.globalAlpha = 1;
   }
