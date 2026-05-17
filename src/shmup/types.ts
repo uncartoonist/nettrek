@@ -38,6 +38,9 @@ export interface PlayerShip {
   // Currency
   stars: number;
   totalStars: number;     // lifetime total (for upgrade hangar)
+  // Shield burst (hard-push / long-press on touch) — defensive panic button
+  shieldBurstCooldown: number;  // frames until next burst is allowed
+  shieldBurstActive: number;    // frames remaining of active burst visual
 }
 
 // ── Enemies ────────────────────────────────────────────────

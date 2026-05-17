@@ -1779,6 +1779,29 @@ export class ShmupRenderer {
     ctx.save();
     ctx.translate(p.pos.x, p.pos.y);
 
+    // ── Shield burst ring — visible while shieldBurstActive > 0 ──
+    if (p.shieldBurstActive > 0) {
+      const progress = 1 - p.shieldBurstActive / 60;
+      const ringR = p.width * (1.5 + progress * 1.2);
+      ctx.strokeStyle = '#44ddff';
+      ctx.lineWidth = 3 * (1 - progress * 0.7);
+      ctx.globalAlpha = 0.85 * (1 - progress);
+      ctx.beginPath(); ctx.arc(0, 0, ringR, 0, Math.PI * 2); ctx.stroke();
+      // Inner softer ring
+      ctx.strokeStyle = '#aaeeff';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.5 * (1 - progress);
+      ctx.beginPath(); ctx.arc(0, 0, ringR * 0.75, 0, Math.PI * 2); ctx.stroke();
+      // Soft inner glow
+      const sbGrad = ctx.createRadialGradient(0, 0, ringR * 0.3, 0, 0, ringR);
+      sbGrad.addColorStop(0, 'rgba(120,220,255,0)');
+      sbGrad.addColorStop(0.7, `rgba(120,220,255,${0.12 * (1 - progress)})`);
+      sbGrad.addColorStop(1, 'rgba(120,220,255,0)');
+      ctx.fillStyle = sbGrad;
+      ctx.beginPath(); ctx.arc(0, 0, ringR, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     const W = p.width * 1.2, H = p.height * 1.2; // slightly bigger
     const ep = 0.6 + Math.sin(state.tick * 0.25) * 0.3; // engine pulse
 

@@ -93,6 +93,8 @@ function createPlayer(): PlayerShip {
     lockOnCooldown: 0,
     stars: 0,
     totalStars: parseInt(localStorage.getItem('nettrek-stars') || '0'),
+    shieldBurstCooldown: 0,
+    shieldBurstActive: 0,
   };
 }
 
@@ -151,7 +153,8 @@ export interface ShmupInput {
   fire: boolean;
   fireSpecial: boolean;
   bomb: boolean;
-  lockOnFire: boolean; // double-tap triggers lock-on phaser
+  lockOnFire: boolean;   // double-tap triggers lock-on phaser
+  shieldBurst: boolean;  // hard-push (pressure) or long-press — defensive panic burst
 }
 
 export interface ShmupEvents {
@@ -219,6 +222,21 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     p.pos.y = Math.max(p.height / 2, Math.min(H - p.height / 2, p.pos.y));
 
     if (p.invulnTimer > 0) p.invulnTimer--;
+
+    // ── Shield burst (hard-push / long-press) — defensive panic ──
+    if (p.shieldBurstCooldown > 0) p.shieldBurstCooldown--;
+    if (p.shieldBurstActive > 0) p.shieldBurstActive--;
+    if (input.shieldBurst && p.shieldBurstCooldown <= 0) {
+      // 90 frames of invulnerability + a brief active visual ring.
+      p.invulnTimer = Math.max(p.invulnTimer, 90);
+      p.shieldBurstActive = 60;
+      p.shieldBurstCooldown = 240; // 4-second cooldown — meaningful, not spammable
+      state.popups.push({
+        pos: { x: p.pos.x, y: p.pos.y - 30 },
+        text: 'SHIELDS UP',
+        color: '#44ddff', life: 36, maxLife: 36,
+      });
+    }
 
     // Engine trail particles (capped — only every 3rd frame)
     if (state.tick % 3 === 0 && state.particles.length < 400) {

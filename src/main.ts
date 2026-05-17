@@ -19,109 +19,207 @@ const musicAnalyzer = new MusicAnalyzer();
 setAnalyzer(musicAnalyzer);
 
 // ── Input ──────────────────────────────────────────────────
+// Single Pointer-Event-based pipeline that handles mouse, touch, and
+// Apple Pencil uniformly. Each pointer keeps absolute coordinates and
+// pressure; the ship follows the highest-priority active pointer (pen >
+// touch > mouse). Double-tap fires the lock-on phaser. Hard-push
+// (pressure > 0.55, e.g. Pencil hard press / 3D Touch) or a long-press
+// (~380ms while stationary) activates the defensive shield burst.
+
 const keys: Record<string, boolean> = {};
-const input: ShmupInput = { moveX: 0, moveY: 0, fire: false, fireSpecial: false, bomb: false, lockOnFire: false };
+const input: ShmupInput = {
+  moveX: 0, moveY: 0,
+  fire: false, fireSpecial: false, bomb: false,
+  lockOnFire: false, shieldBurst: false,
+};
 
-// Double-tap detection for lock-on phaser
-let lastClickTime = 0;
-const DOUBLE_TAP_MS = 350;
+type PtrType = 'mouse' | 'touch' | 'pen';
+interface ActivePointer {
+  id: number;
+  type: PtrType;
+  x: number;
+  y: number;
+  pressure: number;
+  downTime: number;
+  downX: number;
+  downY: number;
+  longPressFired: boolean;
+}
+const activePointers = new Map<number, ActivePointer>();
+let primaryPointerId: number | null = null;
 
-// Mouse state
-let mouseX = window.innerWidth / 2;
-let mouseY = window.innerHeight * 0.75;
-let mouseDown = false;
-let mouseActive = false; // becomes true on first mouse move
-
-canvas.addEventListener('mousemove', (e) => {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-  mouseActive = true;
-});
+// Buttons / mouse-specific state
 let rightMouseDown = false;
-canvas.addEventListener('mousedown', (e) => {
-  mouseActive = true;
-  if (e.button === 0) {
-    mouseDown = true;
-    // Double-tap detection for lock-on phaser
-    const now = Date.now();
-    if (now - lastClickTime < DOUBLE_TAP_MS) {
-      input.lockOnFire = true;
-    }
-    lastClickTime = now;
+let mouseHover = { x: window.innerWidth / 2, y: window.innerHeight * 0.75, active: false };
+
+// Double-tap detection
+let lastTapTime = 0;
+let lastTapX = 0;
+let lastTapY = 0;
+const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_DIST = 50;
+
+// Tunables
+const HARD_PRESS_THRESHOLD = 0.55;  // pressure above this = "hard push"
+const LONG_PRESS_MS = 380;          // hold longer than this while still = shield burst
+const LONG_PRESS_MAX_MOVE = 14;     // px
+
+function rank(t: PtrType): number {
+  return t === 'pen' ? 2 : t === 'touch' ? 1 : 0;
+}
+
+function recomputePrimary(): void {
+  let best: ActivePointer | null = null;
+  for (const p of activePointers.values()) {
+    if (!best || rank(p.type) > rank(best.type)) best = p;
   }
-  if (e.button === 2) { rightMouseDown = true; }
-  e.preventDefault();
-});
-canvas.addEventListener('mouseup', (e) => {
-  if (e.button === 0) mouseDown = false;
-  if (e.button === 2) rightMouseDown = false;
-});
-canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+  primaryPointerId = best ? best.id : null;
+}
 
-// Touch state
-let touchMoveX = 0;
-let touchMoveY = 0;
-let touchActive = false;
-let touchStartX = 0;
-let touchStartY = 0;
-
+// ── Keyboard ─────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (state.phase === 'playing' || state.phase === 'boss') e.preventDefault();
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-// Touch controls
-canvas.addEventListener('touchstart', (e) => {
+// ── Pointer (mouse + touch + pen) ────────────────────────
+canvas.addEventListener('pointerdown', (e) => {
+  // Right-click on mouse stays separate (used for specials)
+  if (e.pointerType === 'mouse' && e.button === 2) {
+    rightMouseDown = true;
+    e.preventDefault();
+    return;
+  }
+
+  const ptr: ActivePointer = {
+    id: e.pointerId,
+    type: (e.pointerType as PtrType) || 'mouse',
+    x: e.clientX,
+    y: e.clientY,
+    pressure: e.pressure,
+    downTime: performance.now(),
+    downX: e.clientX,
+    downY: e.clientY,
+    longPressFired: false,
+  };
+  activePointers.set(e.pointerId, ptr);
+  // Capture so we keep getting events even if the pointer leaves the canvas
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+
+  // Prefer pen > touch > mouse for steering
+  if (primaryPointerId === null) {
+    primaryPointerId = e.pointerId;
+  } else {
+    const cur = activePointers.get(primaryPointerId);
+    if (!cur || rank(ptr.type) > rank(cur.type)) primaryPointerId = e.pointerId;
+  }
+
+  // Double-tap (any pointer type) → lock-on phaser
+  const now = performance.now();
+  const dx = e.clientX - lastTapX;
+  const dy = e.clientY - lastTapY;
+  if (now - lastTapTime < DOUBLE_TAP_MS && Math.hypot(dx, dy) < DOUBLE_TAP_DIST) {
+    input.lockOnFire = true;
+    lastTapTime = 0; // prevent triple-tap re-trigger
+  } else {
+    lastTapTime = now;
+    lastTapX = e.clientX;
+    lastTapY = e.clientY;
+  }
+
   e.preventDefault();
-  const t = e.touches[0];
-  if (!t) return;
-  touchActive = true;
-  touchStartX = t.clientX;
-  touchStartY = t.clientY;
-  input.fire = true;
-});
-canvas.addEventListener('touchmove', (e) => {
-  e.preventDefault();
-  if (!touchActive) return;
-  const t = e.touches[0];
-  if (!t) return;
-  touchMoveX = (t.clientX - touchStartX) * 0.15;
-  touchMoveY = (t.clientY - touchStartY) * 0.15;
-  touchStartX = t.clientX;
-  touchStartY = t.clientY;
-});
-canvas.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  touchActive = false;
-  touchMoveX = 0;
-  touchMoveY = 0;
-  input.fire = false;
 });
 
+canvas.addEventListener('pointermove', (e) => {
+  const ptr = activePointers.get(e.pointerId);
+  if (ptr) {
+    ptr.x = e.clientX;
+    ptr.y = e.clientY;
+    ptr.pressure = e.pressure;
+  } else if (e.pointerType === 'mouse') {
+    // Mouse hover (no buttons down) — still drive the ship
+    mouseHover.x = e.clientX;
+    mouseHover.y = e.clientY;
+    mouseHover.active = true;
+  }
+  e.preventDefault();
+});
+
+function releasePointer(e: PointerEvent): void {
+  if (e.pointerType === 'mouse' && e.button === 2) {
+    rightMouseDown = false;
+    return;
+  }
+  activePointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch {}
+  if (primaryPointerId === e.pointerId) recomputePrimary();
+}
+canvas.addEventListener('pointerup', releasePointer);
+canvas.addEventListener('pointercancel', releasePointer);
+canvas.addEventListener('pointerleave', (e) => {
+  // Only delete touch/pen on leave — mouse can hover off-canvas
+  if (e.pointerType !== 'mouse') releasePointer(e);
+});
+
+canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+
 function updateInput(): void {
-  if (mouseActive && (state.phase === 'playing' || state.phase === 'boss')) {
-    // Mouse: direct position tracking — ship snaps to cursor
-    const dx = mouseX - state.player.pos.x;
-    const dy = mouseY - state.player.pos.y;
+  const playing = state.phase === 'playing' || state.phase === 'boss';
+  // Always reset per-frame triggers (shieldBurst is consumed by engine each frame)
+  input.shieldBurst = false;
+
+  if (!playing) {
+    input.moveX = input.moveY = 0;
+    input.fire = false;
+    input.fireSpecial = false;
+    return;
+  }
+
+  // Pick the steering source: an active down-pointer beats mouse hover.
+  const primary = primaryPointerId !== null ? activePointers.get(primaryPointerId) : null;
+  const usingPointer = primary != null;
+  const sx = usingPointer ? primary!.x : (mouseHover.active ? mouseHover.x : -1);
+  const sy = usingPointer ? primary!.y : (mouseHover.active ? mouseHover.y : -1);
+
+  if (sx >= 0) {
+    // Touch needs a Y-offset so the finger doesn't cover the ship.
+    // Pencil is precise — small offset. Mouse — no offset.
+    const ptype: PtrType = usingPointer ? primary!.type : 'mouse';
+    const offsetY = ptype === 'touch' ? -55 : ptype === 'pen' ? -14 : 0;
+    const targetX = sx;
+    const targetY = sy + offsetY;
+
+    const dx = targetX - state.player.pos.x;
+    const dy = targetY - state.player.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 2) {
-      // Normalize and scale — full speed toward cursor, no smoothing lag
-      const speed = Math.min(dist, 60) / 60; // ramp up quickly
+      const speed = Math.min(dist, 60) / 60;
       input.moveX = (dx / dist) * speed;
       input.moveY = (dy / dist) * speed;
     } else {
       input.moveX = 0;
       input.moveY = 0;
     }
-    // Auto-fire while in combat
-    input.fire = true;
-    input.fireSpecial = mouseDown || rightMouseDown; // left-click OR right-click fires specials
-  } else if (touchActive) {
-    input.moveX = Math.max(-1, Math.min(1, touchMoveX));
-    input.moveY = Math.max(-1, Math.min(1, touchMoveY));
-    touchMoveX *= 0.5;
-    touchMoveY *= 0.5;
+
+    input.fire = true;  // auto-fire while alive
+    input.fireSpecial = rightMouseDown;
+
+    // ── Shield burst: hard-push (Pencil / 3D Touch) ──
+    if (usingPointer && primary!.pressure > HARD_PRESS_THRESHOLD && !primary!.longPressFired) {
+      input.shieldBurst = true;
+      primary!.longPressFired = true; // single-shot per hold
+    }
+
+    // ── Shield burst: long-press fallback (Haptic Touch / finger) ──
+    if (usingPointer && !primary!.longPressFired) {
+      const held = performance.now() - primary!.downTime;
+      const moved = Math.hypot(primary!.x - primary!.downX, primary!.y - primary!.downY);
+      if (held > LONG_PRESS_MS && moved < LONG_PRESS_MAX_MOVE) {
+        input.shieldBurst = true;
+        primary!.longPressFired = true;
+      }
+    }
   } else {
     // Keyboard fallback
     input.moveX = (keys['ArrowRight'] || keys['KeyD'] ? 1 : 0) - (keys['ArrowLeft'] || keys['KeyA'] ? 1 : 0);
@@ -129,6 +227,7 @@ function updateInput(): void {
     input.fire = keys['Space'] || keys['KeyZ'] || false;
     input.fireSpecial = keys['ShiftLeft'] || keys['ShiftRight'] || false;
   }
+
   if (keys['KeyX'] || keys['KeyB']) {
     input.bomb = true;
     keys['KeyX'] = false;
