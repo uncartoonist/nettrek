@@ -89,8 +89,9 @@ function createPlayer(): PlayerShip {
     scoreMultTimer: 0,
     lockOnPhaserReady: false,
     lockOnTarget: -1,
-    lockOnBeamTimer: 0,
-    lockOnCooldown: 0,
+    phaserCharge: 1,           // start fully charged
+    phaserBeamActive: false,
+    phaserRechargeDelay: 0,
     stars: 0,
     totalStars: parseInt(localStorage.getItem('nettrek-stars') || '0'),
     shieldBurstCooldown: 0,
@@ -314,33 +315,55 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       }
     }
 
-    // ── Lock-on phaser — double-tap to target and destroy ──
-    if (p.lockOnCooldown > 0) p.lockOnCooldown--;
+    // ── Lock-on phaser — charge-based ────────────────────────
+    // Fully charged beam locks on a target and stays locked until either
+    // the target is destroyed or power drains. Recharge rate is tied to
+    // music intensity so the weapon's rhythm fits the game's: quiet
+    // moments recharge you for the next drop.
+    //
+    // Tuning numbers (all in 60fps frames):
+    //   DRAIN_RATE   = 0.012/frame  → ~83 frames at full = 1.4s of beam
+    //   DAMAGE/frame = 4 + phaserLevel (up to 7 at lvl 3 = 581 total)
+    //   RECHARGE_DELAY after beam ends = 30 frames (0.5s "cool-off")
+    //   RECHARGE_QUIET    = 0.012/frame → ~83 frames to full (1.4s)
+    //   RECHARGE_INTENSE  = 0.006/frame → ~167 frames to full (2.8s)
+    //   Activation requires phaserCharge >= 0.99 (fully charged)
+    const DRAIN_RATE = 0.012;
+    const RECHARGE_QUIET = 0.012;
+    const RECHARGE_INTENSE = 0.006;
+    const RECHARGE_DELAY_FRAMES = 30;
+    const ACTIVATION_THRESHOLD = 0.99;
 
-    if (p.lockOnPhaserReady && input.lockOnFire && p.lockOnCooldown <= 0 && p.lockOnBeamTimer <= 0) {
+    // Activation — only when fully charged
+    if (
+      p.lockOnPhaserReady && input.lockOnFire &&
+      !p.phaserBeamActive && p.phaserCharge >= ACTIVATION_THRESHOLD
+    ) {
       // Find nearest enemy to lock onto
       let target: Enemy | null = null;
       let bestDist = Infinity;
       for (const e of state.enemies) {
         if (!e.alive) continue;
         const d = Math.sqrt((e.pos.x - p.pos.x) ** 2 + (e.pos.y - p.pos.y) ** 2);
-        if (d < bestDist && d < W * 0.8) { bestDist = d; target = e; }
+        if (d < bestDist && d < W * 0.85) { bestDist = d; target = e; }
       }
       if (target) {
         p.lockOnTarget = target.id;
-        p.lockOnBeamTimer = 30; // beam lasts 0.5 seconds
-        p.lockOnCooldown = 90;  // 1.5 second cooldown
+        p.phaserBeamActive = true;
+        p.phaserRechargeDelay = 0;
       }
       input.lockOnFire = false;
     }
 
-    // Active lock-on beam — damages target continuously
-    if (p.lockOnBeamTimer > 0) {
-      p.lockOnBeamTimer--;
+    // Active beam — drains charge, damages target, ends when target dies
+    // or charge hits zero
+    if (p.phaserBeamActive) {
       const target = state.enemies.find(e => e.id === p.lockOnTarget && e.alive);
       if (target) {
-        // Deal damage every frame
-        target.hp -= 3;
+        // Deal damage scaled by phaserLevel
+        target.hp -= 4 + p.phaserLevel;
+        p.phaserCharge -= DRAIN_RATE;
+
         // Sparks at impact point
         if (state.tick % 3 === 0 && state.particles.length < 450) {
           state.particles.push({
@@ -349,12 +372,44 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
           });
         }
         if (target.hp <= 0) {
-          p.lockOnBeamTimer = 0;
+          // Target destroyed — disengage but retain remaining charge
+          p.phaserBeamActive = false;
           p.lockOnTarget = -1;
+          p.phaserRechargeDelay = RECHARGE_DELAY_FRAMES;
+        } else if (p.phaserCharge <= 0) {
+          // Out of power — beam fizzles
+          p.phaserCharge = 0;
+          p.phaserBeamActive = false;
+          p.lockOnTarget = -1;
+          p.phaserRechargeDelay = RECHARGE_DELAY_FRAMES;
+          state.popups.push({
+            pos: { x: p.pos.x, y: p.pos.y - 28 },
+            text: 'PHASER DRAINED',
+            color: '#ff6633', life: 30, maxLife: 30,
+          });
         }
       } else {
-        p.lockOnBeamTimer = 0;
+        // Target gone (despawned, off-screen, etc.) — disengage
+        p.phaserBeamActive = false;
         p.lockOnTarget = -1;
+        p.phaserRechargeDelay = RECHARGE_DELAY_FRAMES;
+      }
+    } else {
+      // Not firing — recharge (after the small cool-off delay).
+      // Rate is tied to music intensity so quiet sections recharge faster.
+      if (p.phaserRechargeDelay > 0) {
+        p.phaserRechargeDelay--;
+      } else if (p.phaserCharge < 1) {
+        const rate = state.musicIntensity > 0.7 ? RECHARGE_INTENSE : RECHARGE_QUIET;
+        p.phaserCharge = Math.min(1, p.phaserCharge + rate);
+        // One-shot popup when the phaser becomes ready again
+        if (p.phaserCharge >= 1 && p.lockOnPhaserReady) {
+          state.popups.push({
+            pos: { x: p.pos.x, y: p.pos.y - 28 },
+            text: 'PHASER READY',
+            color: '#ffcc88', life: 28, maxLife: 28,
+          });
+        }
       }
     }
   }

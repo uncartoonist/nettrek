@@ -1507,7 +1507,7 @@ export class ShmupRenderer {
     }
 
     // Lock-on phaser beam
-    if (state.player.lockOnBeamTimer > 0) {
+    if (state.player.phaserBeamActive) {
       this.drawLockOnBeam(ctx, state);
     }
 
@@ -2006,7 +2006,9 @@ export class ShmupRenderer {
     if (!target) return;
 
     const t = state.tick;
-    const intensity = p.lockOnBeamTimer / 30; // 1 at start, 0 at end
+    // Beam intensity tracks remaining charge — dims as power drains so the
+    // player can feel the weapon running out of juice.
+    const intensity = Math.max(0.25, p.phaserCharge);
 
     // Main beam — orange phaser
     ctx.strokeStyle = '#ff8833';
@@ -2978,7 +2980,16 @@ export class ShmupRenderer {
       { icon: '≋', label: 'PHS', level: p.phaserLevel, max: 3, color: '#ff8833', active: p.phaserLevel > 0 },
       { icon: '◎', label: 'SHD', level: p.shields, max: p.maxShields, color: '#44ff44', active: true },
       { icon: '●', label: 'BMB', level: p.bombCount, max: 5, color: '#ff4444', active: p.bombCount > 0 },
-      { icon: '⊕', label: 'LOK', level: p.lockOnPhaserReady ? 1 : 0, max: 1, color: '#ff8833', active: p.lockOnPhaserReady && p.lockOnCooldown <= 0 },
+      // LOK slot doubles as a phaser charge meter: 5 pips fill as power
+      // recharges. Slot lights up only when fully charged and idle (ready to fire).
+      {
+        icon: '⊕',
+        label: 'LOK',
+        level: p.lockOnPhaserReady ? Math.round(p.phaserCharge * 5) : 0,
+        max: 5,
+        color: p.phaserBeamActive ? '#ff5522' : p.phaserCharge >= 0.99 ? '#ff8833' : '#aa6633',
+        active: p.lockOnPhaserReady && p.phaserCharge >= 0.99 && !p.phaserBeamActive,
+      },
     ];
 
     // Scale for screen size

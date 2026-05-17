@@ -30,11 +30,13 @@ export interface PlayerShip {
   droneTimer: number;
   dronePos: Vec2;          // wingman position
   scoreMultTimer: number;  // 2x score
-  // Lock-on phaser
+  // Lock-on phaser — charge-based: locks on until target dies or power drains,
+  // then has to recharge before it can fire again.
   lockOnPhaserReady: boolean;  // has the weapon
   lockOnTarget: number;        // enemy id being targeted (-1 = none)
-  lockOnBeamTimer: number;     // frames of active beam remaining
-  lockOnCooldown: number;      // frames until can fire again
+  phaserCharge: number;        // 0-1, current power level (1 = fully charged)
+  phaserBeamActive: boolean;   // is the beam currently firing?
+  phaserRechargeDelay: number; // frames before recharge resumes after beam ends
   // Currency
   stars: number;
   totalStars: number;     // lifetime total (for upgrade hangar)
