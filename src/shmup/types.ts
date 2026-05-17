@@ -96,6 +96,8 @@ export interface PathPoint {
 }
 
 // ── Bullets ────────────────────────────────────────────────
+export type BulletShape = 'bolt' | 'blob' | 'diamond' | 'orb' | 'needle' | 'missile' | 'torpedo' | 'phaserlance';
+
 export interface Bullet {
   pos: Vec2;
   vel: Vec2;
@@ -106,6 +108,7 @@ export interface Bullet {
   trail?: boolean;
   ttl: number;    // frames remaining
   maxTtl: number; // for fade calc
+  shape?: BulletShape;  // overrides color-based shape dispatch (T'VAK + future bosses)
 }
 
 // ── Obstacles ──────────────────────────────────────────────

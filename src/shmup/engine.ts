@@ -680,6 +680,29 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     for (const enemy of state.enemies) {
       if (!enemy.alive) continue;
       if (hitTest(bullet.pos, bullet.radius, enemy.pos, enemy.width / 2)) {
+        // ── Subsystem shielding ──
+        // For bosses that carry named weapon hardpoints (T'VAK and future
+        // bosses), the main hull is INVULNERABLE while ANY subsystem is
+        // still alive. Bullets deflect off the shield. Player must take
+        // out every subsystem first to expose the hull.
+        if (enemy.type === 'boss' && enemy.weakPoints) {
+          const survivingSubs = enemy.weakPoints.some(wp => wp.alive && wp.weaponType);
+          if (survivingSubs) {
+            bullet.pos.y = -999;
+            bullet.ttl = 0;
+            // Cyan deflect spark
+            for (let i = 0; i < 5; i++) {
+              const a = Math.random() * Math.PI * 2;
+              state.particles.push({
+                pos: { x: bullet.pos.x, y: bullet.pos.y },
+                vel: { x: Math.cos(a) * 2.5, y: Math.sin(a) * 2.5 },
+                life: 10, maxLife: 10, color: '#88ddff', size: 2,
+              });
+            }
+            continue;
+          }
+        }
+
         enemy.hp -= bullet.damage;
         bullet.pos.y = -999; // remove
         bullet.ttl = 0;
@@ -1206,12 +1229,13 @@ interface BossCtx {
 
 // ── Pattern primitives ─────────────────────────────────────────────
 
-function bulletAt(c: BossCtx, x: number, y: number, vx: number, vy: number, opts: { color?: string; r?: number; trail?: boolean; ttl?: number } = {}) {
+function bulletAt(c: BossCtx, x: number, y: number, vx: number, vy: number, opts: { color?: string; r?: number; trail?: boolean; ttl?: number; shape?: import('./types').BulletShape } = {}) {
   c.state.enemyBullets.push({
     pos: { x, y }, vel: { x: vx, y: vy },
     damage: 1, radius: opts.r ?? 5,
     isPlayer: false, color: opts.color ?? c.color, trail: opts.trail,
     ttl: opts.ttl ?? 100, maxTtl: opts.ttl ?? 100,
+    shape: opts.shape,
   });
 }
 
@@ -1458,23 +1482,23 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
         const col = wp.color || c.color;
 
         if (w === 'disruptor') {
-          // Aimed red beam shot — fast travel
+          // Aimed bolt — long, fast, lance-like
           const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
           bulletAt(c, wx, wy, Math.cos(a) * (4.5 + speedBoost), Math.sin(a) * (4.5 + speedBoost),
-            { color: col, r: 5, trail: true, ttl: 90 });
+            { color: col, r: 5, trail: true, ttl: 90, shape: 'bolt' });
         } else if (w === 'missile') {
-          // Pink missile pair with downward arc — pseudo-homing via slow horizontal nudge
+          // Pink missile pair with downward arc + actual missile sprite
           for (const side of [-1, 1]) {
             const a = Math.PI / 2 + side * 0.25;
             bulletAt(c, wx + side * 4, wy + 6, Math.cos(a) * 1.8, Math.sin(a) * 2.6,
-              { color: col, r: 5, trail: true, ttl: 140 });
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
           }
         } else if (w === 'plasma') {
-          // Wide purple arc spread — 5 shots in a fan
+          // Wide purple plasma fan — BIG glowing orbs
           for (let i = -2; i <= 2; i++) {
             const a = Math.PI / 2 + i * 0.22;
             bulletAt(c, wx, wy + 4, Math.cos(a) * 2.6, Math.sin(a) * 2.6,
-              { color: col, r: 5, ttl: 110 });
+              { color: col, r: 7, ttl: 110, shape: 'blob' });
           }
         } else if (w === 'tractor') {
           // Tractor pulse — visual purple ring + slow effect if player is near
@@ -1493,17 +1517,17 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
             state.player.tractorSlowTimer = Math.max(state.player.tractorSlowTimer, 50);
           }
         } else if (w === 'phaser') {
-          // Rapid green scatter — 3 fast small shots
+          // Green phaser lance — thin elongated streak
           for (let i = -1; i <= 1; i++) {
             const a = Math.PI / 2 + i * 0.15 + (Math.random() - 0.5) * 0.1;
             bulletAt(c, wx, wy + 4, Math.cos(a) * 3.6, Math.sin(a) * 3.6,
-              { color: col, r: 3, trail: true, ttl: 80 });
+              { color: col, r: 4, trail: true, ttl: 80, shape: 'phaserlance' });
           }
         } else if (w === 'torpedo') {
-          // Heavy slow red torpedo — single big bomb
+          // Heavy slow red torpedo — single big bomb with halo
           const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
           bulletAt(c, wx, wy + 6, Math.cos(a) * 1.6, Math.sin(a) * 1.6,
-            { color: col, r: 7, trail: true, ttl: 180 });
+            { color: col, r: 9, trail: true, ttl: 180, shape: 'torpedo' });
         }
       }
       // Final-form bonus: central reactor cannon — heavy aimed barrage
@@ -2477,7 +2501,13 @@ function handleBossWeakPointHits(state: ShmupState, events: ShmupEvents): void {
       if (!hitTest(bullet.pos, bullet.radius, { x: wpX, y: wpY }, 12)) continue;
 
       wp.hp -= bullet.damage * 2; // double damage on weak points
-      boss.hp -= bullet.damage; // also damages boss
+      // For named-weapon subsystems (T'VAK) the main hull is shielded
+      // until they're all down — weak point damage no longer bleeds into
+      // the hull. For old-style anonymous weak points the existing
+      // weak-point-leaks-hull-damage behavior is kept.
+      if (!wp.weaponType) {
+        boss.hp -= bullet.damage;
+      }
       bullet.pos.y = -999;
       bullet.ttl = 0;
       events.enemyHit = true;
@@ -2490,7 +2520,10 @@ function handleBossWeakPointHits(state: ShmupState, events: ShmupEvents): void {
 
       if (wp.hp <= 0) {
         wp.alive = false;
-        boss.hp -= Math.floor(boss.maxHp * 0.05); // bonus damage
+        if (!wp.weaponType) {
+          // Anonymous weak point: bonus 5% hull damage on destruction
+          boss.hp -= Math.floor(boss.maxHp * 0.05);
+        }
         for (let i = 0; i < 15; i++) {
           const a = Math.random() * Math.PI * 2;
           state.particles.push({

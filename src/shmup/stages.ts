@@ -44,7 +44,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Border Patrol — Klingon Incursion',
     faction: 'klingon',
     background: '#0a0812',
-    duration: 2100, // 35 seconds — more breathing room
+    duration: 10800, // 3 minutes — first stage, time to learn the controls
     waves: [
       // First enemies are a single scout — easy intro
       { time: 120, enemies: [
@@ -94,7 +94,7 @@ export const STAGES: Stage[] = [
         { type: 'fighter', faction: 'klingon', x: 0.5, path: zigzag(0.5) },
       ]},
     ],
-    boss: { name: "T'VAK CLASS ASSAULT VESSEL", type: 'tvak', hp: 420, width: 230, height: 180, phases: 4, faction: 'klingon' },
+    boss: { name: "T'VAK CLASS ASSAULT VESSEL", type: 'tvak', hp: 520, width: 360, height: 290, phases: 4, faction: 'klingon' },
   },
 
   // ── Stage 2: Romulan Nebula ───────────────────────────────
@@ -104,7 +104,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Deep Cover — Cloaked Ambush',
     faction: 'romulan',
     background: '#060a12',
-    duration: 2100,
+    duration: 11400, // 3:10
     waves: [
       { time: 60, enemies: [
         { type: 'fighter', faction: 'romulan', x: 0.3, path: swoopLeft(0.3) },
@@ -156,7 +156,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Smuggler\'s Run — Syndicate Blockade',
     faction: 'orion',
     background: '#0c0806',
-    duration: 2400,
+    duration: 12000, // 3:20
     waves: [
       { time: 60, enemies: [
         { type: 'fighter', faction: 'orion', x: 0.2, path: swoopRight(0.2) },
@@ -207,7 +207,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Caught in the Pull — Singularity Sector',
     faction: 'romulan',
     background: '#080510',
-    duration: 2400,
+    duration: 12000, // 3:20
     waves: [
       { time: 120, enemies: [
         { type: 'cruiser', faction: 'romulan', x: 0.5, path: straight(0.5), dropType: 'shield' },
@@ -227,7 +227,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Uncharted Sector — Mixed Hostiles',
     faction: 'klingon',
     background: '#050510',
-    duration: 2400,
+    duration: 12600, // 3:30
     waves: [
       { time: 60, enemies: [
         { type: 'fighter', faction: 'klingon', x: 0.2, path: swoopRight(0.2) },
@@ -286,7 +286,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Dimensional Rift — Reality Distortion',
     faction: 'romulan',
     background: '#0a0020',
-    duration: 2100,
+    duration: 13200, // 3:40
     waves: [
       { time: 60, enemies: [
         { type: 'fighter', faction: 'romulan', x: 0.3, path: zigzag(0.3) },
@@ -334,7 +334,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Enemy Stronghold — All-Out Assault',
     faction: 'orion',
     background: '#0c0404',
-    duration: 2700,
+    duration: 13800, // 3:50
     waves: [
       { time: 60, enemies: [
         { type: 'turret', faction: 'orion', x: 0.2, path: straight(0.2) },
@@ -404,7 +404,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Event Horizon — Gravitational Collapse',
     faction: 'klingon',
     background: '#020008',
-    duration: 2400,
+    duration: 14400, // 4:00
     waves: [
       { time: 60, enemies: [
         { type: 'fighter', faction: 'klingon', x: 0.2, path: zigzag(0.2) },
@@ -465,7 +465,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Event Horizon — Reality Bends',
     faction: 'klingon',
     background: '#050208',
-    duration: 2700,
+    duration: 15000, // 4:10
     waves: [
       { time: 60, enemies: [
         { type: 'elite', faction: 'klingon', x: 0.3, path: straight(0.3), dropType: 'shield' },
@@ -485,7 +485,7 @@ export const STAGES: Stage[] = [
     subtitle: 'Between Dimensions — Phase Shifted',
     faction: 'romulan',
     background: '#080014',
-    duration: 2400,
+    duration: 15600, // 4:20
     waves: [
       { time: 60, enemies: [
         { type: 'elite', faction: 'romulan', x: 0.3, path: swoopLeft(0.3), dropType: 'weapon' },
@@ -546,7 +546,7 @@ export const STAGES: Stage[] = [
     subtitle: 'The Final Stand — All Factions United Against You',
     faction: 'orion',
     background: '#0a0000',
-    duration: 2700,
+    duration: 16800, // 4:40 — final stage
     waves: [
       { time: 60, enemies: [
         { type: 'elite', faction: 'klingon', x: 0.2, path: swoopRight(0.2), dropType: 'weapon' },

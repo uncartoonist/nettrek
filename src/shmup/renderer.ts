@@ -319,8 +319,115 @@ export class ShmupRenderer {
 
       const r = bullet.radius;
       const c = bullet.color;
-      // Original color string is still used to pick which SHAPE to render
-      // (preserves "fighter fires bolts, cruiser fires diamonds" recognition)
+      // Shape source of truth: bullet.shape if explicitly set (e.g. T'VAK
+      // weapon hardpoints), otherwise the legacy color-prefix dispatch
+      // below picks an appropriate shape for fighter/bomber/cruiser/elite
+      // bullets. All shapes still use the unified THREAT palette so the
+      // player reads them as "danger" at a glance.
+      const shape = bullet.shape;
+
+      // ── Explicit shape: missile ──
+      if (shape === 'missile') {
+        const angle = Math.atan2(bullet.vel.y, bullet.vel.x);
+        ctx.rotate(angle);
+        // Exhaust trail
+        ctx.fillStyle = '#ffaa44';
+        ctx.globalAlpha = 0.5 * fadeAlpha;
+        ctx.beginPath();
+        ctx.ellipse(-r * 1.6, 0, r * 0.6, r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffee88';
+        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.beginPath();
+        ctx.ellipse(-r * 1.1, 0, r * 0.35, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+        // Body (missile fuselage, pointing along velocity)
+        ctx.fillStyle = THREAT_BODY;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
+        ctx.beginPath();
+        ctx.moveTo(r * 1.4, 0);
+        ctx.lineTo(r * 0.4, -r * 0.6);
+        ctx.lineTo(-r * 0.6, -r * 0.5);
+        ctx.lineTo(-r * 0.6, r * 0.5);
+        ctx.lineTo(r * 0.4, r * 0.6);
+        ctx.closePath(); ctx.fill();
+        // Highlight stripe
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.85 * fadeAlpha;
+        ctx.beginPath();
+        ctx.moveTo(r * 1.2, 0);
+        ctx.lineTo(0, -r * 0.2);
+        ctx.lineTo(0, r * 0.2);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      // ── Explicit shape: torpedo (big heavy bomb with halo) ──
+      if (shape === 'torpedo') {
+        // Big soft halo
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.3 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 2.6, 0, Math.PI * 2); ctx.fill();
+        // Mid body
+        ctx.fillStyle = THREAT_BODY_HOT;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.2, 0, Math.PI * 2); ctx.fill();
+        // Inner ring (chevron stripe)
+        ctx.strokeStyle = '#ffeeff';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.8 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2); ctx.stroke();
+        // Hot core
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      // ── Explicit shape: phaser lance (thin elongated streak) ──
+      if (shape === 'phaserlance') {
+        const angle = Math.atan2(bullet.vel.y, bullet.vel.x);
+        ctx.rotate(angle);
+        // Outer glow
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.3 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.5, r * 3.5, 0, 0, Math.PI * 2); ctx.fill();
+        // Bright thin core
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.18, r * 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      // ── Explicit shape: blob (big plasma orb) ──
+      if (shape === 'blob') {
+        const pulse = 1 + Math.sin(state.tick * 0.15 + bullet.pos.x) * 0.2;
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.28 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 2.6 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_BODY_HOT;
+        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.1 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.75 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      // ── Explicit shape: bolt (sharp aimed disruptor) ──
+      if (shape === 'bolt') {
+        const angle = Math.atan2(bullet.vel.y, bullet.vel.x);
+        ctx.rotate(angle);
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.3 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 1.2, r * 3.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_BODY;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.7, r * 2.3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.25, r * 1.4, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        continue;
+      }
 
       if (c.startsWith('#ff22') || c.startsWith('#ff44')) {
         // Fighter — elongated bolt
@@ -1682,33 +1789,106 @@ export class ShmupRenderer {
       ctx.fillRect(0, 0, w, h);
     }
 
-    // Boss warning banner
-    // Red pulsating border. For T'VAK (and other future capital-class
-    // bosses) also drop a center-top "WARNING — CAPITAL CLASS VESSEL
-    // DETECTED" overlay so the player feels the scale of what's coming.
+    // Boss warning banner — elegant amber alert with cyan corner brackets.
+    // Deliberately NOT red so it can't be confused with the damage vignette.
     if (state.bossWarning > 0) {
-      const warnAlpha = Math.min(1, state.bossWarning / 30) * (0.5 + Math.sin(state.tick * 0.15) * 0.3);
-      ctx.strokeStyle = `rgba(255,0,0,${warnAlpha * 0.6})`;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(2, 2, w - 4, h - 4);
-
       const stageNow = state.stages[state.currentStage];
-      if (stageNow?.boss?.type === 'tvak') {
-        ctx.textAlign = 'center';
-        const a = Math.min(1, state.bossWarning / 30) * (0.6 + Math.sin(state.tick * 0.18) * 0.3);
-        ctx.globalAlpha = a;
-        ctx.fillStyle = '#ff2244';
-        ctx.font = 'bold 16px Courier New';
-        ctx.fillText('⚠  WARNING  ⚠', w / 2, h * 0.22);
-        ctx.font = 'bold 13px Courier New';
-        ctx.fillStyle = '#ff5566';
-        ctx.fillText('CAPITAL CLASS VESSEL DETECTED', w / 2, h * 0.22 + 22);
-        ctx.font = '10px Courier New';
-        ctx.fillStyle = '#aa8888';
-        ctx.fillText(stageNow.boss.name, w / 2, h * 0.22 + 42);
-        ctx.globalAlpha = 1;
-        ctx.textAlign = 'left';
+      const isCapital = stageNow?.boss?.type === 'tvak';
+      const t0 = 120 - state.bossWarning; // frames since warning started (0 → 120)
+      const intro = Math.min(1, t0 / 18);  // 0-1 ease-in over 18 frames
+
+      // ── Corner brackets — sweep in from the four corners ──
+      const bracketColor = 'rgba(120, 220, 255, ';
+      const bracketLen = 28 + intro * 20;
+      const inset = 18 - intro * 6;
+      const lw = 2;
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = bracketColor + (0.6 * intro) + ')';
+      // Top-left
+      ctx.beginPath();
+      ctx.moveTo(inset, inset + bracketLen);
+      ctx.lineTo(inset, inset);
+      ctx.lineTo(inset + bracketLen, inset);
+      ctx.stroke();
+      // Top-right
+      ctx.beginPath();
+      ctx.moveTo(w - inset - bracketLen, inset);
+      ctx.lineTo(w - inset, inset);
+      ctx.lineTo(w - inset, inset + bracketLen);
+      ctx.stroke();
+      // Bottom-left
+      ctx.beginPath();
+      ctx.moveTo(inset, h - inset - bracketLen);
+      ctx.lineTo(inset, h - inset);
+      ctx.lineTo(inset + bracketLen, h - inset);
+      ctx.stroke();
+      // Bottom-right
+      ctx.beginPath();
+      ctx.moveTo(w - inset - bracketLen, h - inset);
+      ctx.lineTo(w - inset, h - inset);
+      ctx.lineTo(w - inset, h - inset - bracketLen);
+      ctx.stroke();
+
+      // ── Slow amber scanline that sweeps down the screen once ──
+      // Only during the first half of the warning, single pass.
+      if (t0 < 60) {
+        const sy = (t0 / 60) * h;
+        const scanGrad = ctx.createLinearGradient(0, sy - 14, 0, sy + 14);
+        scanGrad.addColorStop(0, 'rgba(255,180,60,0)');
+        scanGrad.addColorStop(0.5, 'rgba(255,180,60,0.18)');
+        scanGrad.addColorStop(1, 'rgba(255,180,60,0)');
+        ctx.fillStyle = scanGrad;
+        ctx.fillRect(0, sy - 14, w, 28);
       }
+
+      // ── Centered classification card ──
+      const cardW = Math.min(360, w - 80);
+      const cardH = isCapital ? 86 : 56;
+      const cardX = (w - cardW) / 2;
+      const cardY = h * 0.32 - cardH / 2;
+
+      // Card background (dark glass)
+      ctx.globalAlpha = intro * 0.85;
+      ctx.fillStyle = 'rgba(8, 14, 22, 0.85)';
+      ctx.fillRect(cardX, cardY, cardW, cardH);
+      // Card border (thin cyan)
+      ctx.strokeStyle = `rgba(140, 220, 255, ${intro * 0.85})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardW - 1, cardH - 1);
+      // Top stripe (amber)
+      ctx.fillStyle = `rgba(255, 180, 60, ${intro * 0.85})`;
+      ctx.fillRect(cardX, cardY, cardW, 3);
+      // Bottom rule (thinner)
+      ctx.fillStyle = `rgba(140, 220, 255, ${intro * 0.6})`;
+      ctx.fillRect(cardX + 12, cardY + cardH - 1, cardW - 24, 1);
+
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = intro;
+
+      if (isCapital) {
+        // Capital-class layout — 3 lines
+        ctx.fillStyle = '#ffb84a';
+        ctx.font = 'bold 13px Courier New';
+        ctx.fillText('◤ ALERT — CAPITAL CLASS ◢', w / 2, cardY + 22);
+        ctx.fillStyle = '#e8f4ff';
+        ctx.font = 'bold 15px Courier New';
+        ctx.fillText(stageNow?.boss?.name || 'UNKNOWN VESSEL', w / 2, cardY + 46);
+        // Classification line
+        ctx.fillStyle = '#88aacc';
+        ctx.font = '9px Courier New';
+        ctx.fillText('THREAT LEVEL: EXTREME · SUBSYSTEMS: 6', w / 2, cardY + 66);
+      } else {
+        // Standard boss
+        ctx.fillStyle = '#ffb84a';
+        ctx.font = 'bold 12px Courier New';
+        ctx.fillText('◤ HOSTILE COMMAND VESSEL ◢', w / 2, cardY + 22);
+        ctx.fillStyle = '#e8f4ff';
+        ctx.font = 'bold 13px Courier New';
+        ctx.fillText(stageNow?.boss?.name || 'UNKNOWN', w / 2, cardY + 42);
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
     }
 
     // Boss entrance darkening
@@ -2855,6 +3035,73 @@ export class ShmupRenderer {
     }
     ctx.globalAlpha = 1;
 
+    // ── Armor seam plating — diagonal panel lines across the wings ──
+    ctx.strokeStyle = '#2a2a32';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.45;
+    for (let i = 0; i < 5; i++) {
+      const y = -H * 0.25 + i * H * 0.13;
+      ctx.beginPath();
+      ctx.moveTo(-W * 0.46, y);
+      ctx.lineTo(-W * 0.08, y + H * 0.02);
+      ctx.moveTo(W * 0.08, y + H * 0.02);
+      ctx.lineTo(W * 0.46, y);
+      ctx.stroke();
+    }
+    // Vertical panel seams along the central body
+    for (let i = 0; i < 4; i++) {
+      const x = -W * 0.06 + i * W * 0.04;
+      ctx.beginPath();
+      ctx.moveTo(x, -H * 0.32);
+      ctx.lineTo(x + 1, H * 0.32);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Bright accent stripes along the central spine ──
+    ctx.fillStyle = '#aa1818';
+    ctx.globalAlpha = 0.4 + Math.sin(tick * 0.07) * 0.2;
+    for (let i = 0; i < 3; i++) {
+      const ay = -H * 0.18 + i * H * 0.12;
+      ctx.fillRect(-W * 0.015, ay, W * 0.03, H * 0.025);
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Window/port lights scattered on the wings ──
+    ctx.fillStyle = '#ffaa44';
+    for (let i = 0; i < 14; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      // pseudo-random but deterministic positions
+      const px = side * (W * 0.14 + (i * 11 % 17) * W * 0.015);
+      const py = -H * 0.2 + (i * 23 % 19) * H * 0.05;
+      const winPulse = 0.4 + 0.4 * Math.sin(tick * 0.04 + i * 1.3);
+      ctx.globalAlpha = winPulse;
+      ctx.fillRect(px - 1, py - 0.5, 2, 1.5);
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Shoulder pauldron armor (large angular plates on the upper wings) ──
+    ctx.fillStyle = '#15151c';
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.18, -H * 0.32);
+    ctx.lineTo(-W * 0.38, -H * 0.18);
+    ctx.lineTo(-W * 0.32, -H * 0.04);
+    ctx.lineTo(-W * 0.15, -H * 0.12);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(W * 0.18, -H * 0.32);
+    ctx.lineTo(W * 0.38, -H * 0.18);
+    ctx.lineTo(W * 0.32, -H * 0.04);
+    ctx.lineTo(W * 0.15, -H * 0.12);
+    ctx.closePath(); ctx.fill();
+    // Pauldron rivets
+    ctx.fillStyle = '#3a3a44';
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(side * W * 0.22, -H * 0.24, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(side * W * 0.30, -H * 0.16, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(side * W * 0.24, -H * 0.10, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+
     // ── Subtle scanline overlay on the hull (retro-arcade feel) ──
     ctx.globalAlpha = 0.05;
     ctx.fillStyle = '#000000';
@@ -3723,12 +3970,33 @@ export class ShmupRenderer {
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(barX, barY, barW, barH);
 
-    // HP fill with gradient
-    const grad = ctx.createLinearGradient(barX, barY, barX + barW * hpPct, barY);
-    grad.addColorStop(0, bossColor);
-    grad.addColorStop(1, hpPct < 0.3 ? '#ff2200' : bossColor);
-    ctx.fillStyle = grad;
-    ctx.fillRect(barX, barY, barW * hpPct, barH);
+    // HP fill — dimmed cyan while subsystems shield the hull, faction
+    // color once the hull is exposed
+    const boss0 = state.enemies.find(e => e.type === 'boss');
+    const shielded = !!boss0?.weakPoints?.some(wp => wp.alive && wp.weaponType);
+    if (shielded) {
+      // Crosshatch shielded bar
+      const shieldGrad = ctx.createLinearGradient(barX, barY, barX + barW * hpPct, barY);
+      shieldGrad.addColorStop(0, 'rgba(80,150,200,0.4)');
+      shieldGrad.addColorStop(1, 'rgba(120,200,255,0.55)');
+      ctx.fillStyle = shieldGrad;
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
+      // Diagonal hash overlay
+      ctx.strokeStyle = 'rgba(180,220,255,0.5)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < barW * hpPct; x += 6) {
+        ctx.beginPath();
+        ctx.moveTo(barX + x, barY);
+        ctx.lineTo(barX + x + barH, barY + barH);
+        ctx.stroke();
+      }
+    } else {
+      const grad = ctx.createLinearGradient(barX, barY, barX + barW * hpPct, barY);
+      grad.addColorStop(0, bossColor);
+      grad.addColorStop(1, hpPct < 0.3 ? '#ff2200' : bossColor);
+      ctx.fillStyle = grad;
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
+    }
 
     // Phase markers
     const boss = state.enemies.find(e => e.type === 'boss');
@@ -3753,7 +4021,16 @@ export class ShmupRenderer {
     ctx.font = 'bold 11px Courier New';
     ctx.textAlign = 'center';
     if (stage?.boss) {
-      ctx.fillText(`⚠ ${stage.boss.name.toUpperCase()} ⚠`, w / 2, barY - 8);
+      // While subsystems still shield the hull, swap the name for the
+      // shield notice so the player understands why bullets bounce off.
+      if (shielded) {
+        ctx.fillStyle = '#88ddff';
+        ctx.font = 'bold 11px Courier New';
+        ctx.fillText('▼ HULL SHIELDED — DISABLE SUBSYSTEMS ▼', w / 2, barY - 8);
+      } else {
+        ctx.fillStyle = '#ff8888';
+        ctx.fillText(`⚠ ${stage.boss.name.toUpperCase()} — HULL EXPOSED ⚠`, w / 2, barY - 8);
+      }
     }
 
     // Weak points remaining
