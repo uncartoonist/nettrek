@@ -990,64 +990,11 @@ export class ShmupRenderer {
           break;
         }
         case 'asteroidcorridor': {
-          // Organic asteroid field — proper rocky shapes, not flat circles
-          const leftEdge = gapCenter - gapHalf;
-          const rightEdge = gapCenter + gapHalf;
-          const drawAsteroid = (cx: number, cy: number, R: number, seed: number) => {
-            const N = 9;
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(seed);
-            // Organic shape via bezier
-            ctx.beginPath();
-            for (let i = 0; i < N; i++) {
-              const a = (Math.PI * 2 / N) * i;
-              const r = R * (0.82 + Math.sin(i * 2.4 + seed) * 0.12 + Math.sin(i * 5.1 + seed * 1.3) * 0.06);
-              const a2 = (Math.PI * 2 / N) * (i + 0.5);
-              const r2 = R * (0.86 + Math.cos(i * 3.6 + seed) * 0.1);
-              if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-              else ctx.quadraticCurveTo(Math.cos(a2) * r2, Math.sin(a2) * r2, Math.cos(a) * r, Math.sin(a) * r);
-            }
-            ctx.closePath();
-            // Gradient fill — lit from upper-left
-            const ag = ctx.createRadialGradient(-R * 0.3, -R * 0.3, R * 0.05, 0, 0, R);
-            ag.addColorStop(0, '#6a5a48');
-            ag.addColorStop(0.5, '#3a2e22');
-            ag.addColorStop(1, '#1a1410');
-            ctx.fillStyle = ag;
-            ctx.fill();
-            // Craters
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.beginPath(); ctx.arc(R * 0.25, -R * 0.15, R * 0.18, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(-R * 0.2, R * 0.22, R * 0.13, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(-R * 0.35, -R * 0.1, R * 0.08, 0, Math.PI * 2); ctx.fill();
-            ctx.restore();
-          };
-          // Left cluster
-          for (let i = 0; i < 5; i++) {
-            const ax = Math.sin(i * 4.3 + seg.pos.y * 0.03) * 30 + leftEdge * 0.5;
-            const ay = sy + Math.sin(i * 2.7) * sh * 0.6;
-            const ar = 15 + Math.sin(i * 1.9) * 10;
-            drawAsteroid(ax, ay, ar, i * 1.7 + seg.pos.y * 0.01);
-          }
-          // Right cluster
-          for (let i = 0; i < 5; i++) {
-            const ax = w - Math.sin(i * 3.1 + seg.pos.y * 0.03) * 30 - (w - rightEdge) * 0.5;
-            const ay = sy + Math.cos(i * 2.3) * sh * 0.6;
-            const ar = 15 + Math.cos(i * 1.7) * 10;
-            drawAsteroid(ax, ay, ar, i * 2.3 + seg.pos.y * 0.02);
-          }
-          // Subtle danger glow near gap edge (replaces harsh red line)
-          const dgGradL = ctx.createLinearGradient(leftEdge - 8, 0, leftEdge, 0);
-          dgGradL.addColorStop(0, 'transparent');
-          dgGradL.addColorStop(1, `rgba(255,80,40,${0.12 + Math.sin(state.tick * 0.05) * 0.05})`);
-          ctx.fillStyle = dgGradL;
-          ctx.fillRect(leftEdge - 8, sy - sh, 8, sh * 2);
-          const dgGradR = ctx.createLinearGradient(rightEdge, 0, rightEdge + 8, 0);
-          dgGradR.addColorStop(0, `rgba(255,80,40,${0.12 + Math.sin(state.tick * 0.05) * 0.05})`);
-          dgGradR.addColorStop(1, 'transparent');
-          ctx.fillStyle = dgGradR;
-          ctx.fillRect(rightEdge, sy - sh, 8, sh * 2);
+          // The asteroid clusters are now spawned as real destroyable
+          // Obstacle entities (see spawnTerrain in engine.ts). They draw
+          // themselves and handle collision + destruction. This case is
+          // left as a no-op for visual; the gap-edge danger glow is gone
+          // because the rocks ARE the danger now.
           break;
         }
         case 'stationdebris': {
@@ -2006,54 +1953,119 @@ export class ShmupRenderer {
     if (!target) return;
 
     const t = state.tick;
-    // Beam intensity tracks remaining charge — dims as power drains so the
-    // player can feel the weapon running out of juice.
-    const intensity = Math.max(0.25, p.phaserCharge);
+    const intensity = Math.max(0.3, p.phaserCharge);
 
-    // Main beam — orange phaser
-    ctx.strokeStyle = '#ff8833';
-    ctx.lineWidth = 3 + intensity * 2;
-    ctx.globalAlpha = 0.7 * intensity;
+    const sx = p.pos.x;
+    const sy = p.pos.y - p.height * 0.3;
+    const tx = target.pos.x;
+    const ty = target.pos.y;
+    const dx = tx - sx;
+    const dy = ty - sy;
+    const len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+    const nx = dx / len;
+    const ny = dy / len;
+    // perpendicular for crackle offsets
+    const px = -ny;
+    const py = nx;
+
+    // ── Outer atmospheric haze ──
+    ctx.strokeStyle = '#ff5522';
+    ctx.lineWidth = 14 + intensity * 6;
+    ctx.globalAlpha = 0.10 * intensity;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(p.pos.x, p.pos.y - p.height * 0.3);
-    ctx.lineTo(target.pos.x, target.pos.y);
+    ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+
+    // ── Mid beam body ──
+    ctx.strokeStyle = '#ff7733';
+    ctx.lineWidth = 7 + intensity * 3;
+    ctx.globalAlpha = 0.55 * intensity;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+
+    // ── Inner blazing core ──
+    ctx.strokeStyle = '#ffdd99';
+    ctx.lineWidth = 3 + intensity * 1.5;
+    ctx.globalAlpha = 0.95 * intensity;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+
+    // ── White-hot pulse running down the beam (laser feel) ──
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 3; i++) {
+      const pulsePos = ((t * 0.12 + i * 0.33) % 1);
+      const cx = sx + nx * len * pulsePos;
+      const cy = sy + ny * len * pulsePos;
+      ctx.globalAlpha = (1 - pulsePos) * 0.7 * intensity;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 5 + (1 - pulsePos) * 4, 1.8, Math.atan2(ny, nx), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ── Electric crackle along the beam (3 segments, jittered each frame) ──
+    ctx.strokeStyle = '#ffe9aa';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.55 * intensity;
+    ctx.beginPath();
+    let prevX = sx;
+    let prevY = sy;
+    const segs = 6;
+    for (let i = 1; i <= segs; i++) {
+      const ft = i / segs;
+      const jitter = (Math.sin(t * 0.5 + i * 1.7) + Math.sin(t * 0.83 + i * 2.3)) * 3 * intensity;
+      const cx2 = sx + nx * len * ft + px * jitter;
+      const cy2 = sy + ny * len * ft + py * jitter;
+      if (i === 1) ctx.moveTo(prevX, prevY);
+      ctx.lineTo(cx2, cy2);
+      prevX = cx2; prevY = cy2;
+    }
     ctx.stroke();
 
-    // Inner bright core beam
-    ctx.strokeStyle = '#ffcc88';
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.9 * intensity;
-    ctx.beginPath();
-    ctx.moveTo(p.pos.x, p.pos.y - p.height * 0.3);
-    ctx.lineTo(target.pos.x, target.pos.y);
-    ctx.stroke();
+    // ── Muzzle glow at the ship ──
+    const muzzleGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, 14);
+    muzzleGrad.addColorStop(0, `rgba(255,255,200,${0.9 * intensity})`);
+    muzzleGrad.addColorStop(0.5, `rgba(255,140,40,${0.5 * intensity})`);
+    muzzleGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = muzzleGrad;
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(sx, sy, 14, 0, Math.PI * 2); ctx.fill();
 
-    // Lock-on reticle on target
+    // ── Impact scorch at target (radial gradient) ──
+    const impactR = 18 + Math.sin(t * 0.4) * 3;
+    const impGrad = ctx.createRadialGradient(tx, ty, 0, tx, ty, impactR);
+    impGrad.addColorStop(0, `rgba(255,255,200,${0.85 * intensity})`);
+    impGrad.addColorStop(0.4, `rgba(255,140,40,${0.55 * intensity})`);
+    impGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = impGrad;
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(tx, ty, impactR, 0, Math.PI * 2); ctx.fill();
+
+    // ── Lock-on reticle on target ──
     ctx.strokeStyle = '#ff8833';
     ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.6 + Math.sin(t * 0.3) * 0.2;
+    ctx.globalAlpha = 0.7;
     const r = target.width * 0.5 + 8;
+    ctx.beginPath(); ctx.arc(tx, ty, r, 0, Math.PI * 2); ctx.stroke();
+    // Crosshair ticks
     ctx.beginPath();
-    ctx.arc(target.pos.x, target.pos.y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    // Crosshair lines
-    ctx.beginPath();
-    ctx.moveTo(target.pos.x - r - 5, target.pos.y);
-    ctx.lineTo(target.pos.x - r + 3, target.pos.y);
-    ctx.moveTo(target.pos.x + r - 3, target.pos.y);
-    ctx.lineTo(target.pos.x + r + 5, target.pos.y);
-    ctx.moveTo(target.pos.x, target.pos.y - r - 5);
-    ctx.lineTo(target.pos.x, target.pos.y - r + 3);
-    ctx.moveTo(target.pos.x, target.pos.y + r - 3);
-    ctx.lineTo(target.pos.x, target.pos.y + r + 5);
+    ctx.moveTo(tx - r - 5, ty); ctx.lineTo(tx - r + 3, ty);
+    ctx.moveTo(tx + r - 3, ty); ctx.lineTo(tx + r + 5, ty);
+    ctx.moveTo(tx, ty - r - 5); ctx.lineTo(tx, ty - r + 3);
+    ctx.moveTo(tx, ty + r - 3); ctx.lineTo(tx, ty + r + 5);
     ctx.stroke();
 
-    // Impact glow at target
-    ctx.fillStyle = '#ff8833';
-    ctx.globalAlpha = 0.3 * intensity;
-    ctx.beginPath();
-    ctx.arc(target.pos.x, target.pos.y, 12, 0, Math.PI * 2);
-    ctx.fill();
+    // ── Target HP bar (so the player sees their work draining the enemy) ──
+    if (target.maxHp > 0) {
+      const hpPct = Math.max(0, target.hp / target.maxHp);
+      const barW = Math.max(28, target.width * 0.9);
+      const barX = tx - barW / 2;
+      const barY = ty + r + 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, 4);
+      ctx.fillStyle = '#ff8833';
+      ctx.fillRect(barX, barY, barW * hpPct, 2);
+    }
 
     ctx.globalAlpha = 1;
   }

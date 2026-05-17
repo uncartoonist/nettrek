@@ -315,24 +315,32 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       }
     }
 
-    // ── Lock-on phaser — charge-based ────────────────────────
+    // ── Lock-on phaser — charge-based sustained laser ────────
     // Fully charged beam locks on a target and stays locked until either
-    // the target is destroyed or power drains. Recharge rate is tied to
-    // music intensity so the weapon's rhythm fits the game's: quiet
-    // moments recharge you for the next drop.
+    // the target is destroyed or power drains. When a target dies the
+    // beam automatically sweeps to the next nearest enemy as long as
+    // charge remains — so the laser feels like a sustained, chainable
+    // weapon rather than a single burst.
     //
-    // Tuning numbers (all in 60fps frames):
-    //   DRAIN_RATE   = 0.012/frame  → ~83 frames at full = 1.4s of beam
-    //   DAMAGE/frame = 4 + phaserLevel (up to 7 at lvl 3 = 581 total)
+    // Tuning (60fps frames):
+    //   DRAIN_RATE   = 0.006/frame → ~166 frames at full = 2.8s of beam
+    //   DAMAGE/frame = 2 + phaserLevel (max 5 at lvl 3)
+    //     fighter (3 HP) dies in ~1 frame
+    //     bomber  (8 HP) dies in ~2 frames
+    //     cruiser (20 HP) ~4 frames
+    //     elite   (35 HP) ~7 frames
+    //     boss    (150 HP) ~30 frames — meaningful chunk of one charge
     //   RECHARGE_DELAY after beam ends = 30 frames (0.5s "cool-off")
     //   RECHARGE_QUIET    = 0.012/frame → ~83 frames to full (1.4s)
     //   RECHARGE_INTENSE  = 0.006/frame → ~167 frames to full (2.8s)
     //   Activation requires phaserCharge >= 0.99 (fully charged)
-    const DRAIN_RATE = 0.012;
+    const DRAIN_RATE = 0.006;
     const RECHARGE_QUIET = 0.012;
     const RECHARGE_INTENSE = 0.006;
     const RECHARGE_DELAY_FRAMES = 30;
     const ACTIVATION_THRESHOLD = 0.99;
+    const PHASER_DAMAGE = 2 + p.phaserLevel;
+    const REACQUIRE_RANGE = W * 0.9;
 
     // Activation — only when fully charged
     if (
@@ -355,29 +363,51 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       input.lockOnFire = false;
     }
 
-    // Active beam — drains charge, damages target, ends when target dies
-    // or charge hits zero
+    // Active beam — drains charge, damages target, sweeps to the next
+    // enemy when current target dies (as long as charge remains)
     if (p.phaserBeamActive) {
-      const target = state.enemies.find(e => e.id === p.lockOnTarget && e.alive);
+      let target = state.enemies.find(e => e.id === p.lockOnTarget && e.alive);
+      // Reacquire if target died/despawned and we still have charge
+      if (!target && p.phaserCharge > 0.05) {
+        let nextTarget: Enemy | null = null;
+        let bestDist = Infinity;
+        for (const e of state.enemies) {
+          if (!e.alive) continue;
+          const d = Math.sqrt((e.pos.x - p.pos.x) ** 2 + (e.pos.y - p.pos.y) ** 2);
+          if (d < bestDist && d < REACQUIRE_RANGE) { bestDist = d; nextTarget = e; }
+        }
+        if (nextTarget) {
+          p.lockOnTarget = nextTarget.id;
+          target = nextTarget;
+          // Brief reacquire-spark at new target
+          for (let i = 0; i < 6; i++) {
+            const a = Math.random() * Math.PI * 2;
+            state.particles.push({
+              pos: { ...nextTarget.pos }, vel: { x: Math.cos(a)*2, y: Math.sin(a)*2 },
+              life: 8, maxLife: 8, color: '#ffcc66', size: 2,
+            });
+          }
+        }
+      }
+
       if (target) {
-        // Deal damage scaled by phaserLevel
-        target.hp -= 4 + p.phaserLevel;
+        target.hp -= PHASER_DAMAGE;
         p.phaserCharge -= DRAIN_RATE;
 
-        // Sparks at impact point
-        if (state.tick % 3 === 0 && state.particles.length < 450) {
+        // Continuous sparks at impact point — every frame for laser feel
+        if (state.particles.length < 460) {
           state.particles.push({
-            pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*4, y: (Math.random()-0.5)*4 },
-            life: 6, maxLife: 6, color: '#ff8833', size: 2,
+            pos: { x: target.pos.x + (Math.random()-0.5)*8, y: target.pos.y + (Math.random()-0.5)*8 },
+            vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 },
+            life: 8, maxLife: 8, color: Math.random() > 0.5 ? '#ff8833' : '#ffcc88', size: 1.5 + Math.random()*1.5,
           });
         }
+
         if (target.hp <= 0) {
-          // Target destroyed — disengage but retain remaining charge
-          p.phaserBeamActive = false;
-          p.lockOnTarget = -1;
-          p.phaserRechargeDelay = RECHARGE_DELAY_FRAMES;
+          // Target destroyed — beam keeps going if charge remains; the
+          // reacquire branch above will pick a new target next frame.
+          // If no charge left we'll fall into the drain-out branch below.
         } else if (p.phaserCharge <= 0) {
-          // Out of power — beam fizzles
           p.phaserCharge = 0;
           p.phaserBeamActive = false;
           p.lockOnTarget = -1;
@@ -389,7 +419,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
           });
         }
       } else {
-        // Target gone (despawned, off-screen, etc.) — disengage
+        // No target found within range — end beam
         p.phaserBeamActive = false;
         p.lockOnTarget = -1;
         p.phaserRechargeDelay = RECHARGE_DELAY_FRAMES;
@@ -1343,9 +1373,10 @@ function spawnTerrain(state: ShmupState, W: number, H: number): void {
   for (let i = 0; i < numSegments; i++) {
     gapX += driftDir;
     gapX = Math.max(0.2, Math.min(0.8, gapX));
+    const segY = -height - i * (height + 30);
 
     state.terrain.push({
-      pos: { x: W / 2, y: -height - i * (height + 30) },
+      pos: { x: W / 2, y: segY },
       vel: { x: driftDir * 2, y: 1.5 + state.scrollSpeed },
       type,
       width: gapWidth,
@@ -1356,6 +1387,40 @@ function spawnTerrain(state: ShmupState, W: number, H: number): void {
       life: Math.floor(H / 1.5 + i * 30),
       damaging,
     });
+
+    // ── Asteroid corridor: spawn real destroyable rock obstacles per segment.
+    // The flying clusters in the screenshot need to be solid (kill ship on
+    // contact) and shootable (player can blast their way through). Real
+    // Obstacle entities already handle both, so we spawn them here instead
+    // of drawing decorative asteroids in the renderer.
+    if (type === 'asteroidcorridor') {
+      const leftEdgeX = W * gapX - gapWidth / 2;
+      const rightEdgeX = W * gapX + gapWidth / 2;
+      const spawnRockCluster = (side: -1 | 1) => {
+        const count = 4 + Math.floor(Math.random() * 2);
+        for (let r = 0; r < count; r++) {
+          const radius = 14 + Math.random() * 14;
+          // X: scattered within the wall area, biased toward the gap edge
+          // so the cluster reads as a barrier next to the safe gap.
+          const wallX = side === -1
+            ? leftEdgeX - 8 - Math.random() * (leftEdgeX * 0.6)
+            : rightEdgeX + 8 + Math.random() * ((W - rightEdgeX) * 0.6);
+          // Y: scattered within the segment height (with some overhang)
+          const wallY = segY + (Math.random() - 0.4) * height * 2;
+          state.obstacles.push({
+            pos: { x: wallX, y: wallY },
+            vel: { x: driftDir * 1.2 + (Math.random() - 0.5) * 0.3, y: 1.4 + state.scrollSpeed * 0.9 },
+            radius,
+            hp: Math.ceil(radius / 4),
+            type: 'rock',
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 0.025,
+          });
+        }
+      };
+      spawnRockCluster(-1);
+      spawnRockCluster(+1);
+    }
   }
 }
 
