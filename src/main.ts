@@ -20,7 +20,11 @@ setAnalyzer(musicAnalyzer);
 
 // ── Input ──────────────────────────────────────────────────
 const keys: Record<string, boolean> = {};
-const input: ShmupInput = { moveX: 0, moveY: 0, fire: false, fireSpecial: false, bomb: false };
+const input: ShmupInput = { moveX: 0, moveY: 0, fire: false, fireSpecial: false, bomb: false, lockOnFire: false };
+
+// Double-tap detection for lock-on phaser
+let lastClickTime = 0;
+const DOUBLE_TAP_MS = 350;
 
 // Mouse state
 let mouseX = window.innerWidth / 2;
@@ -36,8 +40,16 @@ canvas.addEventListener('mousemove', (e) => {
 let rightMouseDown = false;
 canvas.addEventListener('mousedown', (e) => {
   mouseActive = true;
-  if (e.button === 0) { mouseDown = true; }
-  if (e.button === 2) { rightMouseDown = true; } // Right-click = special weapons
+  if (e.button === 0) {
+    mouseDown = true;
+    // Double-tap detection for lock-on phaser
+    const now = Date.now();
+    if (now - lastClickTime < DOUBLE_TAP_MS) {
+      input.lockOnFire = true;
+    }
+    lastClickTime = now;
+  }
+  if (e.button === 2) { rightMouseDown = true; }
   e.preventDefault();
 });
 canvas.addEventListener('mouseup', (e) => {
@@ -126,12 +138,10 @@ function updateInput(): void {
 
 // ── HUD ────────────────────────────────────────────────────
 const hud = document.getElementById('hud');
-const controls = document.getElementById('controls');
-if (!hud || !controls) {
-  throw new Error('Missing HUD or controls element');
+if (!hud) {
+  throw new Error('Missing HUD element');
 }
 hud.style.display = 'none';
-controls.textContent = 'Mouse: move & auto-fire | Right-click: special weapons | X/B: bomb | ESC: exit';
 
 // ── Menu ───────────────────────────────────────────────────
 const menuOverlay = document.createElement('div');
@@ -164,7 +174,8 @@ const hangar = new HangarScreen(state, (stageIdx) => {
   resetDirector();
   startStage(state, stageIdx);
   playStageMusic(stageIdx);
-  controls.style.display = 'block';
+  const pauseBtn = document.getElementById('pause-btn');
+  if (pauseBtn) pauseBtn.style.display = 'block';
 });
 
 // ── Event bindings ─────────────────────────────────────────
@@ -184,7 +195,7 @@ document.getElementById('start-btn')!.addEventListener('click', () => {
   startThemeOnInteraction();
   menuOverlay.style.display = 'none';
   state.phase = 'hangar';
-  hangar.show();
+  hangar.show(); const _pb = document.getElementById("pause-btn"); if (_pb) _pb.style.display = "none";
 });
 
 document.getElementById('menu-signup')!.addEventListener('click', async () => {
@@ -211,53 +222,71 @@ window.addEventListener('keydown', (e) => {
       state.phase = 'hangar';
       stopMusic();
       setTimeout(() => playMainTheme(), 500);
-      hangar.show();
+      hangar.show(); const _pb = document.getElementById("pause-btn"); if (_pb) _pb.style.display = "none";
       e.preventDefault();
     }
   }
   // Pause toggle — P or Escape
   if (e.code === 'KeyP' || e.code === 'Escape') {
-    if (paused) {
-      // Unpause
-      paused = false;
-      state.phase = pausedPhase as any;
-      e.preventDefault();
-    } else if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning') {
-      // Pause
-      paused = true;
-      pausedPhase = state.phase;
-      e.preventDefault();
-    }
+    if (paused) { hidePauseMenu(); e.preventDefault(); }
+    else if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning') { showPauseMenu(); e.preventDefault(); }
   }
-  // Quit to hangar from pause (Q key)
-  if (e.code === 'KeyQ' && paused) {
-    paused = false;
-    state.phase = 'hangar';
-    stopMusic();
-    setTimeout(() => playMainTheme(), 500);
-    hangar.show();
-    e.preventDefault();
-  }
+  // Q to quit from pause
+  if (e.code === 'KeyQ' && paused) { quitToHangar(); e.preventDefault(); }
+});
+
+// ── Pause menu (HTML overlay with clickable buttons) ──
+const pauseMenu = document.createElement('div');
+pauseMenu.id = 'pause-menu';
+pauseMenu.style.cssText = `
+  position:fixed;inset:0;z-index:200;display:none;
+  background:rgba(0,0,0,0.75);
+  font-family:'Courier New',monospace;
+  flex-direction:column;align-items:center;justify-content:center;gap:20px;
+`;
+pauseMenu.innerHTML = `
+  <h2 style="color:#fff;font-size:clamp(22px,5vw,32px);letter-spacing:4px;margin:0;">PAUSED</h2>
+  <button id="pause-resume" style="padding:14px 36px;font-size:clamp(14px,3.5vw,18px);font-weight:bold;background:rgba(0,204,255,0.12);border:2px solid #0cc;color:#0cc;cursor:pointer;font-family:'Courier New';border-radius:6px;letter-spacing:2px;min-width:220px;">KEEP FIGHTING</button>
+  <button id="pause-quit" style="padding:14px 36px;font-size:clamp(14px,3.5vw,18px);font-weight:bold;background:rgba(255,60,60,0.1);border:2px solid #a33;color:#f55;cursor:pointer;font-family:'Courier New';border-radius:6px;letter-spacing:2px;min-width:220px;">EXIT TO HANGAR</button>
+`;
+document.body.appendChild(pauseMenu);
+
+function showPauseMenu() {
+  paused = true;
+  pausedPhase = state.phase;
+  pauseMenu.style.display = 'flex';
+}
+
+function hidePauseMenu() {
+  paused = false;
+  state.phase = pausedPhase as any;
+  pauseMenu.style.display = 'none';
+}
+
+function quitToHangar() {
+  paused = false;
+  pauseMenu.style.display = 'none';
+  state.phase = 'hangar';
+  stopMusic();
+  setTimeout(() => playMainTheme(), 500);
+  hangar.show(); const _pb = document.getElementById("pause-btn"); if (_pb) _pb.style.display = "none";
+}
+
+document.getElementById('pause-resume')!.addEventListener('click', (e) => { e.stopPropagation(); hidePauseMenu(); });
+document.getElementById('pause-quit')!.addEventListener('click', (e) => { e.stopPropagation(); quitToHangar(); });
+
+// Pause button in top-right corner
+document.getElementById('pause-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (paused) hidePauseMenu();
+  else if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning') showPauseMenu();
 });
 
 // ── Game Loop ──────────────────────────────────────────────
 function loop() {
   // Pause handling — still render but don't update
   if (paused) {
-    renderer.render(state);
-    // Draw pause overlay
-    const ctx = (document.getElementById('game') as HTMLCanvasElement).getContext('2d')!;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px Courier New';
-    ctx.fillText('PAUSED', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
-    ctx.fillStyle = '#888';
-    ctx.font = '13px Courier New';
-    ctx.fillText('P or ESC to resume', ctx.canvas.width / 2, ctx.canvas.height / 2 + 15);
-    ctx.fillText('Q to quit to hangar', ctx.canvas.width / 2, ctx.canvas.height / 2 + 35);
-    ctx.textAlign = 'left';
+    renderer.render(state); // keep rendering the frozen frame behind the overlay
     requestAnimationFrame(loop);
     return;
   }

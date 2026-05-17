@@ -41,32 +41,18 @@
     #hud .faction { color: #0ff; font-weight: bold; }
     #hud .shields { color: #ff0; }
     #hud .energy { color: #0f0; }
-    #controls {
-      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-      font-family: 'Courier New', monospace; color: #555; font-size: 11px;
-      text-align: center; pointer-events: none; z-index: 10;
-    }
     @media (max-width: 600px) {
       #hud { font-size: 9px; padding: 4px 8px; }
-      #controls { font-size: 8px; bottom: 8px; }
     }
     @media (max-height: 500px) {
       #hud { display: none; }
-      #controls { display: none !important; }
     }
   </style>
 </head>
 <body>
-  <div id="hud">
-    <span class="faction" id="hud-faction">FEDERATION</span>
-    <span class="shields" id="hud-shields">SHD: 100</span>
-    <span class="energy" id="hud-energy">NRG: 10000</span>
-    <span id="hud-speed">SPD: 0</span>
-  </div>
+  <div id="hud" style="display:none;"></div>
   <canvas id="game"></canvas>
-  <div id="controls">
-    WASD: move | Space: torpedo | F: phaser | C: cloak | Tab: map/scores | B: bomb | V: beam down | G: beam up
-  </div>
+  <button id="pause-btn" style="position:fixed;top:12px;right:12px;z-index:15;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.25);color:#ccc;font-family:'Courier New',monospace;font-size:12px;padding:8px 14px;cursor:pointer;border-radius:4px;display:none;">❚❚</button>
   <script type="module" src="/src/main.ts"></script>
   <!-- Statcounter -->
   <script type="text/javascript">

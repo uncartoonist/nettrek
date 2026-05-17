@@ -1443,6 +1443,16 @@ export class ShmupRenderer {
       this.drawPlayer(state);
     }
 
+    // Wingman drone ship
+    if (state.player.droneActive) {
+      this.drawWingman(ctx, state);
+    }
+
+    // Lock-on phaser beam
+    if (state.player.lockOnBeamTimer > 0) {
+      this.drawLockOnBeam(ctx, state);
+    }
+
     // ── Chain reaction shockwave rings ──
     // Single subtle ring per kill (was two rings strobing white+orange).
     for (const zone of state.explosionZones) {
@@ -1862,6 +1872,107 @@ export class ShmupRenderer {
       ctx.globalAlpha = 1;
       ctx.restore();
     }
+  }
+
+  private drawWingman(ctx: CanvasRenderingContext2D, state: ShmupState): void {
+    const p = state.player;
+    const wx = p.dronePos.x, wy = p.dronePos.y;
+    const t = state.tick;
+
+    ctx.save();
+    ctx.translate(wx, wy);
+
+    // Engine glow
+    ctx.fillStyle = '#44ffaa';
+    ctx.globalAlpha = 0.4 + Math.sin(t * 0.25) * 0.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 2, 5 + Math.sin(t * 0.3) * 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Small ship body — mini version of player
+    ctx.fillStyle = '#1a4a3a';
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(-8, 4);
+    ctx.lineTo(-5, 7);
+    ctx.lineTo(5, 7);
+    ctx.lineTo(8, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Accent
+    ctx.fillStyle = '#44ffaa';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(-1, -8, 2, 10);
+    ctx.globalAlpha = 1;
+
+    // Shield shimmer
+    ctx.strokeStyle = '#44ffaa';
+    ctx.globalAlpha = 0.15;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+  }
+
+  private drawLockOnBeam(ctx: CanvasRenderingContext2D, state: ShmupState): void {
+    const p = state.player;
+    const target = state.enemies.find(e => e.id === p.lockOnTarget && e.alive);
+    if (!target) return;
+
+    const t = state.tick;
+    const intensity = p.lockOnBeamTimer / 30; // 1 at start, 0 at end
+
+    // Main beam — orange phaser
+    ctx.strokeStyle = '#ff8833';
+    ctx.lineWidth = 3 + intensity * 2;
+    ctx.globalAlpha = 0.7 * intensity;
+    ctx.beginPath();
+    ctx.moveTo(p.pos.x, p.pos.y - p.height * 0.3);
+    ctx.lineTo(target.pos.x, target.pos.y);
+    ctx.stroke();
+
+    // Inner bright core beam
+    ctx.strokeStyle = '#ffcc88';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9 * intensity;
+    ctx.beginPath();
+    ctx.moveTo(p.pos.x, p.pos.y - p.height * 0.3);
+    ctx.lineTo(target.pos.x, target.pos.y);
+    ctx.stroke();
+
+    // Lock-on reticle on target
+    ctx.strokeStyle = '#ff8833';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.6 + Math.sin(t * 0.3) * 0.2;
+    const r = target.width * 0.5 + 8;
+    ctx.beginPath();
+    ctx.arc(target.pos.x, target.pos.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    // Crosshair lines
+    ctx.beginPath();
+    ctx.moveTo(target.pos.x - r - 5, target.pos.y);
+    ctx.lineTo(target.pos.x - r + 3, target.pos.y);
+    ctx.moveTo(target.pos.x + r - 3, target.pos.y);
+    ctx.lineTo(target.pos.x + r + 5, target.pos.y);
+    ctx.moveTo(target.pos.x, target.pos.y - r - 5);
+    ctx.lineTo(target.pos.x, target.pos.y - r + 3);
+    ctx.moveTo(target.pos.x, target.pos.y + r - 3);
+    ctx.lineTo(target.pos.x, target.pos.y + r + 5);
+    ctx.stroke();
+
+    // Impact glow at target
+    ctx.fillStyle = '#ff8833';
+    ctx.globalAlpha = 0.3 * intensity;
+    ctx.beginPath();
+    ctx.arc(target.pos.x, target.pos.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
   }
 
   private drawDetailedEnemy(ctx: CanvasRenderingContext2D, enemy: any, color: string, tick: number): void {
@@ -2729,53 +2840,35 @@ export class ShmupRenderer {
   private drawHUD(state: ShmupState): void {
     const { ctx, w, h } = this;
     const p = state.player;
-    // Scale HUD for small screens
-    const s = Math.min(1, w / 500); // scale factor: 1.0 on desktop, smaller on mobile
-    const fs = Math.max(9, Math.floor(12 * s));
+    const s = Math.min(1, w / 500);
+    const fs = Math.max(9, Math.floor(11 * s));
 
+    // Left side — score + lives only
     ctx.font = `${fs}px Courier New`;
     ctx.textAlign = 'left';
+    ctx.fillStyle = '#ccc';
+    ctx.fillText(`${state.score.toLocaleString()}`, 10, h - 12);
 
-    // Score
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`SCORE: ${state.score.toLocaleString()}`, 8 * s + 4, 24 * s);
-
-    // Combo
+    // Combo (only when active)
     if (state.combo > 1) {
       ctx.fillStyle = '#ffdd00';
-      ctx.fillText(`x${state.combo} COMBO`, 12, 42);
+      ctx.fillText(`x${state.combo}`, 10, h - 28);
     }
 
-    // Graze counter (only show if player has grazed)
-    if (state.grazeCount > 0) {
-      ctx.fillStyle = state.grazeFlash > 0 ? '#ffffff' : '#aaaaff';
-      ctx.fillText(`GRAZE: ${state.grazeCount}`, 12, state.combo > 1 ? 57 : 42);
-    }
-
-    // Lives
+    // Lives + shields — bottom left
     ctx.fillStyle = '#ff8888';
-    ctx.fillText('♥'.repeat(p.lives), 12, state.grazeCount > 0 ? 75 : 60);
+    ctx.fillText('♥'.repeat(p.lives), 10, h - 44);
+    if (p.shields > 0) {
+      ctx.fillStyle = '#44ff44';
+      ctx.globalAlpha = 0.7;
+      ctx.fillText('■'.repeat(Math.max(0, p.shields)), 10 + p.lives * 12, h - 44);
+      ctx.globalAlpha = 1;
+    }
 
-    // Shields
-    ctx.fillStyle = '#44ff44';
-    ctx.fillText(`SHD: ${'■'.repeat(Math.max(0, p.shields))}${'□'.repeat(Math.max(0, p.maxShields - p.shields))}`, 12, 78);
-
-    // (weapon loadout is now shown via the armory bar at top center)
-
-    // Coins (right side)
-    ctx.font = '12px Courier New';
-    ctx.fillStyle = '#ffdd00';
+    // Right side — coins only
     ctx.textAlign = 'right';
-    ctx.fillText(`⚡ ${p.stars} COINS`, w - 12, 24);
-
-    // Bombs
-    ctx.fillStyle = '#ff4444';
-    ctx.fillText(`BOMB: ${'● '.repeat(p.bombCount)}`, w - 12, 42);
-
-    // ESC hint
-    ctx.fillStyle = '#445';
-    ctx.font = '9px Courier New';
-    ctx.fillText('ESC: EXIT', w - 12, 58);
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillText(`⚡${p.stars}`, w - 50, h - 12);
 
     // Stage name
     const stage = state.stages[state.currentStage];
@@ -2804,6 +2897,7 @@ export class ShmupRenderer {
       { icon: '≋', label: 'PHS', level: p.phaserLevel, max: 3, color: '#ff8833', active: p.phaserLevel > 0 },
       { icon: '◎', label: 'SHD', level: p.shields, max: p.maxShields, color: '#44ff44', active: true },
       { icon: '●', label: 'BMB', level: p.bombCount, max: 5, color: '#ff4444', active: p.bombCount > 0 },
+      { icon: '⊕', label: 'LOK', level: p.lockOnPhaserReady ? 1 : 0, max: 1, color: '#ff8833', active: p.lockOnPhaserReady && p.lockOnCooldown <= 0 },
     ];
 
     // Scale for screen size

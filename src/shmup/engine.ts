@@ -85,7 +85,12 @@ function createPlayer(): PlayerShip {
     overdriveTimer: 0,
     droneActive: false,
     droneTimer: 0,
+    dronePos: { x: 0, y: 0 },
     scoreMultTimer: 0,
+    lockOnPhaserReady: false,
+    lockOnTarget: -1,
+    lockOnBeamTimer: 0,
+    lockOnCooldown: 0,
     stars: 0,
     totalStars: parseInt(localStorage.getItem('nettrek-stars') || '0'),
   };
@@ -144,8 +149,9 @@ export interface ShmupInput {
   moveX: number;  // -1 to 1
   moveY: number;  // -1 to 1
   fire: boolean;
-  fireSpecial: boolean; // right-click / double-tap fires missiles, laser, phaser
+  fireSpecial: boolean;
   bomb: boolean;
+  lockOnFire: boolean; // double-tap triggers lock-on phaser
 }
 
 export interface ShmupEvents {
@@ -250,29 +256,87 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     // Score multiplier timer
     if (p.scoreMultTimer > 0) p.scoreMultTimer--;
 
-    // Drone — fires automatically at nearest enemy
+    // ── Wingman drone — flies in formation, fires at enemies ──
     if (p.droneActive) {
       p.droneTimer--;
       if (p.droneTimer <= 0) p.droneActive = false;
-      else if (state.tick % 12 === 0) {
-        // Find nearest enemy
+
+      // Wingman flies in formation — offset from player with smooth tracking
+      const targetDroneX = p.pos.x + 35;
+      const targetDroneY = p.pos.y + 15;
+      p.dronePos.x += (targetDroneX - p.dronePos.x) * 0.08;
+      p.dronePos.y += (targetDroneY - p.dronePos.y) * 0.08;
+
+      // Engine trail from wingman
+      if (state.tick % 4 === 0 && state.particles.length < 400) {
+        state.particles.push({
+          pos: { x: p.dronePos.x + (Math.random()-0.5)*3, y: p.dronePos.y + 10 },
+          vel: { x: (Math.random()-0.5)*0.3, y: 1 }, life: 8, maxLife: 8,
+          color: '#44ffaa', size: 1 + Math.random(),
+        });
+      }
+
+      // Wingman fires at nearest enemy every 10 frames
+      if (state.tick % 10 === 0) {
         let target: Enemy | null = null;
         let bestDist = Infinity;
         for (const e of state.enemies) {
           if (!e.alive) continue;
-          const d = Math.abs(e.pos.x - p.pos.x) + Math.abs(e.pos.y - p.pos.y);
+          const d = Math.abs(e.pos.x - p.dronePos.x) + Math.abs(e.pos.y - p.dronePos.y);
           if (d < bestDist) { bestDist = d; target = e; }
         }
         if (target) {
-          const droneX = p.pos.x + Math.sin(state.tick * 0.08) * 30;
-          const droneY = p.pos.y - 25;
-          const angle = Math.atan2(target.pos.y - droneY, target.pos.x - droneX);
+          const angle = Math.atan2(target.pos.y - p.dronePos.y, target.pos.x - p.dronePos.x);
           state.playerBullets.push({
-            pos: { x: droneX, y: droneY },
+            pos: { x: p.dronePos.x, y: p.dronePos.y - 8 },
             vel: { x: Math.cos(angle) * 10, y: Math.sin(angle) * 10 },
             damage: 2, radius: 3, isPlayer: true, color: '#44ffaa', trail: true, ttl: 60, maxTtl: 60,
           });
         }
+      }
+    }
+
+    // ── Lock-on phaser — double-tap to target and destroy ──
+    if (p.lockOnCooldown > 0) p.lockOnCooldown--;
+
+    if (p.lockOnPhaserReady && input.lockOnFire && p.lockOnCooldown <= 0 && p.lockOnBeamTimer <= 0) {
+      // Find nearest enemy to lock onto
+      let target: Enemy | null = null;
+      let bestDist = Infinity;
+      for (const e of state.enemies) {
+        if (!e.alive) continue;
+        const d = Math.sqrt((e.pos.x - p.pos.x) ** 2 + (e.pos.y - p.pos.y) ** 2);
+        if (d < bestDist && d < W * 0.8) { bestDist = d; target = e; }
+      }
+      if (target) {
+        p.lockOnTarget = target.id;
+        p.lockOnBeamTimer = 30; // beam lasts 0.5 seconds
+        p.lockOnCooldown = 90;  // 1.5 second cooldown
+      }
+      input.lockOnFire = false;
+    }
+
+    // Active lock-on beam — damages target continuously
+    if (p.lockOnBeamTimer > 0) {
+      p.lockOnBeamTimer--;
+      const target = state.enemies.find(e => e.id === p.lockOnTarget && e.alive);
+      if (target) {
+        // Deal damage every frame
+        target.hp -= 3;
+        // Sparks at impact point
+        if (state.tick % 3 === 0 && state.particles.length < 450) {
+          state.particles.push({
+            pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*4, y: (Math.random()-0.5)*4 },
+            life: 6, maxLife: 6, color: '#ff8833', size: 2,
+          });
+        }
+        if (target.hp <= 0) {
+          p.lockOnBeamTimer = 0;
+          p.lockOnTarget = -1;
+        }
+      } else {
+        p.lockOnBeamTimer = 0;
+        p.lockOnTarget = -1;
       }
     }
   }
@@ -1782,7 +1846,8 @@ function collectPowerUp(state: ShmupState, pu: PowerUp): void {
       break;
     case 'phaser':
       p.phaserLevel = Math.min(3, p.phaserLevel + 1);
-      flashText = `PHASER LVL ${p.phaserLevel}`;
+      p.lockOnPhaserReady = true; // unlock lock-on with first phaser pickup
+      flashText = `PHASER LVL ${p.phaserLevel} — LOCK-ON READY`;
       break;
     case 'life':
       p.lives++;

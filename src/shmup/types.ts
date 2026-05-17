@@ -28,7 +28,13 @@ export interface PlayerShip {
   overdriveTimer: number;  // 2x fire rate
   droneActive: boolean;    // companion drone
   droneTimer: number;
+  dronePos: Vec2;          // wingman position
   scoreMultTimer: number;  // 2x score
+  // Lock-on phaser
+  lockOnPhaserReady: boolean;  // has the weapon
+  lockOnTarget: number;        // enemy id being targeted (-1 = none)
+  lockOnBeamTimer: number;     // frames of active beam remaining
+  lockOnCooldown: number;      // frames until can fire again
   // Currency
   stars: number;
   totalStars: number;     // lifetime total (for upgrade hangar)
