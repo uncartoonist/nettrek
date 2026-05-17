@@ -1,0 +1,7 @@
+node_modules
+dist
+.DS_Store
+# Source media (duplicates of public/)
+music/
+backgrounds/
+poster/

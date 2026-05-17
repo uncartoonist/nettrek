@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>NetTrek — Tactical Assault</title>
+  <meta name="description" content="Music-reactive space combat. Defend the Federation in this vertical scrolling tactical assault." />
+  <!-- Open Graph -->
+  <meta property="og:title" content="NetTrek — Tactical Assault" />
+  <meta property="og:description" content="Music-reactive space combat. Defend the Federation in this vertical scrolling tactical assault." />
+  <meta property="og:image" content="https://d2pu3pmby1pmk.cloudfront.net/poster.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://d2pu3pmby1pmk.cloudfront.net" />
+  <meta property="og:site_name" content="NetTrek" />
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="NetTrek — Tactical Assault" />
+  <meta name="twitter:description" content="Music-reactive space combat. Defend the Federation." />
+  <meta name="twitter:image" content="https://d2pu3pmby1pmk.cloudfront.net/poster.png" />
+  <meta name="twitter:image:alt" content="NetTrek game logo" />
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/poster.png" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 16px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+      font-family: 'Courier New', monospace; color: #0f0; font-size: 12px;
+      pointer-events: none; z-index: 10;
+    }
+    #hud .faction { color: #0ff; font-weight: bold; }
+    #hud .shields { color: #ff0; }
+    #hud .energy { color: #0f0; }
+    #controls {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      font-family: 'Courier New', monospace; color: #555; font-size: 11px;
+      text-align: center; pointer-events: none; z-index: 10;
+    }
+    @media (max-width: 600px) {
+      #hud { font-size: 9px; padding: 4px 8px; }
+      #controls { font-size: 8px; bottom: 8px; }
+    }
+    @media (max-height: 500px) {
+      #hud { display: none; }
+      #controls { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <span class="faction" id="hud-faction">FEDERATION</span>
+    <span class="shields" id="hud-shields">SHD: 100</span>
+    <span class="energy" id="hud-energy">NRG: 10000</span>
+    <span id="hud-speed">SPD: 0</span>
+  </div>
+  <canvas id="game"></canvas>
+  <div id="controls">
+    WASD: move | Space: torpedo | F: phaser | C: cloak | Tab: map/scores | B: bomb | V: beam down | G: beam up
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+  <!-- Statcounter -->
+  <script type="text/javascript">
+  var sc_project=13234326;
+  var sc_invisible=1;
+  var sc_security="130df681";
+  </script>
+  <script type="text/javascript" src="https://www.statcounter.com/counter/counter.js" async></script>
+  <noscript><div class="statcounter"><a title="Web Analytics Made Easy - Statcounter" href="https://statcounter.com/" target="_blank"><img class="statcounter" src="https://c.statcounter.com/13234326/0/130df681/1/" alt="Web Analytics Made Easy - Statcounter" referrerPolicy="no-referrer-when-downgrade"></a></div></noscript>
+</body>
+</html>

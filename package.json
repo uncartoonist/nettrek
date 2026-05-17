@@ -1,0 +1,24 @@
+{
+  "name": "nettrek",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NetTrek web game client — HTML5 Canvas beta",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "dev:all": "node server/index.js & vite"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1048.0",
+    "@aws-sdk/lib-dynamodb": "^3.1048.0",
+    "ws": "^8.20.1"
+  }
+}
