@@ -236,8 +236,10 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   // ══════════════════════════════════════════════════════════════
   // SPAWNING — the music tells us when and what
   // ═════���════════════════════════════════════════════════════════
-  const baseMax = 5 + Math.floor(d * 7) + Math.floor(normalizedEnergy * 3);
-  const maxEnemies = Math.max(3, Math.floor(baseMax * density));
+  // Density biases CADENCE (how often we spawn), not the cap. Capping
+  // max enemies by density meant low-density songs could only ever have
+  // 3 enemies on screen, which felt empty.
+  const maxEnemies = 5 + Math.floor(d * 7) + Math.floor(normalizedEnergy * 3);
   const currentEnemies = state.enemies.filter(e => e.alive).length;
   const canSpawn = currentEnemies < maxEnemies && spawnCD <= 0;
 
@@ -301,7 +303,9 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
 
   // ── TRIGGER HIT: profile-specific band drives spawns ──
   else if (trigger.hit && canSpawn) {
-    const spawnChance = (0.3 + d * 0.3 + normalizedEnergy * 0.2) * density;
+    // Density biases the chance but with a floor so low-density songs
+    // (drone, lull) still spawn on most beats.
+    const spawnChance = Math.max(0.25, (0.45 + d * 0.3 + normalizedEnergy * 0.2) * density);
     if (Math.random() < spawnChance) {
       cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
       spawnCD = Math.floor((40 - normalizedEnergy * 15 - d * 10) / Math.max(0.5, density));
@@ -317,12 +321,28 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
     spawnCD = 30;
   }
 
-  // ── GUARANTEED TRICKLE: never leave screen empty (drone profile holds 1) ──
+  // ── GUARANTEED TRICKLE: never leave screen empty ──
+  // Fires whenever we're below the minimum presence, regardless of whether
+  // the analyzer is reporting music data. This makes the game still playable
+  // during the first frames before audio kicks in, between songs, or if the
+  // user has muted audio.
   const minPresence = profile.signature === 'drone' ? 1 : 2;
-  if (guaranteedSpawnTimer <= 0 && currentEnemies < minPresence && !energy.isQuiet) {
+  if (guaranteedSpawnTimer <= 0 && currentEnemies < minPresence) {
     cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
     guaranteedSpawnTimer = Math.floor(90 - d * 30 - normalizedEnergy * 20);
     spawnCD = 20;
+  }
+
+  // ── BASELINE HEARTBEAT: even without any music signal, keep enemies
+  // arriving every ~3 seconds so the level always feels alive. The
+  // music-driven spawns above take priority; this only fires if nothing
+  // else has spawned recently and the screen has room.
+  if (
+    spawnCD <= 0 && currentEnemies < maxEnemies &&
+    state.tick % 180 === 0 && cmd.spawnEnemies.length === 0
+  ) {
+    cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
+    spawnCD = Math.max(40, 60 - state.currentStage * 4);
   }
 
   // ── FIRE SYNC — enemies shoot on the profile's trigger band hit ──

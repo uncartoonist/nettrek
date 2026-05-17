@@ -275,7 +275,10 @@ export function getTriggerEnergy(
   switch (profile.triggerBand) {
     case 'bass': return { value: energy.bass, hit: energy.bassHit };
     case 'mid':  return { value: energy.mid, hit: energy.midHit };
-    case 'high': return { value: energy.high, hit: energy.high > 0.5 && energy.midHit }; // approximate hihat
+    case 'high':
+      // Hihat-driven songs: midHit when highs are noticeably present.
+      // Threshold relaxed (0.25) so high-band stages still spawn reliably.
+      return { value: energy.high, hit: energy.midHit && energy.high > 0.25 };
     case 'wide': return { value: energy.overall, hit: energy.bassHit || energy.midHit };
   }
 }
