@@ -1778,9 +1778,13 @@ export class ShmupRenderer {
       this.drawGameOver(state);
     }
 
-    // Victory overlay
+    // Victory overlay (flyaway → stats card)
     if (state.phase === 'victory') {
       this.drawVictory(state);
+    }
+    // Briefing overlay — next mission preview
+    if (state.phase === 'briefing') {
+      this.drawBriefing(state);
     }
 
     // ── End screen shake transform ──
@@ -1964,15 +1968,26 @@ export class ShmupRenderer {
 
     const W = p.width * 1.2, H = p.height * 1.2; // slightly bigger
     const ep = 0.6 + Math.sin(state.tick * 0.25) * 0.3; // engine pulse
+    // Flyaway boost — engines flare 3x bigger and brighter as the ship warps out
+    const warp = state.phase === 'victory' ? state.flyawayProgress : 0;
+    const exhaustLen = 12 + ep * 8 + warp * 50;
+    const exhaustW = 4 + warp * 4;
 
     // ── Warp nacelle exhaust (blue glow behind nacelles) ──
     ctx.fillStyle = '#3366ff';
-    ctx.globalAlpha = 0.6 * ep;
-    ctx.beginPath(); ctx.ellipse(-W*0.42, H*0.35, 4, 12+ep*8, 0, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(W*0.42, H*0.35, 4, 12+ep*8, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#aaddff'; ctx.globalAlpha = 0.8 * ep;
-    ctx.beginPath(); ctx.ellipse(-W*0.42, H*0.32, 2, 6, 0, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(W*0.42, H*0.32, 2, 6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = (0.6 + warp * 0.35) * ep;
+    ctx.beginPath(); ctx.ellipse(-W*0.42, H*0.35 + warp * 15, exhaustW, exhaustLen, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( W*0.42, H*0.35 + warp * 15, exhaustW, exhaustLen, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#aaddff'; ctx.globalAlpha = (0.8 + warp * 0.2) * ep;
+    ctx.beginPath(); ctx.ellipse(-W*0.42, H*0.32 + warp * 10, 2 + warp * 2, 6 + warp * 30, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( W*0.42, H*0.32 + warp * 10, 2 + warp * 2, 6 + warp * 30, 0, 0, Math.PI*2); ctx.fill();
+    // White-hot core when fully warping
+    if (warp > 0.1) {
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = warp * 0.9;
+      ctx.beginPath(); ctx.ellipse(-W*0.42, H*0.30 + warp * 8, 1.5, 4 + warp * 18, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse( W*0.42, H*0.30 + warp * 8, 1.5, 4 + warp * 18, 0, 0, Math.PI*2); ctx.fill();
+    }
     ctx.globalAlpha = 1;
 
     // ── Nacelle pylons (angled struts connecting hull to nacelles) ──
@@ -4436,9 +4451,29 @@ export class ShmupRenderer {
     const t = state.tick;
     const vt = state.victoryTimer; // frames since boss died
 
-    // Dramatic fade-in based on victoryTimer (not wall-clock tick)
-    const fadeIn = Math.min(1, vt / 30);
-    ctx.fillStyle = `rgba(0,0,10,${0.75 * fadeIn})`;
+    // ── During flyaway: NO overlay, ship is visible warping off ──
+    // The stats panel only appears after the ship has cleared the screen.
+    // Flyaway runs ~130 frames; gate stats UI on a small buffer past that.
+    const flyawayDone = state.flyawayProgress >= 1;
+    if (!flyawayDone) {
+      // Just a subtle "speed lines" overlay during flyaway so the player
+      // feels the ship is accelerating — no debrief UI yet.
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.15;
+      for (let i = 0; i < 24; i++) {
+        const sx = (i * 73 + (state.tick * 18) % 1000) % w;
+        const sy = ((i * 41 + (state.tick * 30) % h) % h);
+        const sh = 6 + state.flyawayProgress * 18;
+        ctx.fillRect(sx, sy, 1, sh);
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    // ── After flyaway: dim the screen and bring the stats card in ──
+    const vtPost = vt - 130; // frames since flyaway ended
+    const fadeIn = Math.min(1, vtPost / 30);
+    ctx.fillStyle = `rgba(0,0,10,${0.78 * fadeIn})`;
     ctx.fillRect(0, 0, w, h);
 
     // Celebratory rays
@@ -4457,7 +4492,7 @@ export class ShmupRenderer {
     }
     ctx.restore();
 
-    // ── Stats panel — animated in over time ──
+    // ── Stats panel — animated in over time (vtPost-relative) ──
     ctx.textAlign = 'center';
     ctx.globalAlpha = fadeIn;
 
@@ -4521,13 +4556,13 @@ export class ShmupRenderer {
     ctx.textAlign = 'center';
     ctx.fillText('— STAGE DEBRIEF —', w / 2, cardY + 18);
 
-    // Rows
+    // Rows — reveal one at a time based on vtPost (frames since flyaway done)
     ctx.textAlign = 'left';
     ctx.font = '12px Courier New';
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (vt < r.revealAt) continue;
-      const rowAlpha = Math.min(1, (vt - r.revealAt) / 12);
+      if (vtPost < r.revealAt) continue;
+      const rowAlpha = Math.min(1, (vtPost - r.revealAt) / 12);
       ctx.globalAlpha = fadeIn * rowAlpha;
       const ry = cardY + 28 + i * rowH + 16;
       // Label
@@ -4548,8 +4583,8 @@ export class ShmupRenderer {
     ctx.globalAlpha = fadeIn;
 
     // Rank computed from score (reveals after all rows)
-    if (vt >= 180) {
-      const rankAlpha = Math.min(1, (vt - 180) / 30);
+    if (vtPost >= 170) {
+      const rankAlpha = Math.min(1, (vtPost - 170) / 30);
       ctx.globalAlpha = fadeIn * rankAlpha;
       const rank = state.score > 80000 ? 'S' : state.score > 50000 ? 'A' : state.score > 25000 ? 'B' : 'C';
       const rankColor = rank === 'S' ? '#ffdd00' : rank === 'A' ? '#00ccff' : rank === 'B' ? '#44ff44' : '#888888';
@@ -4565,22 +4600,115 @@ export class ShmupRenderer {
       ctx.fillText('RANK', w / 2, cardY + cardH + 80);
     }
 
-    // Continue prompt — only after flyaway sequence has been kicked off
-    if (state.flyawayActive) {
+    // Continue prompt — appears after all rows have revealed
+    if (vtPost >= 200) {
       ctx.globalAlpha = fadeIn * (0.6 + Math.sin(t * 0.08) * 0.3);
       ctx.fillStyle = '#aaccee';
       ctx.font = '12px Courier New';
       ctx.textAlign = 'center';
       ctx.fillText('PRESS ENTER TO CONTINUE', w / 2, h * 0.93);
-    } else if (vt >= 220) {
-      ctx.globalAlpha = fadeIn * (0.4 + Math.sin(t * 0.08) * 0.2);
-      ctx.fillStyle = '#557788';
-      ctx.font = '10px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText('▼ DEPARTING SECTOR ▼', w / 2, h * 0.93);
     }
     ctx.textAlign = 'left';
     ctx.globalAlpha = 1;
+  }
+
+  // ── Next-mission briefing screen ──────────────────────────
+  // Shown after the player presses ENTER on the stage debrief. Displays
+  // the next stage's primary background image, name, subtitle, and a
+  // BEGIN MISSION prompt. ENTER advances into the next stage.
+  private drawBriefing(state: ShmupState): void {
+    const { ctx, w, h } = this;
+    const t = state.tick;
+    const nextIdx = Math.min(state.currentStage + 1, state.stages.length - 1);
+    const nextStage = state.stages[nextIdx];
+    if (!nextStage) return;
+
+    // Same per-stage journey table the gameplay background uses — pick
+    // the FIRST scene of the next stage as the briefing backdrop.
+    const STAGE_JOURNEYS: number[][] = [
+      [0, 7, 6], [2, 5, 3], [1, 6, 4], [0, 7, 5], [2, 4, 3],
+      [1, 7, 6], [4, 2, 7], [0, 4, 5], [3, 6, 7], [2, 5, 7], [1, 4, 6],
+    ];
+    const journey = STAGE_JOURNEYS[nextIdx % STAGE_JOURNEYS.length];
+    const bgImg = this.nebulaImgs[journey[0]] || this.nebulaImgs[0];
+
+    // Solid black wipe under the image
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, w, h);
+
+    // Background image — cover the whole canvas with slight zoom drift
+    if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+      const zoom = 1.06 + Math.sin(t * 0.003) * 0.01;
+      const iw = bgImg.naturalWidth;
+      const ih = bgImg.naturalHeight;
+      // Cover fit
+      const scale = Math.max(w / iw, h / ih) * zoom;
+      const dw = iw * scale;
+      const dh = ih * scale;
+      const dx = (w - dw) / 2 + Math.sin(t * 0.002) * 8;
+      const dy = (h - dh) / 2;
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(bgImg, dx, dy, dw, dh);
+      ctx.globalAlpha = 1;
+    }
+
+    // Top + bottom dark fade so the text reads cleanly over the image
+    const topG = ctx.createLinearGradient(0, 0, 0, h * 0.45);
+    topG.addColorStop(0, 'rgba(0,0,0,0.85)');
+    topG.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = topG;
+    ctx.fillRect(0, 0, w, h * 0.45);
+    const botG = ctx.createLinearGradient(0, h * 0.55, 0, h);
+    botG.addColorStop(0, 'rgba(0,0,0,0)');
+    botG.addColorStop(1, 'rgba(0,0,0,0.9)');
+    ctx.fillStyle = botG;
+    ctx.fillRect(0, h * 0.55, w, h * 0.45);
+
+    // Top text — incoming mission label
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#88ddff';
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText('▸ INCOMING TRANSMISSION ▸', w / 2, h * 0.10);
+    ctx.fillStyle = '#aaccdd';
+    ctx.font = '10px Courier New';
+    ctx.fillText(`STARDATE  ·  SECTOR ${nextIdx + 1} OF ${state.stages.length}`, w / 2, h * 0.13);
+
+    // Big stage name centered upper-third
+    ctx.shadowColor = '#00ccff';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px Courier New';
+    ctx.fillText('NEXT  MISSION', w / 2, h * 0.22);
+    ctx.shadowBlur = 0;
+
+    // Stage name + subtitle in the middle band
+    ctx.fillStyle = '#ffdd00';
+    ctx.font = 'bold 28px Courier New';
+    ctx.fillText(nextStage.name, w / 2, h * 0.42);
+    ctx.fillStyle = '#bbccdd';
+    ctx.font = '14px Courier New';
+    ctx.fillText(nextStage.subtitle, w / 2, h * 0.46);
+
+    // Faction indicator
+    const factionLabel = (nextStage.faction || 'unknown').toUpperCase();
+    ctx.fillStyle = '#ff5566';
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText(`⚠ HOSTILE FACTION : ${factionLabel} ⚠`, w / 2, h * 0.50);
+
+    // Boss preview line
+    if (nextStage.boss) {
+      ctx.fillStyle = '#aaccdd';
+      ctx.font = '11px Courier New';
+      ctx.fillText(`PROJECTED CAPITAL CLASS: ${nextStage.boss.name}`, w / 2, h * 0.54);
+    }
+
+    // Bottom: continue prompt
+    ctx.globalAlpha = 0.7 + Math.sin(t * 0.08) * 0.25;
+    ctx.fillStyle = '#88ddff';
+    ctx.font = 'bold 14px Courier New';
+    ctx.fillText('► PRESS ENTER TO BEGIN MISSION ◄', w / 2, h * 0.85);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
   }
 
   // ── Environment System ─────────────────────────────────────

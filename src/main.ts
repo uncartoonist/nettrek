@@ -92,6 +92,27 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
 
+  // ── Victory / briefing tap-to-advance (mobile-friendly) ──
+  // ENTER is the desktop binding; on touch screens, tapping advances too.
+  if (state.phase === 'victory') {
+    const vtPost = state.victoryTimer - 130;
+    if (state.flyawayProgress >= 1 && vtPost >= 200) {
+      const nextIdx = state.currentStage + 1;
+      if (nextIdx < state.stages.length) {
+        state.phase = 'briefing';
+        e.preventDefault();
+        return;
+      }
+    }
+  } else if (state.phase === 'briefing') {
+    const nextIdx = Math.min(state.currentStage + 1, state.stages.length - 1);
+    resetDirector();
+    startStage(state, nextIdx);
+    playStageMusic(nextIdx);
+    e.preventDefault();
+    return;
+  }
+
   const ptr: ActivePointer = {
     id: e.pointerId,
     type: (e.pointerType as PtrType) || 'mouse',
@@ -329,14 +350,40 @@ document.getElementById('menu-signup')!.addEventListener('click', async () => {
 let paused = false;
 let pausedPhase: string = '';
 
-// Return to hangar on Enter after game over / victory
+// Return to hangar on Enter after game over.
+// On victory: stats → briefing → next stage. Briefing → start next stage.
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Enter') {
-    if (state.phase === 'gameover' || state.phase === 'victory') {
+    if (state.phase === 'gameover') {
       state.phase = 'hangar';
       stopMusic();
       setTimeout(() => playMainTheme(), 500);
       hangar.show(); const _pb = document.getElementById("pause-btn"); if (_pb) _pb.style.display = "none";
+      e.preventDefault();
+    } else if (state.phase === 'victory') {
+      // Only allow advancing once flyaway is done AND the continue prompt is up.
+      // The renderer puts the prompt up at vtPost >= 200 (≈3.3s after flyaway).
+      const vtPost = state.victoryTimer - 130;
+      if (state.flyawayProgress >= 1 && vtPost >= 200) {
+        const nextIdx = state.currentStage + 1;
+        if (nextIdx >= state.stages.length) {
+          // Game completed — return to hangar
+          state.phase = 'hangar';
+          stopMusic();
+          setTimeout(() => playMainTheme(), 500);
+          hangar.show(); const _pb = document.getElementById("pause-btn"); if (_pb) _pb.style.display = "none";
+        } else {
+          // Show next-mission briefing
+          state.phase = 'briefing';
+        }
+        e.preventDefault();
+      }
+    } else if (state.phase === 'briefing') {
+      // Start the next stage
+      const nextIdx = Math.min(state.currentStage + 1, state.stages.length - 1);
+      resetDirector();
+      startStage(state, nextIdx);
+      playStageMusic(nextIdx);
       e.preventDefault();
     }
   }

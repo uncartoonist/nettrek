@@ -1113,20 +1113,20 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   if (events.enemyHit || events.obstacleHit || events.weakPointHit) state.stageStats.shotsHit++;
   if (events.playerHit) state.stageStats.damageTaken++;
 
-  // ── Post-victory sequence: stats reveal → ship flyaway ──
-  // Victory transition fires above; from there we tick a timer that
-  // drives the stats reveal and then the player ship's exit animation.
+  // ── Post-victory sequence: ship flyaway → stats reveal ──
+  // 1. Boss dies → state.phase = 'victory'
+  // 2. Immediately the ship's engines flare and it accelerates UP off-screen.
+  // 3. Once ship is off-screen (flyaway done), the stats card animates in.
+  // 4. ENTER on stats → transitions to 'briefing' phase (next stage intro).
   if (state.phase === 'victory') {
     state.victoryTimer++;
-    // After ~4.5s of stats display, start flying the ship off-screen
-    if (state.victoryTimer >= 270 && !state.flyawayActive) {
-      state.flyawayActive = true;
-    }
-    if (state.flyawayActive) {
-      state.flyawayProgress = Math.min(1, state.flyawayProgress + 0.012);
-      // Accelerate the ship upward off-screen
+    // Flyaway starts immediately on victory — no pre-roll
+    if (!state.flyawayActive) state.flyawayActive = true;
+    if (state.flyawayActive && state.flyawayProgress < 1) {
+      // Accelerate the ship straight up; finishes around ~130 frames
+      state.flyawayProgress = Math.min(1, state.flyawayProgress + 0.015);
       const p = state.player;
-      p.pos.y -= 3 + state.flyawayProgress * 14;
+      p.pos.y -= 3 + state.flyawayProgress * 18;
     }
   }
 
