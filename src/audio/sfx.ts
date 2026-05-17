@@ -150,6 +150,48 @@ export function playPhaser(): void {
   osc('sine', 1250, 380, 0.3, 0.06);
 }
 
+// ── Hit contact — quick tick when a player bullet connects ──
+// Throttled by the caller; this should be tiny so it never
+// overwhelms explosions or music. Subtle but consistent feedback
+// that shots are landing.
+let lastHitTime = 0;
+export function playBulletHit(): void {
+  const a = ac();
+  const now = a.currentTime;
+  // Throttle to ~12 hits/sec max so it doesn't machine-gun
+  if (now - lastHitTime < 0.045) return;
+  lastHitTime = now;
+  const o = a.createOscillator();
+  const g = a.createGain();
+  o.type = 'square';
+  // Slight pitch randomization so it doesn't get repetitive
+  const f0 = 1700 + Math.random() * 400;
+  o.frequency.setValueAtTime(f0, now);
+  o.frequency.exponentialRampToValueAtTime(800, now + 0.04);
+  g.gain.setValueAtTime(0.045, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  o.connect(g); g.connect(a.destination);
+  o.start(now); o.stop(now + 0.05);
+}
+
+// Heavier hit for crit weak-point hits
+let lastCritTime = 0;
+export function playCritHit(): void {
+  const a = ac();
+  const now = a.currentTime;
+  if (now - lastCritTime < 0.06) return;
+  lastCritTime = now;
+  const o = a.createOscillator();
+  const g = a.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(2400, now);
+  o.frequency.exponentialRampToValueAtTime(900, now + 0.07);
+  g.gain.setValueAtTime(0.08, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+  o.connect(g); g.connect(a.destination);
+  o.start(now); o.stop(now + 0.08);
+}
+
 export function playCloak(): void {
   osc('sine', 300, 1200, 0.25, 0.1);
 }

@@ -2,7 +2,7 @@
 import { createShmupState, updateShmup, startStage, applyDirectorCommand, ShmupInput } from './shmup/engine';
 import { ShmupRenderer } from './shmup/renderer';
 import { HangarScreen } from './shmup/hangar';
-import { initAudio, playExplosion, playBigExplosion, playPlayerHit, playBomb, playCoinCollect, playPowerUpWeapon, playPowerUpShield, playPowerUpSpecial } from './audio/sfx';
+import { initAudio, playExplosion, playBigExplosion, playPlayerHit, playBomb, playCoinCollect, playPowerUpWeapon, playPowerUpShield, playPowerUpSpecial, playBulletHit, playCritHit } from './audio/sfx';
 import { playStageMusic, playMainTheme, stopMusic, setAnalyzer } from './audio/music';
 import { MusicAnalyzer } from './audio/analyzer';
 import { getDirectorCommand, resetDirector } from './shmup/director';
@@ -30,7 +30,7 @@ const keys: Record<string, boolean> = {};
 const input: ShmupInput = {
   moveX: 0, moveY: 0,
   fire: false, fireSpecial: false, bomb: false,
-  lockOnFire: false, shieldBurst: false,
+  lockOnFire: false, phaserHold: false, shieldBurst: false,
 };
 
 type PtrType = 'mouse' | 'touch' | 'pen';
@@ -168,12 +168,25 @@ function updateInput(): void {
   const playing = state.phase === 'playing' || state.phase === 'boss';
   // Always reset per-frame triggers (shieldBurst is consumed by engine each frame)
   input.shieldBurst = false;
+  // phaserHold is computed fresh every frame from current input state
+  input.phaserHold = false;
 
   if (!playing) {
     input.moveX = input.moveY = 0;
     input.fire = false;
     input.fireSpecial = false;
     return;
+  }
+
+  // ── Phaser hold-to-fire ──
+  // Mobile: 2+ active touch/pen pointers → fire phaser
+  // Desktop: Shift held → fire phaser
+  // Release = beam ends immediately (engine handles).
+  const touchPenCount = Array.from(activePointers.values())
+    .filter(p => p.type === 'touch' || p.type === 'pen').length;
+  const shiftHeld = !!(keys['ShiftLeft'] || keys['ShiftRight']);
+  if (touchPenCount >= 2 || shiftHeld) {
+    input.phaserHold = true;
   }
 
   // Pick the steering source: an active down-pointer beats mouse hover.
@@ -203,7 +216,9 @@ function updateInput(): void {
     }
 
     input.fire = true;  // auto-fire while alive
-    input.fireSpecial = rightMouseDown;
+    // Special weapons fire on: right-click (mouse), shift held (desktop),
+    // or 2+ fingers down (mobile — same gesture as phaser hold).
+    input.fireSpecial = rightMouseDown || input.phaserHold;
 
     // ── Shield burst: hard-push (Pencil / 3D Touch) ──
     if (usingPointer && primary!.pressure > HARD_PRESS_THRESHOLD && !primary!.longPressFired) {
@@ -411,6 +426,10 @@ function loop() {
     if (events.bombUsed) playBomb();
     if (events.bossKilled) { playBigExplosion(); }
     if (events.coinCollected) playCoinCollect();
+    // Hit-contact feedback — small tick when shots land. Critical hits on
+    // boss weak points get a richer sound. Both are throttled inside sfx.ts.
+    if (events.weakPointHit) playCritHit();
+    else if (events.enemyHit || events.obstacleHit) playBulletHit();
     // Distinct sounds per powerup type
     if (events.powerUpCollected && events.powerUpCollected !== 'star') {
       const pu = events.powerUpCollected;

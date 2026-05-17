@@ -155,7 +155,9 @@ export interface ShmupInput {
   fire: boolean;
   fireSpecial: boolean;
   bomb: boolean;
-  lockOnFire: boolean;   // double-tap triggers lock-on phaser
+  lockOnFire: boolean;   // (legacy double-tap; still supported as a one-shot trigger)
+  phaserHold: boolean;   // held: 2nd finger on mobile, Shift on desktop. Beam stays
+                         // on as long as this is true and there's charge left.
   shieldBurst: boolean;  // hard-push (pressure) or long-press — defensive panic burst
 }
 
@@ -169,6 +171,9 @@ export interface ShmupEvents {
   bossKilled?: boolean;
   bombUsed?: boolean;
   coinCollected?: boolean;
+  obstacleHit?: boolean;       // player bullet hit a rock / mine / asteroid
+  weakPointHit?: boolean;      // player bullet hit a boss weak point (crit)
+  shieldDeflect?: boolean;     // player bullet deflected off a shielded boss hull
 }
 
 export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
@@ -346,10 +351,22 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     const PHASER_DAMAGE = 2 + p.phaserLevel;
     const REACQUIRE_RANGE = W * 0.9;
 
-    // Activation — only when fully charged
+    // ── Release the beam the instant the player lets go ──
+    // (Mobile: 2nd finger lifted. Desktop: Shift released.) This is the
+    // primary deactivation path now — charge depletion is the secondary cap.
+    if (p.phaserBeamActive && !input.phaserHold && !input.lockOnFire) {
+      p.phaserBeamActive = false;
+      p.lockOnTarget = -1;
+      p.phaserRechargeDelay = RECHARGE_DELAY_FRAMES;
+    }
+
+    // Activation — only when has charge. Held-to-fire (phaserHold) is the
+    // primary input; legacy lockOnFire (double-tap one-shot) still works.
+    const wantPhaser = input.phaserHold || input.lockOnFire;
+    const minChargeToStart = input.phaserHold ? 0.15 : ACTIVATION_THRESHOLD;
     if (
-      p.lockOnPhaserReady && input.lockOnFire &&
-      !p.phaserBeamActive && p.phaserCharge >= ACTIVATION_THRESHOLD
+      p.lockOnPhaserReady && wantPhaser &&
+      !p.phaserBeamActive && p.phaserCharge >= minChargeToStart
     ) {
       // Find nearest enemy to lock onto
       let target: Enemy | null = null;
@@ -690,6 +707,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
           if (survivingSubs) {
             bullet.pos.y = -999;
             bullet.ttl = 0;
+            events.shieldDeflect = true;
             // Cyan deflect spark
             for (let i = 0; i < 5; i++) {
               const a = Math.random() * Math.PI * 2;
@@ -802,6 +820,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       if (hitTest(bullet.pos, bullet.radius, obs.pos, obs.radius)) {
         obs.hp -= bullet.damage;
         bullet.pos.y = -999;
+        events.obstacleHit = true;
         // Sparks
         for (let i = 0; i < 3; i++) {
           state.particles.push({
@@ -1043,26 +1062,104 @@ function getFireRate(p: PlayerShip): number {
 }
 
 function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolean): void {
-  const color = FACTION_COLORS.federation;
   const PT = 120; // player bullet lifespan (long — they leave screen anyway)
-  // Main gun
-  const spread = p.mainGunLevel >= 3 ? [-4, 0, 4] : p.mainGunLevel >= 2 ? [-2, 2] : [0];
-  for (const dx of spread) {
+
+  // ── MAIN GUN — visually distinct per upgrade level ──
+  // Each level changes color, count, and arrangement so the player feels
+  // the upgrade. The color progression goes cool → hot as power grows.
+  const lvl = p.mainGunLevel;
+  // Color per level: cyan → bright cyan → electric blue → violet-cyan → white-hot
+  const lvlColors: Record<number, { core: string; trail: string }> = {
+    1: { core: '#00ddff', trail: '#0088cc' },     // basic cyan
+    2: { core: '#22eeff', trail: '#0099dd' },     // brighter cyan
+    3: { core: '#44ffff', trail: '#0066ff' },     // electric blue-cyan twin
+    4: { core: '#88aaff', trail: '#3344ff' },     // violet-cyan triplet
+    5: { core: '#ffffff', trail: '#88ccff' },     // white-hot quad
+  };
+  const cc = lvlColors[Math.min(5, Math.max(1, lvl))] || lvlColors[1];
+  const mainColor = cc.core;
+  const dmg = 1 + Math.floor(lvl / 2);
+
+  // Per-level bullet layout
+  let mainShots: { dx: number; dy: number; vx: number; vy: number; r: number; tag?: string }[] = [];
+  if (lvl <= 1) {
+    // L1: single straight bolt
+    mainShots = [{ dx: 0, dy: 0, vx: 0, vy: -12, r: 4 }];
+  } else if (lvl === 2) {
+    // L2: twin parallel bolts
+    mainShots = [
+      { dx: -5, dy: 0, vx: 0, vy: -12, r: 4 },
+      { dx:  5, dy: 0, vx: 0, vy: -12, r: 4 },
+    ];
+  } else if (lvl === 3) {
+    // L3: triple — center + two angled outer
+    mainShots = [
+      { dx: 0, dy: -2, vx: 0, vy: -13, r: 5 },
+      { dx: -6, dy: 0, vx: -1.2, vy: -12, r: 4 },
+      { dx:  6, dy: 0, vx:  1.2, vy: -12, r: 4 },
+    ];
+  } else if (lvl === 4) {
+    // L4: triple with wider spread + lead pair offset
+    mainShots = [
+      { dx: 0, dy: -4, vx: 0, vy: -14, r: 5 },
+      { dx: -8, dy: 0, vx: -1.8, vy: -12, r: 4 },
+      { dx:  8, dy: 0, vx:  1.8, vy: -12, r: 4 },
+      { dx: -3, dy: -2, vx: -0.5, vy: -13, r: 3 },
+      { dx:  3, dy: -2, vx:  0.5, vy: -13, r: 3 },
+    ];
+  } else {
+    // L5: quad — wider triple + offset twin escorts, all white-hot
+    mainShots = [
+      { dx: 0,  dy: -6, vx: 0,    vy: -15, r: 6 },
+      { dx: -4, dy: -3, vx: -0.6, vy: -14, r: 4 },
+      { dx:  4, dy: -3, vx:  0.6, vy: -14, r: 4 },
+      { dx: -10, dy: 0, vx: -2.4, vy: -12, r: 5 },
+      { dx:  10, dy: 0, vx:  2.4, vy: -12, r: 5 },
+    ];
+  }
+  for (const s of mainShots) {
     state.playerBullets.push({
-      pos: { x: p.pos.x + dx, y: p.pos.y - p.height / 2 },
-      vel: { x: dx * 0.3, y: -12 },
-      damage: 1 + Math.floor(p.mainGunLevel / 2),
-      radius: 4, isPlayer: true, color, trail: true, ttl: PT, maxTtl: PT,
+      pos: { x: p.pos.x + s.dx, y: p.pos.y - p.height / 2 + s.dy },
+      vel: { x: s.vx, y: s.vy },
+      damage: dmg,
+      radius: s.r, isPlayer: true, color: mainColor, trail: true, ttl: PT, maxTtl: PT,
     });
   }
+  // L5 muzzle flare — extra glow bullet that fades quickly
+  if (lvl >= 5 && state.particles.length < 460) {
+    for (let i = 0; i < 3; i++) {
+      state.particles.push({
+        pos: { x: p.pos.x + (Math.random()-0.5)*8, y: p.pos.y - p.height / 2 },
+        vel: { x: (Math.random()-0.5)*1.5, y: -3 - Math.random()*2 },
+        life: 6, maxLife: 6, color: '#ffffff', size: 2,
+      });
+    }
+  }
 
-  // Wing guns
+  // ── WING GUNS — fan out further and add count as levels grow ──
   if (p.wingGunLevel > 0 && state.tick % (12 - p.wingGunLevel * 2) === 0) {
-    const ws = p.wingGunLevel >= 3 ? 20 : 14;
-    state.playerBullets.push(
-      { pos: { x: p.pos.x - ws, y: p.pos.y - 5 }, vel: { x: -1, y: -10 }, damage: 1, radius: 3, isPlayer: true, color: '#88ddff', ttl: PT, maxTtl: PT },
-      { pos: { x: p.pos.x + ws, y: p.pos.y - 5 }, vel: { x: 1, y: -10 }, damage: 1, radius: 3, isPlayer: true, color: '#88ddff', ttl: PT, maxTtl: PT },
-    );
+    const wlvl = p.wingGunLevel;
+    const ws = 14 + wlvl * 3;  // wing spacing grows with level
+    const wColor = wlvl >= 3 ? '#aaffff' : '#88ddff';
+    const wingShots: { x: number; vx: number }[] = [];
+    // L1: 2 simple, L2: 2 with slight angle, L3: 4 (twin per side), L4: 4 wider + angled
+    if (wlvl <= 2) {
+      wingShots.push({ x: -ws, vx: -1 - wlvl * 0.3 });
+      wingShots.push({ x:  ws, vx:  1 + wlvl * 0.3 });
+    } else {
+      wingShots.push({ x: -ws, vx: -1 });
+      wingShots.push({ x: -ws + 6, vx: -2 });
+      wingShots.push({ x:  ws, vx:  1 });
+      wingShots.push({ x:  ws - 6, vx:  2 });
+    }
+    for (const w of wingShots) {
+      state.playerBullets.push({
+        pos: { x: p.pos.x + w.x, y: p.pos.y - 5 },
+        vel: { x: w.vx, y: -10 },
+        damage: 1, radius: 3 + Math.floor(wlvl / 2),
+        isPlayer: true, color: wColor, ttl: PT, maxTtl: PT,
+      });
+    }
   }
 
   // Missiles — only fire on special
@@ -1800,34 +1897,41 @@ function spawnOutpost(state: ShmupState, W: number): void {
 
   switch (type) {
     case 'station':
-      lootTable = ['shield', 'shield', 'weapon', 'bomb', 'star', 'star', 'star'];
-      radius = 35;
-      captureTime = 90; // 1.5 seconds
-      name = 'SUPPLY STATION';
+      // STARBASE — recruit crew + arm up. Stations are the firepower outpost:
+      // every capture gives at least one crew (wing/main gun bump) plus
+      // weapon upgrades. The clearest "I'm getting stronger" loot in the game.
+      lootTable = ['crew', 'crew', 'weapon', 'missile', 'bomb', 'star', 'star'];
+      radius = 38;
+      captureTime = 100;
+      name = 'STARBASE';
       break;
     case 'planet':
-      lootTable = ['life', 'shield', 'shield', 'star', 'star', 'star', 'star', 'star'];
-      radius = 50;
-      captureTime = 120; // 2 seconds (bigger reward)
+      // COLONY — defensive resources: lives, shields, magnet (food / safety).
+      lootTable = ['life', 'shield', 'shield', 'magnet', 'star', 'star', 'star', 'star'];
+      radius = 52;
+      captureTime = 130; // takes longer but biggest reward
       name = 'COLONY WORLD';
       break;
     case 'derelict':
-      lootTable = ['weapon', 'missile', 'laser', 'phaser', 'emp'];
-      radius = 30;
-      captureTime = 75; // 1.25 seconds
+      // DERELICT WARSHIP — salvaged offensive systems. Lots of weapons, rare crew.
+      lootTable = ['weapon', 'missile', 'laser', 'phaser', 'emp', 'overdrive', 'crew'];
+      radius = 32;
+      captureTime = 80;
       name = 'DERELICT WARSHIP';
       break;
     case 'beacon':
-      lootTable = ['overdrive', 'score2x', 'drone'];
-      radius = 20;
-      captureTime = 50; // quick grab
+      // NAV BEACON — intel/buffs: scoring + magnets + drones.
+      lootTable = ['overdrive', 'score2x', 'drone', 'magnet'];
+      radius = 22;
+      captureTime = 50;
       name = 'NAV BEACON';
       break;
     case 'tradeship':
-      lootTable = ['star', 'star', 'star', 'star', 'star', 'magnet', 'shield'];
-      radius = 28;
-      captureTime = 60; // 1 second
-      name = 'TRADE VESSEL';
+      // MERCHANT — coins, magnets, occasional crew (hired hand).
+      lootTable = ['star', 'star', 'star', 'star', 'star', 'magnet', 'shield', 'crew'];
+      radius = 30;
+      captureTime = 65;
+      name = 'MERCHANT VESSEL';
       break;
   }
 
@@ -2384,6 +2488,21 @@ function collectPowerUp(state: ShmupState, pu: PowerUp): void {
       p.mainGunLevel = Math.min(5, p.mainGunLevel + 1);
       flashText = `CANNON LVL ${p.mainGunLevel}`;
       break;
+    case 'crew':
+      // Extra crew man the wing guns — bumps wingGunLevel. If wings are
+      // already maxed, bumps main cannon instead. Either way, more firepower.
+      if (p.wingGunLevel < 4) {
+        p.wingGunLevel = Math.min(4, p.wingGunLevel + 1);
+        flashText = `CREW ABOARD — WING LVL ${p.wingGunLevel}`;
+      } else if (p.mainGunLevel < 5) {
+        p.mainGunLevel = Math.min(5, p.mainGunLevel + 1);
+        flashText = `CREW ABOARD — CANNON LVL ${p.mainGunLevel}`;
+      } else {
+        // Fully maxed — give a shield instead
+        p.shields = Math.min(p.maxShields + 2, p.shields + 1);
+        flashText = 'CREW ABOARD — SHIELDS +1';
+      }
+      break;
     case 'shield':
       p.shields = Math.min(p.maxShields + 2, p.shields + 1);
       flashText = 'SHIELDS +1';
@@ -2511,6 +2630,7 @@ function handleBossWeakPointHits(state: ShmupState, events: ShmupEvents): void {
       bullet.pos.y = -999;
       bullet.ttl = 0;
       events.enemyHit = true;
+      events.weakPointHit = true;
 
       // Crit spark
       state.particles.push({

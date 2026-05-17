@@ -7,11 +7,12 @@ const POWERUP_COLORS: Record<PowerUpType, string> = {
   bomb: '#ff4444', magnet: '#ff88ff', missile: '#ffaa00',
   laser: '#ff44ff', phaser: '#ff8833', life: '#ff8888',
   emp: '#44ddff', overdrive: '#ff6600', drone: '#44ffaa', score2x: '#ffff00',
+  crew: '#ffcc66',  // warm amber — Federation away-team uniform
 };
 
 const POWERUP_LABELS: Record<PowerUpType, string> = {
   weapon: 'W', shield: 'S', star: '★', bomb: 'B', magnet: 'M', missile: 'R', laser: 'L', phaser: 'P', life: '♥',
-  emp: '⚡', overdrive: '🔥', drone: '◈', score2x: '×2',
+  emp: '⚡', overdrive: '🔥', drone: '◈', score2x: '×2', crew: 'C',
 };
 
 import type { EnvSpawn } from './types';
@@ -319,6 +320,21 @@ export class ShmupRenderer {
 
       const r = bullet.radius;
       const c = bullet.color;
+
+      // ── Universal threat warning halo ──
+      // Draws BEFORE the per-shape detail so every enemy bullet has an
+      // obvious bright outer ring that reads as "incoming fire." The
+      // halo pulses subtly so the eye latches on to it against the
+      // dark nebula background. The shape-specific render then layers
+      // its detail on top.
+      const haloPulse = 0.7 + Math.sin(state.tick * 0.18 + bullet.pos.x * 0.05) * 0.3;
+      const haloR = Math.max(8, r * 2.8) * haloPulse;
+      const haloGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, haloR);
+      haloGrad.addColorStop(0, `rgba(255, 60, 110, ${0.55 * fadeAlpha})`);
+      haloGrad.addColorStop(0.55, `rgba(255, 40, 90, ${0.25 * fadeAlpha})`);
+      haloGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath(); ctx.arc(0, 0, haloR, 0, Math.PI * 2); ctx.fill();
       // Shape source of truth: bullet.shape if explicitly set (e.g. T'VAK
       // weapon hardpoints), otherwise the legacy color-prefix dispatch
       // below picks an appropriate shape for fighter/bomber/cruiser/elite
@@ -3800,6 +3816,26 @@ export class ShmupRenderer {
         ctx.textAlign = 'center';
         ctx.fillText('×2', 0, 3);
         ctx.textAlign = 'left';
+        break;
+      }
+      case 'crew': {
+        // Crew badge — silhouette of two figures behind a captain's chair stripe.
+        // A "people" icon to telegraph 'extra crew aboard'.
+        // Captain's stripe
+        ctx.fillStyle = color; ctx.globalAlpha = 0.9 * pulse;
+        ctx.fillRect(-10, -2, 20, 4);
+        // Two head silhouettes above the stripe
+        ctx.fillStyle = color; ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.arc(-4, -7, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc( 4, -7, 3, 0, Math.PI * 2); ctx.fill();
+        // Two shoulders/torsos below
+        ctx.beginPath();
+        ctx.moveTo(-8, 8); ctx.lineTo(-8, 2); ctx.quadraticCurveTo(-4, -2, 0, 2);
+        ctx.quadraticCurveTo(4, -2, 8, 2); ctx.lineTo(8, 8);
+        ctx.closePath(); ctx.fill();
+        // Highlight on captain's stripe
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.4;
+        ctx.fillRect(-9, -1, 18, 1);
         break;
       }
     }

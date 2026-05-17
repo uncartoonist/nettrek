@@ -144,7 +144,7 @@ export interface Outpost {
 }
 
 // ── Power-ups ──────────────────────────────────────────────
-export type PowerUpType = 'weapon' | 'shield' | 'star' | 'bomb' | 'magnet' | 'missile' | 'laser' | 'phaser' | 'life' | 'emp' | 'overdrive' | 'drone' | 'score2x';
+export type PowerUpType = 'weapon' | 'shield' | 'star' | 'bomb' | 'magnet' | 'missile' | 'laser' | 'phaser' | 'life' | 'emp' | 'overdrive' | 'drone' | 'score2x' | 'crew';
 
 export interface PowerUp {
   pos: Vec2;
