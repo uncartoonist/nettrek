@@ -58,6 +58,42 @@ export function resetDirector(): void {
   intensityMemory = 0;
 }
 
+// ── Player power score — how loaded out is the ship right now? ──
+// Returns 0-1. Fresh start ≈ 0.10, fully maxed ≈ 1.00. The director uses
+// this to crank up spawn density / max enemies / cadence so a maxed-out
+// loadout still feels meaningfully challenged. "If my ship has tons of
+// firepower and it's destroying everything, it's not very fun."
+function playerPower(state: ShmupState): number {
+  const p = state.player;
+  const weaponScore = (
+    Math.min(5, p.mainGunLevel) / 5 +
+    Math.min(4, p.wingGunLevel) / 4 +
+    Math.min(3, p.missileLevel) / 3 +
+    Math.min(2, p.laserLevel) / 2 +
+    Math.min(3, p.phaserLevel) / 3
+  ) / 5;  // 0-1, average of normalized weapon levels
+  const buffScore =
+    (p.overdriveTimer > 0 ? 0.20 : 0) +
+    (p.droneActive       ? 0.15 : 0) +
+    (p.scoreMultTimer > 0? 0.08 : 0) +
+    (p.magnetActive      ? 0.05 : 0);
+  const shieldScore = Math.min(3, p.shields) / 3 * 0.12;
+  const bombScore = Math.min(5, p.bombCount) / 5 * 0.08;
+  return Math.min(1, weaponScore * 0.7 + buffScore + shieldScore + bombScore);
+}
+
+// ── Armada intensity — ramps as the boss approaches ──
+// Constant 1.0 for the first 70% of the stage. From 70% → 100% of the
+// timer, scales linearly up to 2.0 (twice as many enemies and roughly
+// twice the spawn rate). This gives every level a real "closing in on
+// the boss" escalation arc.
+function armadaIntensity(state: ShmupState): number {
+  const dur = state.stages[state.currentStage]?.duration || 2100;
+  const timeProg = Math.min(state.tick / dur, 1);
+  if (timeProg < 0.7) return 1;
+  return 1 + (timeProg - 0.7) / 0.3;  // 1.0 → 2.0
+}
+
 // ── Difficulty curve based on time + stage ──
 function diff(state: ShmupState): number {
   const dur = state.stages[state.currentStage]?.duration || 2100;
@@ -243,13 +279,25 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
     cmd.particleBurst = true;
   }
 
+  // ── Adaptive difficulty — player power + armada ramp ──
+  // power: 0-1, how loaded out the ship is right now
+  // armada: 1.0-2.0, how close we are to the boss (last 30% of stage)
+  // Both feed into the spawn cap, cadence, and trigger chance so a
+  // maxed loadout always has more to dodge, and the level escalates
+  // visibly as the boss approaches.
+  const power = playerPower(state);
+  const armada = armadaIntensity(state);
+  const powerBonus = Math.floor(power * 4);       // +0 to +4 enemies
+  const armadaBonus = Math.floor((armada - 1) * 6); // +0 to +6 enemies in last 30%
+
   // ══════════════════════════════════════════════════════════════
-  // SPAWNING — the music tells us when and what
-  // ═════���════════════════════════════════════════════════════════
+  // SPAWNING — music tells us when and what; power+armada tell us how much
+  // ══════════════════════════════════════════════════════════════
   // Density biases CADENCE (how often we spawn), not the cap. Capping
   // max enemies by density meant low-density songs could only ever have
   // 3 enemies on screen, which felt empty.
-  const maxEnemies = 5 + Math.floor(d * 7) + Math.floor(normalizedEnergy * 3);
+  const baseMax = 5 + Math.floor(d * 7) + Math.floor(normalizedEnergy * 3);
+  const maxEnemies = baseMax + powerBonus + armadaBonus;
   const currentEnemies = state.enemies.filter(e => e.alive).length;
   const canSpawn = currentEnemies < maxEnemies && spawnCD <= 0;
 
@@ -295,7 +343,10 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
     cmd.particleBurst = true;
     cmd.signatureTrigger = profile.signature;
 
-    const dropCount = Math.max(2, Math.floor((4 + Math.floor(d * 4) + state.currentStage) * density));
+    // Drop wave: amplify with power and armada (more enemies arrive on
+    // the drop when the player is loaded out or approaching the boss).
+    const dropMult = (1 + power * 0.6) * armada;
+    const dropCount = Math.max(2, Math.floor((4 + Math.floor(d * 4) + state.currentStage) * density * dropMult));
     for (let i = 0; i < dropCount; i++) {
       cmd.spawnEnemies.push({
         type: pickEnemy(d, energy, profile),
@@ -304,7 +355,7 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
         drop: i === 0 ? pickDrop(d, energy) : i === 1 ? 'shield' : undefined,
       });
     }
-    spawnCD = 45;
+    spawnCD = Math.max(20, Math.floor(45 / armada));
     fleetCD = 180;
 
     const dropPU: PowerUpType[] = ['overdrive','emp','drone','score2x'];
@@ -314,21 +365,25 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   // ── TRIGGER HIT: profile-specific band drives spawns ──
   else if (trigger.hit && canSpawn) {
     // Density biases the chance but with a floor so low-density songs
-    // (drone, lull) still spawn on most beats.
-    const spawnChance = Math.max(0.25, (0.45 + d * 0.3 + normalizedEnergy * 0.2) * density);
+    // (drone, lull) still spawn on most beats. Power and armada bump
+    // both the chance and how quickly we can spawn the next wave.
+    const intensityMult = (1 + power * 0.6) * armada;
+    const spawnChance = Math.max(0.25, (0.45 + d * 0.3 + normalizedEnergy * 0.2) * density * intensityMult);
     if (Math.random() < spawnChance) {
       cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
-      spawnCD = Math.floor((40 - normalizedEnergy * 15 - d * 10) / Math.max(0.5, density));
+      spawnCD = Math.floor((40 - normalizedEnergy * 15 - d * 10) / Math.max(0.5, density * intensityMult));
     }
   }
 
   // ── HIHAT SWARM: swarm profile spawns fighter clusters on high-band spikes ──
-  else if (profile.signature === 'swarm' && energy.high > 0.55 && canSpawn && Math.random() < 0.08 * density) {
+  else if (profile.signature === 'swarm' && energy.high > 0.55 && canSpawn && Math.random() < 0.08 * density * armada) {
     const clusterX = 0.2 + Math.random() * 0.6;
-    for (let i = 0; i < 3; i++) {
-      cmd.spawnEnemies.push({ type: 'fighter', faction, x: clusterX + (Math.random() - 0.5) * 0.15 });
+    // Cluster size scales with armada — more fighters near the boss
+    const clusterN = 3 + Math.floor((armada - 1) * 3);
+    for (let i = 0; i < clusterN; i++) {
+      cmd.spawnEnemies.push({ type: 'fighter', faction, x: clusterX + (Math.random() - 0.5) * 0.2 });
     }
-    spawnCD = 30;
+    spawnCD = Math.max(15, Math.floor(30 / armada));
   }
 
   // ── GUARANTEED TRICKLE: never leave screen empty ──
@@ -357,10 +412,13 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
 
   // ── FIRE SYNC — enemies shoot on the profile's trigger band hit ──
   // Aggression scales fire rate: aggressive songs fire more often.
+  // Player power and armada both tighten the cooldown — a loaded player
+  // approaching the boss faces noticeably more incoming fire.
   if (trigger.hit && trigger.value > 0.3 && fireCD <= 0) {
     cmd.triggerFire = true;
     const cooldownBase = 40 - profile.aggression * 20;
-    fireCD = Math.floor(cooldownBase - normalizedEnergy * 10);
+    const tighten = 1 + power * 0.6 + (armada - 1) * 0.7;
+    fireCD = Math.max(8, Math.floor((cooldownBase - normalizedEnergy * 10) / tighten));
   }
 
   // ── OBSTACLES — type chosen from profile, rate from high frequencies ──
