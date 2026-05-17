@@ -267,63 +267,19 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     }
   }
 
-  // ── Spawn waves ────────────────────────────────────────────
+  // ── Spawning is now 100% music-driven via the Director ──
+  // The director (called from main.ts game loop) handles all enemy spawns.
+  // We only handle the boss transition here based on level duration.
   if (!state.bossActive) {
-    for (const wave of stage.waves) {
-      if (state.tick === wave.time) {
-        for (const we of wave.enemies) {
-          spawnEnemy(state, we.type, we.faction, we.x * W, we.path, we.hp, we.dropType);
-        }
-      }
-    }
-
-    // ── Fleet encounter — at 60% through the level ──
-    const fleetTick = Math.floor(stage.duration * 0.6);
-    if (state.tick === fleetTick) {
-      const faction = stage.faction;
-      // Capital ship in center
-      spawnEnemy(state, 'cruiser', faction, W * 0.5, undefined, undefined, 'shield');
-      // Flanking cruiser (later stages)
-      if (state.currentStage >= 2) {
-        spawnEnemy(state, 'cruiser', faction, W * 0.25, undefined, undefined, 'weapon');
-      }
-      if (state.currentStage >= 4) {
-        spawnEnemy(state, 'cruiser', faction, W * 0.75, undefined, undefined, 'missile');
-      }
-      // Fighter escort wings — pincer from sides
-      for (let i = 0; i < 3 + state.currentStage; i++) {
-        const side = i % 2 === 0 ? 0.05 + Math.random() * 0.15 : 0.8 + Math.random() * 0.15;
-        spawnEnemy(state, 'fighter', faction, W * side);
-      }
-      // Elite escort (later stages)
-      if (state.currentStage >= 3) {
-        spawnEnemy(state, 'elite', faction, W * 0.35, undefined, undefined, 'phaser');
-        spawnEnemy(state, 'elite', faction, W * 0.65, undefined, undefined, 'laser');
-      }
-    }
-
-    // ── Secondary wave at 80% — last push before boss ──
-    const pushTick = Math.floor(stage.duration * 0.85);
-    if (state.tick === pushTick) {
-      const faction = stage.faction;
-      // Swarm of fighters
-      for (let i = 0; i < 4 + state.currentStage; i++) {
-        spawnEnemy(state, 'fighter', faction, W * (0.1 + Math.random() * 0.8));
-      }
-      // Bombers
-      spawnEnemy(state, 'bomber', faction, W * 0.3, undefined, undefined, 'bomb');
-      spawnEnemy(state, 'bomber', faction, W * 0.7, undefined, undefined, 'star');
-    }
-
     // Check if it's boss time — trigger warning first
     if (state.tick >= stage.duration - 120 && state.bossWarning === 0 && !state.bossActive && stage.boss) {
-      state.bossWarning = 120; // 2 seconds of WARNING
+      state.bossWarning = 120;
     }
     if (state.tick >= stage.duration && state.enemies.length === 0 && stage.boss) {
       spawnBoss(state, stage.boss);
       state.phase = 'boss';
       state.bossActive = true;
-      state.bossEntrance = 120; // 2 second entrance cinematic
+      state.bossEntrance = 120;
       state.screenShake = 8;
     }
 

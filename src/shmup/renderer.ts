@@ -2736,11 +2736,40 @@ export class ShmupRenderer {
       }
     }
 
-    // Music-reactive background brightness pulse
-    if (state.musicIntensity > 0.5) {
-      ctx.globalAlpha = (state.musicIntensity - 0.5) * 0.04;
-      ctx.fillStyle = '#112244';
+    // ── Music-reactive atmosphere — the screen breathes with the song ──
+    const mi = state.musicIntensity;
+    const bp = state.beatPulse;
+
+    // Background energy wash — color shifts with intensity
+    if (mi > 0.3) {
+      const stage2 = state.stages[state.currentStage];
+      const factionTint = stage2?.faction === 'klingon' ? [40,10,5] :
+        stage2?.faction === 'romulan' ? [5,30,15] :
+        stage2?.faction === 'orion' ? [30,20,5] : [5,15,30];
+      ctx.globalAlpha = (mi - 0.3) * 0.06;
+      ctx.fillStyle = `rgb(${factionTint[0]},${factionTint[1]},${factionTint[2]})`;
       ctx.fillRect(0, 0, w, h);
+    }
+
+    // Bass pulses — deep atmospheric throbs from bottom of screen
+    if (bp > 0.1) {
+      const bassGrad = ctx.createLinearGradient(0, h, 0, h * 0.6);
+      bassGrad.addColorStop(0, `rgba(30,10,60,${bp * 0.12})`);
+      bassGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = bassGrad;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // High energy = lens flare in random corner
+    if (mi > 0.8 && t % 120 < 60) {
+      const flareX = Math.sin(t * 0.001) > 0 ? w * 0.85 : w * 0.15;
+      const flareY = h * 0.1;
+      const flareR = 40 + (mi - 0.8) * 200;
+      const flareGrad = ctx.createRadialGradient(flareX, flareY, 0, flareX, flareY, flareR);
+      flareGrad.addColorStop(0, `rgba(200,220,255,${(mi-0.8)*0.08})`);
+      flareGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = flareGrad;
+      ctx.fillRect(flareX - flareR, flareY - flareR, flareR * 2, flareR * 2);
     }
 
     ctx.globalAlpha = 1;
