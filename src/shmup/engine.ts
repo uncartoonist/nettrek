@@ -1976,13 +1976,17 @@ function spawnBoss(state: ShmupState, config: any): void {
       fireTimer: Math.floor(Math.random() * cooldown),
       fireCooldown: cooldown,
     });
+    // Hardpoint positions tuned to match the concept art's mounting points.
+    // Left side of the ship gets one of each pair; the renderer mirrors the
+    // visual mounts so each subsystem reads as TWO physical cannons firing
+    // together (one weak point destroys both visible cannons).
     weakPoints.push(
-      hardpoint(-cw * 0.16, -ch * 0.38, 'disruptor', 'DISRUPTOR', '#ff2a2a', 0.10, 95),
-      hardpoint( cw * 0.16, -ch * 0.38, 'missile',   'MISSILE',   '#ff44aa', 0.10, 140),
-      hardpoint(-cw * 0.34, -ch * 0.12, 'plasma',    'PLASMA',    '#bb44ff', 0.12, 85),
-      hardpoint( cw * 0.34, -ch * 0.12, 'tractor',   'TRACTOR',   '#9933ff', 0.12, 240),
-      hardpoint(-cw * 0.18,  ch * 0.30, 'phaser',    'PHASER',    '#44ff66', 0.10, 70),
-      hardpoint( cw * 0.18,  ch * 0.30, 'torpedo',   'TORPEDO',   '#ff3030', 0.10, 110),
+      hardpoint(-cw * 0.22, -ch * 0.40, 'disruptor', 'DISRUPTOR', '#ff44ee', 0.10, 95),
+      hardpoint( cw * 0.36, -ch * 0.34, 'missile',   'MISSILE',   '#ff66cc', 0.10, 140),
+      hardpoint(-cw * 0.40, -ch * 0.06, 'plasma',    'PLASMA',    '#bb44ff', 0.12, 85),
+      hardpoint( cw * 0.42,  ch * 0.18, 'tractor',   'TRACTOR',   '#aa44ff', 0.12, 240),
+      hardpoint(-cw * 0.32,  ch * 0.34, 'phaser',    'PHASER',    '#ff44aa', 0.10, 70),
+      hardpoint( 0,           ch * 0.46, 'torpedo',   'TORPEDO',   '#ff3030', 0.12, 110),
     );
   } else {
     // Generic boss: ring of evenly-spaced weak points

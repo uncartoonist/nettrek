@@ -2824,121 +2824,203 @@ export class ShmupRenderer {
   // the engine's weak-point layout. In phase 3 (final form) the wing
   // armor plates slide outward and the core glows white-hot.
   private bossHullTvak(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, _dk: string, _md: string, tick: number, phase: number) {
-    // Tunable colors (gunmetal black armor)
-    const armorDark = '#0a0a10';
-    const armorMid = '#1a1a22';
-    const armorLight = '#262630';
+    // ── Color palette matched to the T'VAK concept art ──
+    const armorDarkest = '#080810';
+    const armorDark = '#13131c';
+    const armorMid = '#22222a';
+    const armorLight = '#34343e';
     const conduitGreen = '#22cc44';
     const conduitGreenDim = '#0a4a18';
     const coreRed = '#ff2020';
-    const corePulse = 0.6 + Math.sin(tick * 0.08) * 0.3;
+    const corePulse = 0.65 + Math.sin(tick * 0.08) * 0.3;
 
     // Final-form armor open: at phase 3, wings rotate slightly outward.
     const armorSpread = phase >= 3 ? Math.min(1, (tick - (tick - 60)) / 60) * 1.0 : 0;
-    const spreadOff = armorSpread * W * 0.05;
+    const spreadOff = armorSpread * W * 0.04;
 
-    // ── Outer raptor silhouette — full sweep ──
+    // ── Wide-swept raptor wings — more aggressive jagged silhouette ──
+    // The concept has wings that fan out and have multiple armor lobes.
     ctx.fillStyle = armorDark;
     ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    // Right side
-    ctx.lineTo(W * 0.08, -H * 0.45);
-    ctx.lineTo(W * 0.18, -H * 0.32);
-    ctx.lineTo(W * 0.26, -H * 0.18);
-    ctx.lineTo(W * 0.34 + spreadOff, -H * 0.05);
-    ctx.lineTo(W * 0.48 + spreadOff,  H * 0.05);
-    ctx.lineTo(W * 0.46 + spreadOff,  H * 0.18);
-    ctx.lineTo(W * 0.38,  H * 0.30);
-    ctx.lineTo(W * 0.28,  H * 0.34);
-    ctx.lineTo(W * 0.18,  H * 0.32);
-    ctx.lineTo(W * 0.12,  H * 0.42);
-    ctx.lineTo(W * 0.08,  H * 0.5);
-    ctx.lineTo(-W * 0.08, H * 0.5);
-    ctx.lineTo(-W * 0.12, H * 0.42);
-    ctx.lineTo(-W * 0.18, H * 0.32);
-    ctx.lineTo(-W * 0.28, H * 0.34);
-    ctx.lineTo(-W * 0.38, H * 0.30);
-    ctx.lineTo(-W * 0.46 - spreadOff, H * 0.18);
-    ctx.lineTo(-W * 0.48 - spreadOff, H * 0.05);
-    ctx.lineTo(-W * 0.34 - spreadOff, -H * 0.05);
-    ctx.lineTo(-W * 0.26, -H * 0.18);
-    ctx.lineTo(-W * 0.18, -H * 0.32);
-    ctx.lineTo(-W * 0.08, -H * 0.45);
+    // Top of central command tower
+    ctx.moveTo(0, -H * 0.50);
+    // Right side, top tower → shoulder → wing lobes → wing tip → fold under
+    ctx.lineTo(W * 0.06, -H * 0.46);
+    ctx.lineTo(W * 0.10, -H * 0.40);
+    ctx.lineTo(W * 0.16, -H * 0.36);
+    // Upper shoulder pauldron
+    ctx.lineTo(W * 0.28, -H * 0.32);
+    ctx.lineTo(W * 0.38, -H * 0.22);
+    // Wing lobe 1 (outer upper)
+    ctx.lineTo(W * 0.46, -H * 0.10);
+    // Wing tip extends out
+    ctx.lineTo(W * 0.50 + spreadOff, -H * 0.02);
+    // Lobe step
+    ctx.lineTo(W * 0.46 + spreadOff, H * 0.08);
+    ctx.lineTo(W * 0.50 + spreadOff, H * 0.18);
+    // Lower wing fold
+    ctx.lineTo(W * 0.42, H * 0.28);
+    ctx.lineTo(W * 0.34, H * 0.34);
+    ctx.lineTo(W * 0.24, H * 0.36);
+    ctx.lineTo(W * 0.18, H * 0.42);
+    // Bottom outer (phaser barrel mount area)
+    ctx.lineTo(W * 0.16, H * 0.50);
+    ctx.lineTo(W * 0.10, H * 0.50);
+    // Bottom-center engine pod taper
+    ctx.lineTo(W * 0.08, H * 0.46);
+    ctx.lineTo(W * 0.05, H * 0.42);
+    ctx.lineTo(-W * 0.05, H * 0.42);
+    ctx.lineTo(-W * 0.08, H * 0.46);
+    // Mirror left side back up to top
+    ctx.lineTo(-W * 0.10, H * 0.50);
+    ctx.lineTo(-W * 0.16, H * 0.50);
+    ctx.lineTo(-W * 0.18, H * 0.42);
+    ctx.lineTo(-W * 0.24, H * 0.36);
+    ctx.lineTo(-W * 0.34, H * 0.34);
+    ctx.lineTo(-W * 0.42, H * 0.28);
+    ctx.lineTo(-W * 0.50 - spreadOff, H * 0.18);
+    ctx.lineTo(-W * 0.46 - spreadOff, H * 0.08);
+    ctx.lineTo(-W * 0.50 - spreadOff, -H * 0.02);
+    ctx.lineTo(-W * 0.46, -H * 0.10);
+    ctx.lineTo(-W * 0.38, -H * 0.22);
+    ctx.lineTo(-W * 0.28, -H * 0.32);
+    ctx.lineTo(-W * 0.16, -H * 0.36);
+    ctx.lineTo(-W * 0.10, -H * 0.40);
+    ctx.lineTo(-W * 0.06, -H * 0.46);
     ctx.closePath();
     ctx.fill();
 
-    // ── Mid armor highlight (subtle plating definition) ──
+    // Subtle warm-tone rim light along the silhouette top (matches concept's
+    // orange edge highlight where the studio key light catches the armor)
+    ctx.strokeStyle = 'rgba(120, 60, 20, 0.45)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.46, -H * 0.10);
+    ctx.lineTo(-W * 0.38, -H * 0.22);
+    ctx.lineTo(-W * 0.28, -H * 0.32);
+    ctx.lineTo(-W * 0.16, -H * 0.36);
+    ctx.lineTo(0, -H * 0.50);
+    ctx.lineTo(W * 0.16, -H * 0.36);
+    ctx.lineTo(W * 0.28, -H * 0.32);
+    ctx.lineTo(W * 0.38, -H * 0.22);
+    ctx.lineTo(W * 0.46, -H * 0.10);
+    ctx.stroke();
+
+    // ── Mid armor — defines the inner wing plating ──
     ctx.fillStyle = armorMid;
     ctx.beginPath();
-    ctx.moveTo(0, -H * 0.42);
-    ctx.lineTo(W * 0.22, -H * 0.2);
-    ctx.lineTo(W * 0.4 + spreadOff, 0);
-    ctx.lineTo(W * 0.32, H * 0.22);
-    ctx.lineTo(0, H * 0.42);
-    ctx.lineTo(-W * 0.32, H * 0.22);
-    ctx.lineTo(-W * 0.4 - spreadOff, 0);
-    ctx.lineTo(-W * 0.22, -H * 0.2);
+    ctx.moveTo(0, -H * 0.40);
+    ctx.lineTo(W * 0.24, -H * 0.22);
+    ctx.lineTo(W * 0.38, -H * 0.04);
+    ctx.lineTo(W * 0.34, H * 0.16);
+    ctx.lineTo(W * 0.18, H * 0.30);
+    ctx.lineTo(0, H * 0.40);
+    ctx.lineTo(-W * 0.18, H * 0.30);
+    ctx.lineTo(-W * 0.34, H * 0.16);
+    ctx.lineTo(-W * 0.38, -H * 0.04);
+    ctx.lineTo(-W * 0.24, -H * 0.22);
     ctx.closePath();
     ctx.fill();
 
-    // ── Inner armor (rim highlight) ──
-    ctx.strokeStyle = '#3a3a44';
+    // Inner armor rim highlight
+    ctx.strokeStyle = '#4a4a55';
     ctx.lineWidth = 1.2;
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(0, -H * 0.42);
-    ctx.lineTo(W * 0.22, -H * 0.2);
-    ctx.lineTo(W * 0.4 + spreadOff, 0);
-    ctx.lineTo(W * 0.32, H * 0.22);
-    ctx.lineTo(0, H * 0.42);
-    ctx.lineTo(-W * 0.32, H * 0.22);
-    ctx.lineTo(-W * 0.4 - spreadOff, 0);
-    ctx.lineTo(-W * 0.22, -H * 0.2);
-    ctx.closePath();
+    ctx.globalAlpha = 0.55;
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // ── Wing energy conduits — vertical green strips on each wing ──
+    // ── Central spine — narrow tall body inside the mid armor ──
+    // This is the "face" of the ship that holds the eye lights and reactor.
+    ctx.fillStyle = armorLight;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.50);
+    ctx.lineTo(W * 0.10, -H * 0.32);
+    ctx.lineTo(W * 0.13, -H * 0.08);
+    ctx.lineTo(W * 0.10, H * 0.18);
+    ctx.lineTo(W * 0.06, H * 0.36);
+    ctx.lineTo(-W * 0.06, H * 0.36);
+    ctx.lineTo(-W * 0.10, H * 0.18);
+    ctx.lineTo(-W * 0.13, -H * 0.08);
+    ctx.lineTo(-W * 0.10, -H * 0.32);
+    ctx.closePath();
+    ctx.fill();
+
+    // ── Wing energy conduits — TALL vertical green bar arrays ──
+    // The concept has BIG vertical green strips on each wing. Make them
+    // prominent — these are an iconic visual signature.
     const drawConduit = (cx: number, cy: number, w: number, h: number, bars: number) => {
       ctx.fillStyle = conduitGreenDim;
       ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
       ctx.fillStyle = conduitGreen;
-      ctx.globalAlpha = 0.7 + Math.sin(tick * 0.1 + cx * 0.02) * 0.25;
+      ctx.globalAlpha = 0.75 + Math.sin(tick * 0.1 + cx * 0.02) * 0.2;
       const barH = h / bars - 1;
       for (let i = 0; i < bars; i++) {
         ctx.fillRect(cx - w / 2 + 1, cy - h / 2 + i * (barH + 1) + 1, w - 2, barH);
       }
+      // Outer cyan glow on the conduit
+      ctx.shadowColor = '#22ff66';
+      ctx.shadowBlur = 4;
+      ctx.fillRect(cx - 0.5, cy - h / 2, 1, h);
+      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     };
-    drawConduit(-W * 0.22, H * 0.05, 8, H * 0.32, 7);
-    drawConduit( W * 0.22, H * 0.05, 8, H * 0.32, 7);
-    drawConduit(-W * 0.34, -H * 0.02, 6, H * 0.22, 5);
-    drawConduit( W * 0.34, -H * 0.02, 6, H * 0.22, 5);
+    // Inner-wing conduit (taller, more bars)
+    drawConduit(-W * 0.22, H * 0.04, 9, H * 0.36, 9);
+    drawConduit( W * 0.22, H * 0.04, 9, H * 0.36, 9);
+    // Outer-wing conduit (shorter, fewer bars)
+    drawConduit(-W * 0.34, -H * 0.04, 7, H * 0.24, 6);
+    drawConduit( W * 0.34, -H * 0.04, 7, H * 0.24, 6);
 
-    // ── Central command tower (top) ──
-    ctx.fillStyle = armorLight;
+    // ── Central command tower (top of ship) ──
+    // The narrow vertical block at the very top that holds the top red eye.
+    ctx.fillStyle = armorMid;
     ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    ctx.lineTo(W * 0.07, -H * 0.45);
-    ctx.lineTo(W * 0.06, -H * 0.32);
-    ctx.lineTo(-W * 0.06, -H * 0.32);
-    ctx.lineTo(-W * 0.07, -H * 0.45);
+    ctx.moveTo(0, -H * 0.50);
+    ctx.lineTo(W * 0.05, -H * 0.46);
+    ctx.lineTo(W * 0.07, -H * 0.36);
+    ctx.lineTo(-W * 0.07, -H * 0.36);
+    ctx.lineTo(-W * 0.05, -H * 0.46);
     ctx.closePath();
     ctx.fill();
-    // Tower light (top eye)
+    // Tower notch
+    ctx.fillStyle = armorDarkest;
+    ctx.fillRect(-W * 0.025, -H * 0.50, W * 0.05, 5);
+    // Top tower red eye — brightest single light
     ctx.fillStyle = coreRed;
-    ctx.globalAlpha = 0.85 + Math.sin(tick * 0.1) * 0.15;
-    ctx.beginPath(); ctx.arc(0, -H * 0.46, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-    // Cyclops eye below tower
-    ctx.fillStyle = '#100000';
-    ctx.beginPath(); ctx.arc(0, -H * 0.28, W * 0.04, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = coreRed;
-    ctx.globalAlpha = corePulse;
-    ctx.beginPath(); ctx.arc(0, -H * 0.28, W * 0.025, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.9 + Math.sin(tick * 0.1) * 0.1;
+    ctx.beginPath(); ctx.arc(0, -H * 0.46, 3.5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ffaaaa';
-    ctx.globalAlpha = corePulse * 0.7;
-    ctx.beginPath(); ctx.arc(0, -H * 0.28, W * 0.012, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.arc(0, -H * 0.46, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── Stacked red eye lights down the spine (the "face") ──
+    // The concept has 3-4 horizontal red eyes between the top tower and
+    // the central reactor — like a stack of menacing watchers.
+    const eyeY = [-H * 0.32, -H * 0.24, -H * 0.18];
+    for (const ey of eyeY) {
+      // Dark socket
+      ctx.fillStyle = armorDarkest;
+      ctx.beginPath(); ctx.arc(0, ey, W * 0.032, 0, Math.PI * 2); ctx.fill();
+      // Red glow
+      ctx.fillStyle = coreRed;
+      ctx.globalAlpha = corePulse * 0.9;
+      ctx.beginPath(); ctx.arc(0, ey, W * 0.023, 0, Math.PI * 2); ctx.fill();
+      // White-hot center
+      ctx.fillStyle = '#ffeeee';
+      ctx.globalAlpha = corePulse * 0.7;
+      ctx.beginPath(); ctx.arc(0, ey, W * 0.010, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // Pair of smaller red eyes flanking the central socket (concept has these too)
+    for (const sx of [-1, 1]) {
+      const ex = sx * W * 0.06;
+      ctx.fillStyle = armorDarkest;
+      ctx.beginPath(); ctx.arc(ex, -H * 0.22, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = coreRed;
+      ctx.globalAlpha = corePulse * 0.85;
+      ctx.beginPath(); ctx.arc(ex, -H * 0.22, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.globalAlpha = 1;
 
     // ── Central core slot — vertical chevron reactor (the iconic feature) ──
@@ -2975,81 +3057,119 @@ export class ShmupRenderer {
     ctx.globalAlpha = 1;
     ctx.beginPath(); ctx.arc(0, H * 0.02, W * 0.18, 0, Math.PI * 2); ctx.fill();
 
-    // ── Engine cluster at the bottom (impulse drives) ──
+    // ── Engine cluster at the bottom — 3 prominent red tubes ──
+    // Match the concept's bottom-center engine cluster (3 cylindrical
+    // tubes glowing red with bright cores).
     for (let i = -1; i <= 1; i++) {
-      const ex = i * W * 0.06;
+      const ex = i * W * 0.05;
       const ey = H * 0.46;
-      ctx.fillStyle = armorMid;
-      ctx.fillRect(ex - 3, ey - H * 0.04, 6, H * 0.08);
-      // Glow
+      // Tube body
+      ctx.fillStyle = armorDarkest;
+      ctx.fillRect(ex - 4, ey - H * 0.06, 8, H * 0.10);
+      ctx.strokeStyle = armorLight; ctx.lineWidth = 1;
+      ctx.strokeRect(ex - 4, ey - H * 0.06, 8, H * 0.10);
+      // Glow ring
+      ctx.fillStyle = '#220000';
+      ctx.beginPath(); ctx.arc(ex, ey + H * 0.04, 4, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = coreRed;
-      ctx.globalAlpha = 0.7 + Math.sin(tick * 0.18 + i) * 0.2;
-      ctx.beginPath(); ctx.arc(ex, ey + H * 0.04, 3.5, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
-    // ── 6 weapon hardpoint glows (positions must match spawnBoss layout) ──
-    // Each glow renders LARGER if its weak point is still alive.
-    const drawHardpoint = (x: number, y: number, c: string, online: boolean, big: boolean) => {
-      if (!online) {
-        // Destroyed — sparking ruin
-        ctx.fillStyle = '#332210';
-        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
-        if (Math.random() < 0.25) {
-          ctx.fillStyle = '#ffaa44';
-          ctx.beginPath(); ctx.arc(x + (Math.random()-0.5)*4, y + (Math.random()-0.5)*4, 1.5, 0, Math.PI*2); ctx.fill();
-        }
-        return;
-      }
-      const r1 = big ? 9 : 6;
-      const r2 = big ? 5 : 3.5;
-      // Outer glow
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r1 * 2.2);
-      g.addColorStop(0, c);
-      g.addColorStop(1, 'transparent');
-      ctx.fillStyle = g;
-      ctx.globalAlpha = 0.55 + Math.sin(tick * 0.12 + x * 0.05) * 0.25;
-      ctx.beginPath(); ctx.arc(x, y, r1 * 2.2, 0, Math.PI * 2); ctx.fill();
-      // Bright core
-      ctx.fillStyle = c;
-      ctx.globalAlpha = 0.95;
-      ctx.beginPath(); ctx.arc(x, y, r2, 0, Math.PI * 2); ctx.fill();
-      // White-hot center dot
-      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.85 + Math.sin(tick * 0.18 + i * 1.3) * 0.15;
+      ctx.beginPath(); ctx.arc(ex, ey + H * 0.04, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffaaaa';
       ctx.globalAlpha = 0.7;
-      ctx.beginPath(); ctx.arc(x, y, r2 * 0.35, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ex, ey + H * 0.04, 1.4, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
-    };
-    // (The actual hardpoint draw is taken care of by the generic
-    // weakPoint renderer that runs after drawBossHull — see drawBoss.
-    // We don't double-draw the glow circles here. The hull just shows
-    // the structural mount points.)
-    // Mount sockets (small dark recesses under each hardpoint)
-    const sockets = [
-      { x: -W * 0.16, y: -H * 0.38 }, { x:  W * 0.16, y: -H * 0.38 },
-      { x: -W * 0.34, y: -H * 0.12 }, { x:  W * 0.34, y: -H * 0.12 },
-      { x: -W * 0.18, y:  H * 0.30 }, { x:  W * 0.18, y:  H * 0.30 },
-    ];
-    ctx.fillStyle = '#050508';
-    for (const s of sockets) { ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI * 2); ctx.fill(); }
-
-    // ── Bottom torpedo cluster (3 launch tubes — purely decorative,
-    // the actual TORPEDO weapon glow sits on top via weakPoints) ──
-    for (let i = -1; i <= 1; i++) {
-      const tx = i * W * 0.05 + W * 0.18;
-      ctx.fillStyle = armorMid;
-      ctx.fillRect(tx - 2.5, H * 0.34, 5, H * 0.1);
-      ctx.fillStyle = coreRed;
-      ctx.globalAlpha = 0.7 + Math.sin(tick * 0.2 + i * 1.7) * 0.25;
-      ctx.beginPath(); ctx.arc(tx, H * 0.42, 2, 0, Math.PI * 2); ctx.fill();
-      // Mirror left side too
-      const txL = -tx;
-      ctx.fillStyle = armorMid;
-      ctx.fillRect(txL - 2.5, H * 0.34, 5, H * 0.1);
-      ctx.fillStyle = coreRed;
-      ctx.beginPath(); ctx.arc(txL, H * 0.42, 2, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.globalAlpha = 1;
+
+    // ── Disruptor cannon tubes — TALL pink-tipped tubes from the shoulders ──
+    // Concept art has these rising VERTICALLY from the upper shoulders.
+    // Hardpoint at (-W*0.22, -H*0.40). Render mirrored pair.
+    const drawCannonTube = (cx: number, cy: number, alive: boolean, tubeColor: string) => {
+      // Tube body
+      ctx.fillStyle = armorDarkest;
+      ctx.fillRect(cx - 4, cy, 8, H * 0.08);
+      ctx.strokeStyle = armorLight; ctx.lineWidth = 1;
+      ctx.strokeRect(cx - 4, cy, 8, H * 0.08);
+      // Internal heat slit
+      ctx.fillStyle = alive ? '#ff2244' : '#222';
+      ctx.fillRect(cx - 1, cy + 2, 2, H * 0.06);
+      // Pink tip dome
+      ctx.fillStyle = alive ? tubeColor : '#3a2233';
+      ctx.beginPath(); ctx.arc(cx, cy, 5, Math.PI, 0); ctx.fill();
+      // Glowing tip pulse
+      if (alive) {
+        const tipP = 0.65 + Math.sin(tick * 0.12 + cx * 0.05) * 0.3;
+        ctx.fillStyle = '#ff88ee';
+        ctx.globalAlpha = tipP;
+        ctx.beginPath(); ctx.arc(cx, cy - 1, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = tipP * 0.8;
+        ctx.beginPath(); ctx.arc(cx, cy - 1, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    };
+    // Find weak point alive state (we look it up via the hardpoint position).
+    // Since the renderer doesn't have direct access to weakPoints here, we
+    // draw the tubes always — the alive state is communicated visually by
+    // the weak-point glow ring that the generic renderer adds on top.
+    drawCannonTube(-W * 0.22, -H * 0.46, true, '#ff44ee');  // L disruptor
+    drawCannonTube( W * 0.22, -H * 0.46, true, '#ff44ee');  // R disruptor (mirror)
+    // Missile bays — taller, more outboard, pink tip
+    drawCannonTube(-W * 0.36, -H * 0.40, true, '#ff66cc');  // L missile
+    drawCannonTube( W * 0.36, -H * 0.40, true, '#ff66cc');  // R missile
+
+    // ── Plasma turret pads — big dark sockets where the purple weapon
+    // glow goes. Decorative ring around the actual hardpoint position. ──
+    const drawTurretPad = (cx: number, cy: number, padR: number) => {
+      // Outer dark ring
+      ctx.strokeStyle = armorLight;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, padR, 0, Math.PI * 2); ctx.stroke();
+      // Inner dark recess
+      ctx.fillStyle = armorDarkest;
+      ctx.beginPath(); ctx.arc(cx, cy, padR - 2, 0, Math.PI * 2); ctx.fill();
+      // Mounting rivets at cardinal points
+      ctx.fillStyle = '#444';
+      for (let i = 0; i < 4; i++) {
+        const a = (Math.PI / 2) * i + Math.PI / 4;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * padR, cy + Math.sin(a) * padR, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    // Plasma turret pads (mirror pair at (-W*0.40, -H*0.06))
+    drawTurretPad(-W * 0.40, -H * 0.06, 14);
+    drawTurretPad( W * 0.40, -H * 0.06, 14);  // mirror so concept's twin plasma turrets read
+    // Tractor beam pads (mirror pair at (W*0.42, H*0.18))
+    drawTurretPad(-W * 0.42, H * 0.18, 14);
+    drawTurretPad( W * 0.42, H * 0.18, 14);
+
+    // ── Phaser barrels — long thin tubes extending DOWN from bottom-outer ──
+    // Concept has these as long pink-tipped barrels at the bottom-outer.
+    const drawPhaserBarrel = (cx: number, cy: number, alive: boolean) => {
+      // Long thin barrel
+      ctx.fillStyle = armorMid;
+      ctx.fillRect(cx - 2, cy, 4, H * 0.12);
+      // Barrel rings
+      ctx.fillStyle = armorLight;
+      ctx.fillRect(cx - 3, cy + H * 0.03, 6, 1.5);
+      ctx.fillRect(cx - 3, cy + H * 0.07, 6, 1.5);
+      // Magenta tip
+      if (alive) {
+        ctx.fillStyle = '#ff44aa';
+        ctx.beginPath(); ctx.moveTo(cx, cy + H * 0.13); ctx.lineTo(cx - 3, cy + H * 0.11); ctx.lineTo(cx + 3, cy + H * 0.11); ctx.closePath(); ctx.fill();
+        const tp = 0.7 + Math.sin(tick * 0.14 + cx * 0.06) * 0.3;
+        ctx.fillStyle = '#ff88dd';
+        ctx.globalAlpha = tp;
+        ctx.beginPath(); ctx.arc(cx, cy + H * 0.125, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    };
+    drawPhaserBarrel(-W * 0.32, H * 0.34, true);
+    drawPhaserBarrel( W * 0.32, H * 0.34, true);  // mirror
+
+    // (Hardpoint glow circles for the 6 weak points are drawn by the
+    // generic weakPoint renderer downstream in drawBoss — they appear
+    // on top of the dark sockets and decorative tubes set up above.)
 
     // ── Armor seam plating — diagonal panel lines across the wings ──
     ctx.strokeStyle = '#2a2a32';
@@ -3096,28 +3216,6 @@ export class ShmupRenderer {
     }
     ctx.globalAlpha = 1;
 
-    // ── Shoulder pauldron armor (large angular plates on the upper wings) ──
-    ctx.fillStyle = '#15151c';
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.18, -H * 0.32);
-    ctx.lineTo(-W * 0.38, -H * 0.18);
-    ctx.lineTo(-W * 0.32, -H * 0.04);
-    ctx.lineTo(-W * 0.15, -H * 0.12);
-    ctx.closePath(); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(W * 0.18, -H * 0.32);
-    ctx.lineTo(W * 0.38, -H * 0.18);
-    ctx.lineTo(W * 0.32, -H * 0.04);
-    ctx.lineTo(W * 0.15, -H * 0.12);
-    ctx.closePath(); ctx.fill();
-    // Pauldron rivets
-    ctx.fillStyle = '#3a3a44';
-    for (const side of [-1, 1]) {
-      ctx.beginPath(); ctx.arc(side * W * 0.22, -H * 0.24, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(side * W * 0.30, -H * 0.16, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(side * W * 0.24, -H * 0.10, 1.5, 0, Math.PI * 2); ctx.fill();
-    }
-
     // ── Subtle scanline overlay on the hull (retro-arcade feel) ──
     ctx.globalAlpha = 0.05;
     ctx.fillStyle = '#000000';
@@ -3126,11 +3224,9 @@ export class ShmupRenderer {
     }
     ctx.globalAlpha = 1;
 
-    // Reference: hardpoint glow circles are added by the generic
-    // weakPoint renderer downstream in drawBoss — see how it iterates
-    // enemy.weakPoints. The 'drawHardpoint' helper above is reserved
-    // for future use and intentionally not called here to avoid double-rendering.
-    void drawHardpoint;
+    // (The 6 weak-point glow circles are drawn by the generic weakPoint
+    // renderer downstream in drawBoss — they appear on top of the dark
+    // mount sockets and decorative tubes/pads laid out above.)
   }
 
   // ── 1. K'TAGH WARBIRD — Klingon, swept wings, brutal angles ──────
