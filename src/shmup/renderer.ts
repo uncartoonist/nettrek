@@ -789,82 +789,123 @@ export class ShmupRenderer {
         ctx.globalAlpha = 1;
 
       } else if (obs.type === 'energyribbon') {
-        // Energy ribbon — flowing sine wave trail through space
+        // Aurora ribbon — ethereal light stream that weaves through space
         const t = state.tick;
+        const R = obs.radius;
         const points = obs.ribbonPoints || [];
-        if (points.length > 2) {
-          // Draw the ribbon as a gradient stroke
-          ctx.save();
-          // Reset translation since ribbon uses absolute positions
-          ctx.restore(); ctx.save();
-          ctx.translate(-obs.pos.x, -obs.pos.y); // undo the obs translate
-          ctx.strokeStyle = `hsla(${(t * 0.5) % 360}, 80%, 60%, 0.6)`;
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(points[0].x, points[0].y);
-          for (let i = 1; i < points.length; i++) {
-            const prev = points[i-1];
-            const curr = points[i];
-            const cpx = (prev.x + curr.x) / 2;
-            const cpy = (prev.y + curr.y) / 2;
-            ctx.quadraticCurveTo(prev.x, prev.y, cpx, cpy);
+        ctx.restore(); // undo per-obs transform — ribbon uses world coords
+        ctx.save();
+        if (points.length > 3) {
+          // Draw as flowing aurora with width variation
+          for (let pass = 0; pass < 3; pass++) {
+            const width = [8, 4, 1.5][pass];
+            const alpha = [0.08, 0.25, 0.6][pass];
+            const hueShift = pass * 30;
+            ctx.strokeStyle = `hsla(${(t * 0.4 + hueShift + state.currentStage * 40) % 360}, 85%, ${55 + pass * 10}%, ${alpha})`;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length - 1; i++) {
+              const xc = (points[i].x + points[i+1].x) / 2;
+              const yc = (points[i].y + points[i+1].y) / 2;
+              ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+            }
+            ctx.stroke();
           }
-          ctx.stroke();
-          // Glow pass
-          ctx.strokeStyle = `hsla(${(t * 0.5) % 360}, 80%, 70%, 0.15)`;
-          ctx.lineWidth = 8;
-          ctx.stroke();
-          // Head glow
+          // Leading orb
           const head = points[points.length - 1];
-          ctx.fillStyle = `hsla(${(t * 0.5) % 360}, 90%, 80%, 0.7)`;
-          ctx.beginPath(); ctx.arc(head.x, head.y, 4, 0, Math.PI * 2); ctx.fill();
-          ctx.restore(); ctx.save(); ctx.translate(obs.pos.x, obs.pos.y);
+          const hGrad = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 6);
+          hGrad.addColorStop(0, '#ffffff');
+          hGrad.addColorStop(0.5, `hsla(${(t * 0.4 + state.currentStage * 40) % 360}, 90%, 70%, 0.8)`);
+          hGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = hGrad;
+          ctx.beginPath(); ctx.arc(head.x, head.y, 6, 0, Math.PI * 2); ctx.fill();
         }
+        ctx.restore();
+        ctx.save(); ctx.translate(obs.pos.x, obs.pos.y); ctx.rotate(obs.rotation); // re-establish for next obs
         ctx.globalAlpha = 1;
 
       } else if (obs.type === 'splitter') {
-        // Splitter asteroid — cracked rock that breaks apart
-        const R = obs.radius;
-        const s = obs.rotation * 100;
-        // Irregular shape with visible crack lines
-        const N = 10;
-        ctx.beginPath();
-        for (let i = 0; i < N; i++) {
-          const a = (Math.PI * 2 / N) * i;
-          const wobble = Math.sin(i * 3.1 + s) * 0.2 + Math.sin(i * 5.7 + s * 1.2) * 0.1;
-          const r = R * (0.75 + wobble);
-          if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-        }
-        ctx.closePath();
-        // Stage-colored fill
-        const sc = ['#5a5045','#4a6a5a','#7a6a4a','#5a5570','#5a4a7a','#6a4a4a','#3a3050','#4a6a6a','#6a5040'][state.currentStage % 9];
-        ctx.fillStyle = sc;
-        ctx.fill();
-        // Crack lines — shows it's about to break
-        ctx.strokeStyle = '#ffaa44';
-        ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.4 + Math.sin(state.tick * 0.08) * 0.2;
-        ctx.beginPath(); ctx.moveTo(-R*0.3, -R*0.4); ctx.lineTo(R*0.2, R*0.3); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(R*0.1, -R*0.3); ctx.lineTo(-R*0.2, R*0.2); ctx.stroke();
-        // Glowing fissure core
-        ctx.fillStyle = '#ff8844';
-        ctx.globalAlpha = 0.2 + Math.sin(state.tick * 0.1) * 0.1;
-        ctx.beginPath(); ctx.arc(0, 0, R * 0.2, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-
-      } else {
-        // Energy nexus — elegant floating energy sphere that pulses with the music
+        // Volatile asteroid — visibly unstable, veined with energy
         const R = obs.radius;
         const t = state.tick;
-        const mp = state.beatPulse; // music pulse
+        const s = obs.rotation * 100;
+        const instability = 0.5 + Math.sin(t * 0.06 + s) * 0.3; // pulses
 
-        // Outer aura — soft, breathes with music
-        const auraSize = R * (1 + mp * 0.3);
-        const aGrad = ctx.createRadialGradient(0, 0, R * 0.3, 0, 0, auraSize);
-        aGrad.addColorStop(0, `rgba(80,140,255,${0.12 + mp * 0.08})`);
-        aGrad.addColorStop(0.6, `rgba(60,100,200,${0.06 + mp * 0.04})`);
+        // Organic bezier shape (like rock but more angular)
+        const N = 12;
+        const shape: {x: number; y: number}[] = [];
+        for (let i = 0; i < N; i++) {
+          const a = (Math.PI * 2 / N) * i;
+          const wobble = Math.sin(i * 2.7 + s) * 0.18 + Math.sin(i * 5.3 + s * 0.8) * 0.1;
+          shape.push({ x: Math.cos(a) * R * (0.75 + wobble), y: Math.sin(a) * R * (0.75 + wobble) });
+        }
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) {
+          const p1 = shape[i];
+          const p2 = shape[(i + 1) % N];
+          if (i === 0) ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+        }
+        ctx.closePath();
+
+        // Base — dark with hot interior showing through
+        const baseGrad = ctx.createRadialGradient(0, 0, R * 0.1, 0, 0, R * 0.85);
+        baseGrad.addColorStop(0, `rgba(255,120,40,${instability * 0.3})`);
+        baseGrad.addColorStop(0.4, '#3a2a1a');
+        baseGrad.addColorStop(1, '#1a0a05');
+        ctx.fillStyle = baseGrad;
+        ctx.fill();
+
+        // Molten veins — the energy that makes it split
+        ctx.save(); ctx.clip();
+        ctx.strokeStyle = `rgba(255,140,40,${instability * 0.6})`;
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          const startA = i * 1.5 + s * 0.01;
+          ctx.moveTo(Math.cos(startA) * R * 0.1, Math.sin(startA) * R * 0.1);
+          let cx2 = Math.cos(startA) * R * 0.1, cy2 = Math.sin(startA) * R * 0.1;
+          for (let j = 0; j < 4; j++) {
+            cx2 += Math.cos(startA + j * 0.8) * R * 0.2;
+            cy2 += Math.sin(startA + j * 1.1) * R * 0.2;
+            ctx.lineTo(cx2, cy2);
+          }
+          ctx.stroke();
+        }
+        // Hot spots at vein intersections
+        ctx.fillStyle = `rgba(255,200,80,${instability * 0.4})`;
+        ctx.beginPath(); ctx.arc(R * 0.15, -R * 0.1, 3 + instability * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-R * 0.2, R * 0.15, 2 + instability * 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Outer edge glow — shows instability
+        ctx.strokeStyle = `rgba(255,100,20,${instability * 0.25})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) {
+          const p1 = shape[i];
+          const p2 = shape[(i + 1) % N];
+          if (i === 0) ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+      } else {
+        // Harmonic crystal — geometric solid that resonates with music
+        const R = obs.radius;
+        const t = state.tick;
+        const mp = state.beatPulse;
+
+        // Outer resonance field
+        const auraSize = R * (1.2 + mp * 0.4);
+        const hue = (state.currentStage * 45 + t * 0.2) % 360;
+        const aGrad = ctx.createRadialGradient(0, 0, R * 0.2, 0, 0, auraSize);
+        aGrad.addColorStop(0, `hsla(${hue}, 70%, 60%, ${0.15 + mp * 0.1})`);
+        aGrad.addColorStop(0.5, `hsla(${hue}, 60%, 40%, ${0.06 + mp * 0.04})`);
         aGrad.addColorStop(1, 'transparent');
         ctx.fillStyle = aGrad;
         ctx.beginPath(); ctx.arc(0, 0, auraSize, 0, Math.PI * 2); ctx.fill();
