@@ -69,6 +69,7 @@ export interface Enemy {
   phaseTimer?: number;
   phaseCount?: number;
   weakPoints?: WeakPoint[];
+  bossType?: string;   // 'warbird', 'dreadnought', etc. — dispatches per-boss combat + visuals
 }
 
 export interface WeakPoint {

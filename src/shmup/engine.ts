@@ -1171,115 +1171,232 @@ function fireEnemyWeapon(state: ShmupState, enemy: Enemy, playerPos: Vec2): void
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// BOSS COMBAT
+// ═══════════════════════════════════════════════════════════════════
+// Each boss type has a distinct combat identity. We dispatch by
+// boss.type and use compact pattern primitives so the per-type code
+// stays readable. Additionally every boss inherits its stage's
+// MusicProfile signature mechanic and fires it occasionally (see
+// fireBossSignature).
+
+interface BossCtx {
+  state: ShmupState;
+  boss: Enemy;
+  color: string;
+  phase: number;
+  pt: number;          // phaseTimer
+  t: number;           // global tick
+  ang: number;         // angle to player
+}
+
+// ── Pattern primitives ─────────────────────────────────────────────
+
+function bulletAt(c: BossCtx, x: number, y: number, vx: number, vy: number, opts: { color?: string; r?: number; trail?: boolean; ttl?: number } = {}) {
+  c.state.enemyBullets.push({
+    pos: { x, y }, vel: { x: vx, y: vy },
+    damage: 1, radius: opts.r ?? 5,
+    isPlayer: false, color: opts.color ?? c.color, trail: opts.trail,
+    ttl: opts.ttl ?? 100, maxTtl: opts.ttl ?? 100,
+  });
+}
+
+function radialBurst(c: BossCtx, count: number, speed: number, angleOffset = 0) {
+  for (let i = 0; i < count; i++) {
+    const a = (Math.PI * 2 / count) * i + angleOffset;
+    bulletAt(c, c.boss.pos.x, c.boss.pos.y, Math.cos(a) * speed, Math.sin(a) * speed);
+  }
+}
+
+function aimedSpread(c: BossCtx, n: number, spread: number, speed: number) {
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0 : i / (n - 1) - 0.5;
+    const a = c.ang + t * spread;
+    bulletAt(c, c.boss.pos.x, c.boss.pos.y + c.boss.height * 0.35,
+      Math.cos(a) * speed, Math.sin(a) * speed,
+      { color: '#ffffff', trail: true, r: 6 });
+  }
+}
+
+function spiralArms(c: BossCtx, arms: number, speed: number, spinRate = 0.06) {
+  for (let i = 0; i < arms; i++) {
+    const a = c.t * spinRate + (Math.PI * 2 / arms) * i;
+    bulletAt(c, c.boss.pos.x, c.boss.pos.y, Math.cos(a) * speed, Math.sin(a) * speed);
+  }
+}
+
+function wingShots(c: BossCtx, fanSize = 5, speed = 2.5) {
+  const side = c.pt % 2 === 0 ? -1 : 1;
+  const originX = c.boss.pos.x + side * c.boss.width * 0.35;
+  for (let i = -Math.floor(fanSize / 2); i <= Math.floor(fanSize / 2); i++) {
+    const a = Math.PI / 2 + i * 0.2;
+    bulletAt(c, originX, c.boss.pos.y + c.boss.height * 0.3,
+      Math.cos(a) * speed, Math.sin(a) * speed);
+  }
+}
+
+function bulletWall(c: BossCtx, slots = 8, gapWidth = 2) {
+  const gapPos = Math.floor((Math.sin(c.t * 0.02) * 0.5 + 0.5) * (slots - gapWidth));
+  for (let i = 0; i < slots; i++) {
+    if (i >= gapPos && i < gapPos + gapWidth) continue;
+    const x = c.boss.pos.x - c.boss.width * 0.4 + (c.boss.width * 0.8 / slots) * i;
+    bulletAt(c, x, c.boss.pos.y + c.boss.height * 0.4, 0, 3, { ttl: 80, r: 4 });
+  }
+}
+
+function weakPointFire(c: BossCtx) {
+  if (!c.boss.weakPoints) return;
+  for (const wp of c.boss.weakPoints) {
+    if (!wp.alive) continue;
+    const wpX = c.boss.pos.x + wp.offset.x;
+    const wpY = c.boss.pos.y + wp.offset.y;
+    const a = Math.atan2(c.state.player.pos.y - wpY, c.state.player.pos.x - wpX);
+    bulletAt(c, wpX, wpY, Math.cos(a) * 3, Math.sin(a) * 3, { color: '#ffaa00', r: 4, ttl: 70 });
+  }
+}
+
+// ── Signature mechanic — boss inherits the song's identity ─────────
+// Fires the stage's signature on every Nth attack tick. Keeps the boss
+// feeling like the song's climax.
+function fireBossSignature(state: ShmupState, boss: Enemy) {
+  const profile = profileForStage(state.currentStage);
+  const W = state.screenW;
+  const H = state.screenH;
+  // Skip the heavy ones for low-HP bosses to avoid runaway difficulty
+  fireSignature(state, profile.signature, W, H);
+  // Drop a screen popup so the player knows the boss is unleashing the song
+  state.popups.push({
+    pos: { x: boss.pos.x, y: boss.pos.y - boss.height * 0.6 },
+    text: '♫ ' + profile.signatureLabel + ' ♫',
+    color: '#ff66aa', life: 36, maxLife: 36,
+  });
+}
+
+// ── Per-boss-type combat ───────────────────────────────────────────
+
 function fireBossPattern(state: ShmupState, boss: Enemy): void {
-  const color = FACTION_COLORS[boss.faction];
+  if (state.enemyBullets.length > 65) return;
   const phase = boss.phase || 0;
-  const t = state.tick;
-  const bt = 100;
   const pt = boss.phaseTimer || 0;
-  const playerAngle = Math.atan2(state.player.pos.y - boss.pos.y, state.player.pos.x - boss.pos.x);
+  const c: BossCtx = {
+    state, boss,
+    color: FACTION_COLORS[boss.faction],
+    phase, pt,
+    t: state.tick,
+    ang: Math.atan2(state.player.pos.y - boss.pos.y, state.player.pos.x - boss.pos.x),
+  };
 
-  // Cap boss bullets to avoid flooding
-  if (state.enemyBullets.length > 60) return;
+  // Signature pulse — every ~5 seconds while alive
+  if (pt > 0 && pt % 300 === 0) fireBossSignature(state, boss);
 
-  if (phase === 0) {
-    // Phase 1: alternating spread fans from wings
-    const side = pt % 2 === 0 ? -1 : 1;
-    const originX = boss.pos.x + side * boss.width * 0.35;
-    for (let i = -2; i <= 2; i++) {
-      const a = Math.PI / 2 + i * 0.2; // downward fan
-      state.enemyBullets.push({
-        pos: { x: originX, y: boss.pos.y + boss.height * 0.3 },
-        vel: { x: Math.cos(a) * 2.5, y: Math.sin(a) * 2.5 },
-        damage: 1, radius: 5, isPlayer: false, color, ttl: bt, maxTtl: bt,
-      });
-    }
-  } else if (phase === 1) {
-    // Phase 2: rotating spiral arms
-    const arms = 4;
-    for (let i = 0; i < arms; i++) {
-      const a = (t * 0.06) + (Math.PI * 2 / arms) * i;
-      state.enemyBullets.push({
-        pos: { x: boss.pos.x, y: boss.pos.y },
-        vel: { x: Math.cos(a) * 3.2, y: Math.sin(a) * 3.2 },
-        damage: 1, radius: 5, isPlayer: false, color, ttl: bt, maxTtl: bt,
-      });
-    }
-    // Plus aimed shots every few fires
-    if (pt % 3 === 0) {
-      state.enemyBullets.push({
-        pos: { x: boss.pos.x, y: boss.pos.y + boss.height * 0.4 },
-        vel: { x: Math.cos(playerAngle) * 4, y: Math.sin(playerAngle) * 4 },
-        damage: 1, radius: 6, isPlayer: false, color: '#ffffff', trail: true, ttl: bt, maxTtl: bt,
-      });
-    }
-  } else if (phase === 2) {
-    // Phase 3: bullet curtains — walls with gaps
-    const wallWidth = 8;
-    const gapPos = Math.floor(Math.sin(t * 0.02) * 3 + 4); // gap moves
-    for (let i = 0; i < wallWidth; i++) {
-      if (i === gapPos || i === gapPos + 1) continue; // leave a gap
-      const x = boss.pos.x - boss.width * 0.4 + (boss.width * 0.8 / wallWidth) * i;
-      state.enemyBullets.push({
-        pos: { x, y: boss.pos.y + boss.height * 0.4 },
-        vel: { x: 0, y: 3 },
-        damage: 1, radius: 4, isPlayer: false, color, ttl: 80, maxTtl: 80,
-      });
-    }
-    // Diagonal sweeps from edges
-    if (pt % 4 === 0) {
-      const sweepAngle = playerAngle + Math.sin(t * 0.03) * 0.4;
-      for (let i = -1; i <= 1; i++) {
-        state.enemyBullets.push({
-          pos: { x: boss.pos.x + i * boss.width * 0.4, y: boss.pos.y },
-          vel: { x: Math.cos(sweepAngle + i * 0.1) * 3.5, y: Math.sin(sweepAngle + i * 0.1) * 3.5 },
-          damage: 1, radius: 5, isPlayer: false, color: '#ff4444', trail: true, ttl: bt, maxTtl: bt,
-        });
-      }
-    }
-  } else {
-    // Phase 4+ (rage): everything at once — spiral + aimed + spread
-    // Fast spiral
-    for (let i = 0; i < 5; i++) {
-      const a = (t * 0.1) + (Math.PI * 2 / 5) * i;
-      state.enemyBullets.push({
-        pos: { ...boss.pos },
-        vel: { x: Math.cos(a) * 3.5, y: Math.sin(a) * 3.5 },
-        damage: 1, radius: 5, isPlayer: false, color, ttl: bt, maxTtl: bt,
-      });
-    }
-    // Aimed triple shot
-    for (let i = -1; i <= 1; i++) {
-      state.enemyBullets.push({
-        pos: { x: boss.pos.x + i * 30, y: boss.pos.y + boss.height * 0.4 },
-        vel: { x: Math.cos(playerAngle + i * 0.12) * 4.5, y: Math.sin(playerAngle + i * 0.12) * 4.5 },
-        damage: 1, radius: 6, isPlayer: false, color: '#ffffff', trail: true, ttl: bt, maxTtl: bt,
-      });
-    }
-    // Weak point turrets — remaining alive weak points fire independently
-    if (boss.weakPoints) {
-      for (const wp of boss.weakPoints) {
-        if (!wp.alive) continue;
-        const wpX = boss.pos.x + wp.offset.x;
-        const wpY = boss.pos.y + wp.offset.y;
-        const wpAngle = Math.atan2(state.player.pos.y - wpY, state.player.pos.x - wpX);
-        state.enemyBullets.push({
-          pos: { x: wpX, y: wpY },
-          vel: { x: Math.cos(wpAngle) * 3, y: Math.sin(wpAngle) * 3 },
-          damage: 1, radius: 4, isPlayer: false, color: '#ffaa00', ttl: 70, maxTtl: 70,
-        });
-      }
-    }
+  switch (boss.bossType) {
+    // ── 1. K'TAGH WARBIRD (curtain, klingon) ───────────────────
+    case 'warbird':
+      if (phase === 0) wingShots(c);
+      else if (phase === 1) { wingShots(c, 7, 2.8); if (pt % 3 === 0) aimedSpread(c, 1, 0, 4); }
+      else { bulletWall(c, 10, 2); if (pt % 4 === 0) aimedSpread(c, 3, 0.3, 4); }
+      break;
+
+    // ── 2. IRW VALDORE DREADNOUGHT (loop, romulan) ────────────
+    case 'dreadnought':
+      if (phase === 0) spiralArms(c, 3, 2.6, 0.04);
+      else if (phase === 1) { spiralArms(c, 5, 3, 0.05); if (pt % 5 === 0) aimedSpread(c, 1, 0, 4.5); }
+      else if (phase === 2) { radialBurst(c, 12, 2.5, c.t * 0.03); if (pt % 3 === 0) aimedSpread(c, 3, 0.4, 4); }
+      else { spiralArms(c, 6, 3.5, 0.08); radialBurst(c, 8, 2, -c.t * 0.04); weakPointFire(c); }
+      break;
+
+    // ── 3. ORION FLAGSHIP (siege, orion) ──────────────────────
+    case 'flagship':
+      if (phase === 0) aimedSpread(c, 3, 0.4, 3);
+      else if (phase === 1) { wingShots(c, 7, 3); if (pt % 3 === 0) aimedSpread(c, 5, 0.5, 3.5); }
+      else if (phase === 2) { radialBurst(c, 8, 2.8); if (pt % 4 === 0) aimedSpread(c, 5, 0.6, 4); }
+      else if (phase === 3) { bulletWall(c, 9, 2); if (pt % 3 === 0) aimedSpread(c, 3, 0.3, 5); }
+      else { spiralArms(c, 4, 3.5); aimedSpread(c, 5, 0.5, 4.5); weakPointFire(c); }
+      break;
+
+    // ── 4. SINGULARITY MARAUDER (vortex_storm, romulan) ───────
+    case 'gravitymarauder':
+      if (phase === 0) { spiralArms(c, 4, 1.8, 0.025); if (pt % 6 === 0) aimedSpread(c, 1, 0, 3.5); }
+      else if (phase === 1) { spiralArms(c, 6, 2.2, 0.035); if (pt % 4 === 0) aimedSpread(c, 3, 0.5, 3.5); }
+      else if (phase === 2) { radialBurst(c, 14, 2, c.t * 0.02); if (pt % 5 === 0) weakPointFire(c); }
+      else { spiralArms(c, 5, 2.6, -0.04); radialBurst(c, 10, 2.4, c.t * 0.03); weakPointFire(c); }
+      break;
+
+    // ── 5. ANOMALY GUARDIAN (pulse_walls, klingon) ────────────
+    case 'guardian':
+      if (phase === 0) wingShots(c, 5, 2.6);
+      else if (phase === 1) { aimedSpread(c, 5, 0.5, 3.5); if (pt % 4 === 0) spiralArms(c, 3, 3); }
+      else if (phase === 2) { bulletWall(c, 9, 2); if (pt % 3 === 0) aimedSpread(c, 3, 0.4, 4); }
+      else { wingShots(c, 9, 3.2); spiralArms(c, 4, 3); weakPointFire(c); }
+      break;
+
+    // ── 6. RIFT SOVEREIGN (swarm, romulan) ────────────────────
+    case 'sovereign':
+      if (phase === 0) aimedSpread(c, 5, 0.6, 3);
+      else if (phase === 1) { aimedSpread(c, 7, 0.8, 3.5); if (pt % 3 === 0) radialBurst(c, 6, 2.2); }
+      else if (phase === 2) { spiralArms(c, 6, 3, 0.07); aimedSpread(c, 3, 0.4, 4); }
+      else { aimedSpread(c, 9, 0.9, 4); radialBurst(c, 10, 2.8, c.t * 0.05); weakPointFire(c); }
+      break;
+
+    // ── 7. FORTRESS COMMAND (siege, orion) ────────────────────
+    case 'fortress':
+      if (phase === 0) bulletWall(c, 8, 3);
+      else if (phase === 1) { bulletWall(c, 10, 2); if (pt % 4 === 0) aimedSpread(c, 3, 0.3, 4); }
+      else if (phase === 2) { wingShots(c, 7, 3); bulletWall(c, 9, 2); }
+      else if (phase === 3) { radialBurst(c, 12, 2.8); aimedSpread(c, 3, 0.4, 4.5); }
+      else { bulletWall(c, 12, 1); spiralArms(c, 5, 3.2); weakPointFire(c); }
+      break;
+
+    // ── 8. SINGULARITY DREADNOUGHT (curtain, klingon) ─────────
+    case 'singularity':
+      if (phase === 0) { wingShots(c, 5, 2.6); if (pt % 4 === 0) aimedSpread(c, 1, 0, 4); }
+      else if (phase === 1) { bulletWall(c, 10, 2); if (pt % 3 === 0) aimedSpread(c, 3, 0.3, 4); }
+      else if (phase === 2) { bulletWall(c, 12, 2); spiralArms(c, 3, 3); }
+      else if (phase === 3) { bulletWall(c, 12, 1); aimedSpread(c, 5, 0.5, 4); }
+      else { bulletWall(c, 14, 1); spiralArms(c, 5, 3.5); weakPointFire(c); }
+      break;
+
+    // ── 9. EVENT HORIZON TYRANT (vortex_storm, klingon) ───────
+    case 'voidtyrant':
+      if (phase === 0) { spiralArms(c, 6, 2.5, 0.04); if (pt % 5 === 0) aimedSpread(c, 3, 0.4, 3.5); }
+      else if (phase === 1) { spiralArms(c, 8, 2.8, 0.05); radialBurst(c, 6, 2, c.t * 0.04); }
+      else if (phase === 2) { spiralArms(c, 6, 3.2, -0.06); aimedSpread(c, 5, 0.6, 4); }
+      else if (phase === 3) { radialBurst(c, 16, 2.5, c.t * 0.04); if (pt % 4 === 0) aimedSpread(c, 3, 0.3, 5); }
+      else { spiralArms(c, 8, 3.5, 0.08); radialBurst(c, 12, 3, -c.t * 0.05); weakPointFire(c); }
+      break;
+
+    // ── 10. PHASE WRAITH (drone, romulan) ─────────────────────
+    case 'wraith':
+      // Wraith fires sustained sparse but heavy patterns
+      if (phase === 0) { aimedSpread(c, 1, 0, 5); if (pt % 8 === 0) radialBurst(c, 8, 2.4); }
+      else if (phase === 1) { aimedSpread(c, 3, 0.4, 4.5); if (pt % 5 === 0) spiralArms(c, 4, 3); }
+      else if (phase === 2) { spiralArms(c, 5, 3, 0.07); aimedSpread(c, 5, 0.5, 4); }
+      else if (phase === 3) { radialBurst(c, 14, 2.6, c.t * 0.04); aimedSpread(c, 3, 0.3, 5); }
+      else { spiralArms(c, 7, 3.5, 0.09); radialBurst(c, 10, 2.8, -c.t * 0.06); weakPointFire(c); }
+      break;
+
+    // ── 11. OMEGA SUPREME (finale, orion) ─────────────────────
+    case 'omega':
+      // Final boss combines every pattern across its 6 phases
+      if (phase === 0) wingShots(c, 7, 3);
+      else if (phase === 1) { spiralArms(c, 5, 3, 0.06); aimedSpread(c, 3, 0.3, 4); }
+      else if (phase === 2) { bulletWall(c, 10, 2); aimedSpread(c, 5, 0.6, 4); }
+      else if (phase === 3) { radialBurst(c, 16, 2.8, c.t * 0.04); aimedSpread(c, 3, 0.3, 5); }
+      else if (phase === 4) { spiralArms(c, 8, 3.5, 0.08); bulletWall(c, 12, 1); }
+      else { spiralArms(c, 10, 3.8, 0.1); radialBurst(c, 14, 3, -c.t * 0.06); aimedSpread(c, 5, 0.5, 5); weakPointFire(c); }
+      break;
+
+    // ── Fallback for anything we missed ────────────────────────
+    default:
+      wingShots(c);
+      break;
   }
 
-  // All phases: boss occasionally spawns minions (every ~5 seconds in later phases)
-  if (phase >= 1 && pt % Math.max(100, 300 - phase * 80) === 0) {
-    const faction = boss.faction;
+  // All phases: occasional minion spawn from later-phase bosses
+  if (phase >= 1 && pt % Math.max(120, 320 - phase * 80) === 0) {
     const side = Math.random() < 0.5 ? 0.1 : 0.9;
-    spawnEnemy(state, 'fighter', faction, state.screenW * side);
-    if (phase >= 2) {
-      spawnEnemy(state, 'fighter', faction, state.screenW * (1 - side));
-    }
+    spawnEnemy(state, 'fighter', boss.faction, state.screenW * side);
+    if (phase >= 3) spawnEnemy(state, 'fighter', boss.faction, state.screenW * (1 - side));
   }
 }
 
@@ -1517,6 +1634,7 @@ function spawnBoss(state: ShmupState, config: any): void {
     phaseTimer: 0,
     phaseCount,
     weakPoints,
+    bossType: config.type,
   });
   state.bossHp = config.hp;
   state.bossMaxHp = config.hp;

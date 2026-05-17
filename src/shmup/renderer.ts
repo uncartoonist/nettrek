@@ -2456,7 +2456,7 @@ export class ShmupRenderer {
     ctx.globalAlpha = 0.95;
 
     // Draw unique hull based on stage boss type
-    this.drawBossHull(ctx, W, H, color, tick, phase, enemy.faction);
+    this.drawBossHull(ctx, W, H, color, tick, phase, enemy.faction, enemy.bossType || 'warbird');
 
     // Shield shimmer effect
     ctx.globalAlpha = 0.15 + Math.sin(tick * 0.04) * 0.08;
@@ -2530,92 +2530,34 @@ export class ShmupRenderer {
     ctx.restore();
   }
 
-  private drawBossHull(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, tick: number, phase: number, faction: string): void {
-    // Massive detailed hull — unique shape
-    const darkColor = this.darkenColor(color, 0.4);
-    const midColor = this.darkenColor(color, 0.7);
+  // ── Per-boss-type hull dispatcher ────────────────────────────────
+  private drawBossHull(
+    ctx: CanvasRenderingContext2D, W: number, H: number,
+    color: string, tick: number, phase: number,
+    _faction: string, bossType: string,
+  ): void {
+    const dk = this.darkenColor(color, 0.4);
+    const md = this.darkenColor(color, 0.7);
 
-    // Main armored body
-    ctx.fillStyle = darkColor;
-    ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    ctx.lineTo(-W * 0.15, -H * 0.4);
-    ctx.lineTo(-W * 0.35, -H * 0.2);
-    ctx.lineTo(-W * 0.5, 0);
-    ctx.lineTo(-W * 0.45, H * 0.3);
-    ctx.lineTo(-W * 0.2, H * 0.5);
-    ctx.lineTo(W * 0.2, H * 0.5);
-    ctx.lineTo(W * 0.45, H * 0.3);
-    ctx.lineTo(W * 0.5, 0);
-    ctx.lineTo(W * 0.35, -H * 0.2);
-    ctx.lineTo(W * 0.15, -H * 0.4);
-    ctx.closePath();
-    ctx.fill();
-
-    // Hull plating lines
-    ctx.strokeStyle = midColor;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.6;
-    for (let i = -3; i <= 3; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * W * 0.1, -H * 0.4);
-      ctx.lineTo(i * W * 0.13, H * 0.4);
-      ctx.stroke();
+    switch (bossType) {
+      case 'warbird':         this.bossHullWarbird(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'dreadnought':     this.bossHullDreadnought(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'flagship':        this.bossHullFlagship(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'gravitymarauder': this.bossHullGravityMarauder(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'guardian':        this.bossHullGuardian(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'sovereign':       this.bossHullSovereign(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'fortress':        this.bossHullFortress(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'singularity':     this.bossHullSingularityDread(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'voidtyrant':      this.bossHullVoidTyrant(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'wraith':          this.bossHullWraith(ctx, W, H, color, dk, md, tick, phase); break;
+      case 'omega':           this.bossHullOmega(ctx, W, H, color, dk, md, tick, phase); break;
+      default:                this.bossHullGeneric(ctx, W, H, color, dk, md, tick, phase); break;
     }
-    ctx.globalAlpha = 0.95;
 
-    // Wing nacelles
-    ctx.fillStyle = midColor;
-    // Left wing
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.35, -H * 0.1);
-    ctx.lineTo(-W * 0.55, -H * 0.15);
-    ctx.lineTo(-W * 0.55, H * 0.15);
-    ctx.lineTo(-W * 0.35, H * 0.2);
-    ctx.closePath();
-    ctx.fill();
-    // Right wing
-    ctx.beginPath();
-    ctx.moveTo(W * 0.35, -H * 0.1);
-    ctx.lineTo(W * 0.55, -H * 0.15);
-    ctx.lineTo(W * 0.55, H * 0.15);
-    ctx.lineTo(W * 0.35, H * 0.2);
-    ctx.closePath();
-    ctx.fill();
-
-    // Command bridge (top)
-    ctx.fillStyle = '#111';
-    ctx.beginPath();
-    ctx.ellipse(0, -H * 0.15, W * 0.12, H * 0.08, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Bridge windows
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.6 + Math.sin(tick * 0.05) * 0.2;
-    ctx.beginPath();
-    ctx.ellipse(0, -H * 0.15, W * 0.06, H * 0.04, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.95;
-
-    // Weapon ports — glow based on phase
-    const portGlow = 0.4 + phase * 0.2 + Math.sin(tick * 0.08) * 0.2;
-    ctx.globalAlpha = portGlow;
-    ctx.fillStyle = color;
-    // Front cannons
-    ctx.beginPath();
-    ctx.arc(-W * 0.2, H * 0.35, 5 + phase, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(W * 0.2, H * 0.35, 5 + phase, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(0, H * 0.45, 6 + phase, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Phase-based damage effects
+    // Universal phase damage fires on hull
     if (phase >= 2) {
       ctx.globalAlpha = 0.4;
       ctx.fillStyle = '#ff4400';
-      // Fires on hull
       for (let i = 0; i < phase; i++) {
         const fx = Math.sin(tick * 0.03 + i * 2.5) * W * 0.3;
         const fy = Math.cos(tick * 0.02 + i * 1.7) * H * 0.2;
@@ -2624,8 +2566,421 @@ export class ShmupRenderer {
         ctx.fill();
       }
     }
-
     ctx.globalAlpha = 1;
+  }
+
+  // ── Shared port-glow helper ──────────────────────────────────────
+  private bossPort(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, tick: number, phase: number) {
+    const glow = 0.4 + phase * 0.15 + Math.sin(tick * 0.08) * 0.2;
+    ctx.globalAlpha = glow;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x, y, r + phase * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.95;
+  }
+
+  // ── Generic fallback ─────────────────────────────────────────────
+  private bossHullGeneric(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, _phase: number) {
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5); ctx.lineTo(-W * 0.5, 0); ctx.lineTo(-W * 0.2, H * 0.5);
+    ctx.lineTo(W * 0.2, H * 0.5); ctx.lineTo(W * 0.5, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = color; ctx.globalAlpha = 0.5 + Math.sin(tick * 0.05) * 0.3;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // ── 1. K'TAGH WARBIRD — Klingon, swept wings, brutal angles ──────
+  private bossHullWarbird(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Swept wings — predator silhouette
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.45);
+    ctx.lineTo(-W * 0.12, -H * 0.2);
+    ctx.lineTo(-W * 0.55, H * 0.15);
+    ctx.lineTo(-W * 0.35, H * 0.35);
+    ctx.lineTo(-W * 0.12, H * 0.25);
+    ctx.lineTo(0, H * 0.5);
+    ctx.lineTo(W * 0.12, H * 0.25);
+    ctx.lineTo(W * 0.35, H * 0.35);
+    ctx.lineTo(W * 0.55, H * 0.15);
+    ctx.lineTo(W * 0.12, -H * 0.2);
+    ctx.closePath(); ctx.fill();
+    // Central spine
+    ctx.fillStyle = md;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.4); ctx.lineTo(-W * 0.06, H * 0.3); ctx.lineTo(W * 0.06, H * 0.3);
+    ctx.closePath(); ctx.fill();
+    // Bridge
+    ctx.fillStyle = '#1a0a0a';
+    ctx.beginPath(); ctx.ellipse(0, -H * 0.2, W * 0.08, H * 0.06, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.06) * 0.2;
+    ctx.beginPath(); ctx.ellipse(0, -H * 0.2, W * 0.04, H * 0.025, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Wing-tip cannons
+    this.bossPort(ctx, -W * 0.5, H * 0.15, 5, color, tick, phase);
+    this.bossPort(ctx, W * 0.5, H * 0.15, 5, color, tick, phase);
+    this.bossPort(ctx, 0, H * 0.45, 6, color, tick, phase);
+  }
+
+  // ── 2. IRW VALDORE — Romulan dreadnought, broad raptor wings ─────
+  private bossHullDreadnought(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    ctx.fillStyle = dk;
+    // Crescent wing
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.55, 0);
+    ctx.quadraticCurveTo(-W * 0.4, -H * 0.45, 0, -H * 0.35);
+    ctx.quadraticCurveTo(W * 0.4, -H * 0.45, W * 0.55, 0);
+    ctx.quadraticCurveTo(W * 0.3, H * 0.4, 0, H * 0.5);
+    ctx.quadraticCurveTo(-W * 0.3, H * 0.4, -W * 0.55, 0);
+    ctx.closePath(); ctx.fill();
+    // Central hull
+    ctx.fillStyle = md;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, W * 0.18, H * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+    // Singularity drive (pulsing core)
+    const sPulse = 0.6 + Math.sin(tick * 0.07) * 0.3;
+    ctx.fillStyle = color; ctx.globalAlpha = sPulse;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = sPulse * 0.7;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Wing-tip plasma collectors
+    this.bossPort(ctx, -W * 0.5, -H * 0.05, 6, color, tick, phase);
+    this.bossPort(ctx, W * 0.5, -H * 0.05, 6, color, tick, phase);
+    this.bossPort(ctx, 0, H * 0.45, 5, color, tick, phase);
+  }
+
+  // ── 3. ORION FLAGSHIP — bulky, multi-deck command vessel ─────────
+  private bossHullFlagship(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Forward armor
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5);
+    ctx.lineTo(-W * 0.2, -H * 0.42); ctx.lineTo(-W * 0.4, -H * 0.2);
+    ctx.lineTo(-W * 0.5, H * 0.1); ctx.lineTo(-W * 0.4, H * 0.4);
+    ctx.lineTo(-W * 0.2, H * 0.5); ctx.lineTo(W * 0.2, H * 0.5);
+    ctx.lineTo(W * 0.4, H * 0.4); ctx.lineTo(W * 0.5, H * 0.1);
+    ctx.lineTo(W * 0.4, -H * 0.2); ctx.lineTo(W * 0.2, -H * 0.42);
+    ctx.closePath(); ctx.fill();
+    // Deck plates
+    ctx.fillStyle = md;
+    ctx.fillRect(-W * 0.32, -H * 0.1, W * 0.64, H * 0.08);
+    ctx.fillRect(-W * 0.36, H * 0.1, W * 0.72, H * 0.06);
+    ctx.fillRect(-W * 0.28, H * 0.22, W * 0.56, H * 0.06);
+    // Bridge tower
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(-W * 0.08, -H * 0.35, W * 0.16, H * 0.18);
+    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.05) * 0.2;
+    ctx.fillRect(-W * 0.05, -H * 0.32, W * 0.1, H * 0.04);
+    ctx.fillRect(-W * 0.05, -H * 0.25, W * 0.1, H * 0.03);
+    ctx.globalAlpha = 1;
+    // Multi-cannon battery
+    this.bossPort(ctx, -W * 0.32, H * 0.42, 5, color, tick, phase);
+    this.bossPort(ctx, -W * 0.1, H * 0.45, 5, color, tick, phase);
+    this.bossPort(ctx, W * 0.1, H * 0.45, 5, color, tick, phase);
+    this.bossPort(ctx, W * 0.32, H * 0.42, 5, color, tick, phase);
+  }
+
+  // ── 4. SINGULARITY MARAUDER — dish + gravity core ────────────────
+  private bossHullGravityMarauder(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Outer dish ring (parabolic gravity collector)
+    ctx.strokeStyle = dk; ctx.lineWidth = W * 0.05;
+    ctx.beginPath(); ctx.ellipse(0, 0, W * 0.45, H * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+    // Inner dish fill
+    ctx.fillStyle = md;
+    ctx.beginPath(); ctx.ellipse(0, 0, W * 0.42, H * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    // Radial support struts
+    ctx.strokeStyle = dk; ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i + tick * 0.005;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * W * 0.15, Math.sin(a) * H * 0.13);
+      ctx.lineTo(Math.cos(a) * W * 0.42, Math.sin(a) * H * 0.38);
+      ctx.stroke();
+    }
+    // Singularity core — spinning accretion ring
+    const corePulse = 0.7 + Math.sin(tick * 0.08) * 0.25;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.globalAlpha = corePulse;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, tick * 0.04, tick * 0.04 + Math.PI * 1.6); ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.globalAlpha = corePulse * 0.6;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.19, -tick * 0.05, -tick * 0.05 + Math.PI * 1.2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Rim ports
+    this.bossPort(ctx, 0, -H * 0.4, 5, color, tick, phase);
+    this.bossPort(ctx, 0, H * 0.4, 5, color, tick, phase);
+    this.bossPort(ctx, -W * 0.42, 0, 5, color, tick, phase);
+    this.bossPort(ctx, W * 0.42, 0, 5, color, tick, phase);
+  }
+
+  // ── 5. ANOMALY GUARDIAN — geometric crystal sentinel ─────────────
+  private bossHullGuardian(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Outer crystal hexagon
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
+      const x = Math.cos(a) * W * 0.5;
+      const y = Math.sin(a) * H * 0.48;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    // Inner hex (rotated)
+    ctx.fillStyle = md;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i;
+      const x = Math.cos(a) * W * 0.3;
+      const y = Math.sin(a) * H * 0.28;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    // Central core pulsing
+    const cp = 0.65 + Math.sin(tick * 0.06) * 0.25;
+    ctx.fillStyle = color; ctx.globalAlpha = cp;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = cp * 0.7;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Vertex weapon ports
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
+      this.bossPort(ctx, Math.cos(a) * W * 0.5, Math.sin(a) * H * 0.48, 4, color, tick, phase);
+    }
+  }
+
+  // ── 6. RIFT SOVEREIGN — Romulan elite, slender raptor ────────────
+  private bossHullSovereign(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Forward beak
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5);
+    ctx.quadraticCurveTo(-W * 0.1, -H * 0.3, -W * 0.45, H * 0.05);
+    ctx.lineTo(-W * 0.5, H * 0.2);
+    ctx.lineTo(-W * 0.2, H * 0.45);
+    ctx.lineTo(0, H * 0.35);
+    ctx.lineTo(W * 0.2, H * 0.45);
+    ctx.lineTo(W * 0.5, H * 0.2);
+    ctx.lineTo(W * 0.45, H * 0.05);
+    ctx.quadraticCurveTo(W * 0.1, -H * 0.3, 0, -H * 0.5);
+    ctx.closePath(); ctx.fill();
+    // Wing accent
+    ctx.fillStyle = md;
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.1, -H * 0.15); ctx.lineTo(-W * 0.4, H * 0.05);
+    ctx.lineTo(-W * 0.2, H * 0.3); ctx.lineTo(-W * 0.05, H * 0.05);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(W * 0.1, -H * 0.15); ctx.lineTo(W * 0.4, H * 0.05);
+    ctx.lineTo(W * 0.2, H * 0.3); ctx.lineTo(W * 0.05, H * 0.05);
+    ctx.closePath(); ctx.fill();
+    // Bridge eye
+    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.07) * 0.2;
+    ctx.beginPath(); ctx.ellipse(0, -H * 0.15, W * 0.06, H * 0.025, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Wing tip + nose ports
+    this.bossPort(ctx, 0, -H * 0.45, 4, color, tick, phase);
+    this.bossPort(ctx, -W * 0.5, H * 0.15, 5, color, tick, phase);
+    this.bossPort(ctx, W * 0.5, H * 0.15, 5, color, tick, phase);
+  }
+
+  // ── 7. FORTRESS COMMAND — Orion brutalist station ────────────────
+  private bossHullFortress(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Big armored rectangle with crenellations
+    ctx.fillStyle = dk;
+    ctx.fillRect(-W * 0.5, -H * 0.45, W, H * 0.9);
+    // Top crenellations
+    ctx.fillStyle = md;
+    for (let i = -4; i <= 4; i++) {
+      ctx.fillRect(i * W * 0.1 - W * 0.04, -H * 0.5, W * 0.06, H * 0.08);
+    }
+    // Bottom turret bays
+    for (let i = -3; i <= 3; i++) {
+      ctx.fillRect(i * W * 0.13 - W * 0.04, H * 0.4, W * 0.08, H * 0.1);
+    }
+    // Central command spire
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(-W * 0.12, -H * 0.4, W * 0.24, H * 0.3);
+    // Eye slit
+    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.04) * 0.2;
+    ctx.fillRect(-W * 0.09, -H * 0.2, W * 0.18, H * 0.04);
+    ctx.globalAlpha = 1;
+    // Armor seams
+    ctx.strokeStyle = '#1a1a22'; ctx.lineWidth = 1.5;
+    for (let i = -3; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * W * 0.14, -H * 0.42);
+      ctx.lineTo(i * W * 0.14, H * 0.42);
+      ctx.stroke();
+    }
+    // Turret ports
+    for (let i = -3; i <= 3; i++) {
+      this.bossPort(ctx, i * W * 0.13, H * 0.45, 4, color, tick, phase);
+    }
+  }
+
+  // ── 8. SINGULARITY DREADNOUGHT — Klingon late-game, jagged ───────
+  private bossHullSingularityDread(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Jagged predatory silhouette
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5);
+    ctx.lineTo(-W * 0.18, -H * 0.35);
+    ctx.lineTo(-W * 0.55, -H * 0.05);
+    ctx.lineTo(-W * 0.42, H * 0.12);
+    ctx.lineTo(-W * 0.6, H * 0.25);
+    ctx.lineTo(-W * 0.3, H * 0.42);
+    ctx.lineTo(-W * 0.1, H * 0.3);
+    ctx.lineTo(0, H * 0.5);
+    ctx.lineTo(W * 0.1, H * 0.3);
+    ctx.lineTo(W * 0.3, H * 0.42);
+    ctx.lineTo(W * 0.6, H * 0.25);
+    ctx.lineTo(W * 0.42, H * 0.12);
+    ctx.lineTo(W * 0.55, -H * 0.05);
+    ctx.lineTo(W * 0.18, -H * 0.35);
+    ctx.closePath(); ctx.fill();
+    // Core spine
+    ctx.fillStyle = md;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, W * 0.12, H * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    // Singularity reactor (mid)
+    const sp = 0.65 + Math.sin(tick * 0.09) * 0.25;
+    ctx.fillStyle = color; ctx.globalAlpha = sp;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = sp * 0.8;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Wing-tip + nose ports
+    this.bossPort(ctx, -W * 0.55, -H * 0.05, 5, color, tick, phase);
+    this.bossPort(ctx, W * 0.55, -H * 0.05, 5, color, tick, phase);
+    this.bossPort(ctx, -W * 0.6, H * 0.25, 4, color, tick, phase);
+    this.bossPort(ctx, W * 0.6, H * 0.25, 4, color, tick, phase);
+    this.bossPort(ctx, 0, H * 0.48, 6, color, tick, phase);
+  }
+
+  // ── 9. EVENT HORIZON TYRANT — black-hole shrouded warship ────────
+  private bossHullVoidTyrant(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Event horizon halo (drawn first behind everything)
+    const haloG = ctx.createRadialGradient(0, 0, W * 0.25, 0, 0, W * 0.65);
+    haloG.addColorStop(0, 'rgba(160,40,255,0.45)');
+    haloG.addColorStop(0.5, 'rgba(60,10,80,0.25)');
+    haloG.addColorStop(1, 'transparent');
+    ctx.fillStyle = haloG;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.65, 0, Math.PI * 2); ctx.fill();
+    // Outer dark armor (lobed)
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    const lobes = 8;
+    for (let i = 0; i < lobes * 2; i++) {
+      const a = (Math.PI * 2 / (lobes * 2)) * i - Math.PI / 2;
+      const r = (i % 2 === 0 ? 0.5 : 0.38) * Math.min(W, H);
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r * (H / W);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    // Mid ring
+    ctx.fillStyle = md;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.28, 0, Math.PI * 2); ctx.fill();
+    // Pure black core (the event horizon)
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, 0, Math.PI * 2); ctx.fill();
+    // Accretion ring around the black core
+    const ap = 0.7 + Math.sin(tick * 0.1) * 0.25;
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.globalAlpha = ap;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.19, tick * 0.06, tick * 0.06 + Math.PI * 1.7); ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.globalAlpha = ap * 0.6;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.22, -tick * 0.04, -tick * 0.04 + Math.PI * 1.3); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Lobe-tip cannons
+    for (let i = 0; i < lobes; i++) {
+      const a = (Math.PI * 2 / lobes) * i - Math.PI / 2;
+      this.bossPort(ctx, Math.cos(a) * W * 0.5, Math.sin(a) * H * 0.48, 4, color, tick, phase);
+    }
+  }
+
+  // ── 10. PHASE WRAITH — Romulan, ethereal/cloaked ─────────────────
+  private bossHullWraith(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Ghostly outer halo (shifts in and out of phase)
+    const cloak = 0.5 + Math.sin(tick * 0.04) * 0.3;
+    ctx.globalAlpha = cloak;
+    // Outer spectral wings
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.5);
+    ctx.quadraticCurveTo(-W * 0.25, -H * 0.45, -W * 0.55, -H * 0.1);
+    ctx.quadraticCurveTo(-W * 0.5, H * 0.1, -W * 0.4, H * 0.4);
+    ctx.quadraticCurveTo(-W * 0.2, H * 0.5, 0, H * 0.42);
+    ctx.quadraticCurveTo(W * 0.2, H * 0.5, W * 0.4, H * 0.4);
+    ctx.quadraticCurveTo(W * 0.5, H * 0.1, W * 0.55, -H * 0.1);
+    ctx.quadraticCurveTo(W * 0.25, -H * 0.45, 0, -H * 0.5);
+    ctx.closePath(); ctx.fill();
+    // Inner body
+    ctx.fillStyle = md;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, W * 0.18, H * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Phasing core — never fully visible
+    const cpulse = 0.5 + Math.sin(tick * 0.11) * 0.3;
+    ctx.fillStyle = color; ctx.globalAlpha = cpulse;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.1, 0, Math.PI * 2); ctx.fill();
+    // Spectral wisps trailing behind
+    ctx.fillStyle = color; ctx.globalAlpha = 0.25;
+    for (let i = 0; i < 5; i++) {
+      const wy = H * 0.5 + i * 6;
+      const wx = Math.sin(tick * 0.05 + i) * W * 0.2;
+      ctx.beginPath(); ctx.ellipse(wx, wy, W * 0.05 - i * 1.5, H * 0.04 - i * 1, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    this.bossPort(ctx, -W * 0.5, 0, 4, color, tick, phase);
+    this.bossPort(ctx, W * 0.5, 0, 4, color, tick, phase);
+    this.bossPort(ctx, 0, -H * 0.4, 5, color, tick, phase);
+  }
+
+  // ── 11. OMEGA SUPREME — final boss, layered fortress + halo ──────
+  private bossHullOmega(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
+    // Outer halo
+    const halo = ctx.createRadialGradient(0, 0, W * 0.3, 0, 0, W * 0.7);
+    halo.addColorStop(0, 'rgba(255,170,30,0.4)');
+    halo.addColorStop(1, 'transparent');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.7, 0, Math.PI * 2); ctx.fill();
+    // Outer ring of armor lobes (8-pointed star)
+    ctx.fillStyle = dk;
+    ctx.beginPath();
+    const pts = 16;
+    for (let i = 0; i < pts; i++) {
+      const a = (Math.PI * 2 / pts) * i - Math.PI / 2;
+      const r = (i % 2 === 0 ? 0.55 : 0.4) * Math.min(W, H);
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r * (H / W);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    // Inner armored body
+    ctx.fillStyle = md;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.28, 0, Math.PI * 2); ctx.fill();
+    // Command core
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, 0, Math.PI * 2); ctx.fill();
+    // Pulsing omega symbol — concentric rings
+    const op = 0.7 + Math.sin(tick * 0.08) * 0.25;
+    for (let r = 0; r < 3; r++) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5 - r * 0.5;
+      ctx.globalAlpha = op * (1 - r * 0.2);
+      ctx.beginPath(); ctx.arc(0, 0, W * (0.08 + r * 0.04), tick * (0.03 + r * 0.01), tick * (0.03 + r * 0.01) + Math.PI * 1.6); ctx.stroke();
+    }
+    // White-hot core
+    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = op * 0.8;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // 8 cannons around the outer star points
+    for (let i = 0; i < 8; i++) {
+      const a = (Math.PI * 2 / 8) * i - Math.PI / 2;
+      this.bossPort(ctx, Math.cos(a) * W * 0.5, Math.sin(a) * H * 0.48, 5, color, tick, phase);
+    }
   }
 
   private drawPowerUpIcon(ctx: CanvasRenderingContext2D, x: number, y: number, type: PowerUpType, tick: number): void {
