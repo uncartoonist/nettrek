@@ -412,8 +412,34 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       }
 
       if (target) {
-        target.hp -= PHASER_DAMAGE;
-        p.phaserCharge -= DRAIN_RATE;
+        // ── Subsystem shielding applies to the phaser too ──
+        // Previously the phaser drained boss.hp directly, bypassing the
+        // shield. That caused boss kills with the phaser, lockups, and
+        // a generally bypassable boss fight. Now: while subsystems are
+        // alive, the phaser does NO hull damage and still drains charge
+        // (so you can't just sit on the beam waiting for shields to drop).
+        const isShieldedBoss =
+          target.type === 'boss' &&
+          !!target.weakPoints?.some(wp => wp.alive && wp.weaponType);
+        if (isShieldedBoss) {
+          // Drain charge (and show sparks) but no hp damage.
+          p.phaserCharge -= DRAIN_RATE * 0.6;
+          if (state.particles.length < 460) {
+            const px = target.pos.x + (Math.random()-0.5)*60;
+            const py = target.pos.y + (Math.random()-0.5)*60;
+            state.particles.push({
+              pos: { x: px, y: py },
+              vel: { x: (Math.random()-0.5)*3, y: (Math.random()-0.5)*3 },
+              life: 8, maxLife: 8, color: '#88ddff', size: 2,
+            });
+          }
+        } else {
+          // Bosses still take REDUCED phaser damage so they can't be 1-shot.
+          // Normal enemies and exposed bosses take the full per-frame damage.
+          const dmg = target.type === 'boss' ? Math.max(1, Math.floor(PHASER_DAMAGE * 0.4)) : PHASER_DAMAGE;
+          target.hp -= dmg;
+          p.phaserCharge -= DRAIN_RATE;
+        }
 
         // Continuous sparks at impact point — every frame for laser feel
         if (state.particles.length < 460) {
@@ -1991,13 +2017,17 @@ function spawnBoss(state: ShmupState, config: any): void {
     // Left side of the ship gets one of each pair; the renderer mirrors the
     // visual mounts so each subsystem reads as TWO physical cannons firing
     // together (one weak point destroys both visible cannons).
+    // HP per subsystem is generous — the player has to commit to taking
+    // each one down before the hull becomes vulnerable. With boss HP=1200
+    // and 6 subsystems at ~14% HP each (~170 HP each), full subsystem
+    // teardown is ~1020 damage worth of work before you even touch the hull.
     weakPoints.push(
-      hardpoint(-cw * 0.22, -ch * 0.40, 'disruptor', 'DISRUPTOR', '#ff44ee', 0.10, 95),
-      hardpoint( cw * 0.36, -ch * 0.34, 'missile',   'MISSILE',   '#ff66cc', 0.10, 140),
-      hardpoint(-cw * 0.40, -ch * 0.06, 'plasma',    'PLASMA',    '#bb44ff', 0.12, 85),
-      hardpoint( cw * 0.42,  ch * 0.18, 'tractor',   'TRACTOR',   '#aa44ff', 0.12, 240),
-      hardpoint(-cw * 0.32,  ch * 0.34, 'phaser',    'PHASER',    '#ff44aa', 0.10, 70),
-      hardpoint( 0,           ch * 0.46, 'torpedo',   'TORPEDO',   '#ff3030', 0.12, 110),
+      hardpoint(-cw * 0.22, -ch * 0.40, 'disruptor', 'DISRUPTOR', '#ff44ee', 0.14, 95),
+      hardpoint( cw * 0.36, -ch * 0.34, 'missile',   'MISSILE',   '#ff66cc', 0.14, 140),
+      hardpoint(-cw * 0.40, -ch * 0.06, 'plasma',    'PLASMA',    '#bb44ff', 0.16, 85),
+      hardpoint( cw * 0.42,  ch * 0.18, 'tractor',   'TRACTOR',   '#aa44ff', 0.16, 240),
+      hardpoint(-cw * 0.32,  ch * 0.34, 'phaser',    'PHASER',    '#ff44aa', 0.14, 70),
+      hardpoint( 0,           ch * 0.46, 'torpedo',   'TORPEDO',   '#ff3030', 0.16, 110),
     );
   } else {
     // Generic boss: ring of evenly-spaced weak points

@@ -2649,8 +2649,12 @@ export class ShmupRenderer {
       ctx.globalAlpha = 1;
     }
 
-    // Damage glow — pulsing red as HP drops
-    if (hpPct < 0.5) {
+    // Damage glow — pulsing red as HP drops.
+    // Suppressed while subsystems still shield the hull (otherwise an
+    // edge-case where hp briefly dips can render a giant red ellipse
+    // around an otherwise-undamaged boss).
+    const subShieldUp = !!enemy.weakPoints?.some((wp: any) => wp.alive && wp.weaponType);
+    if (hpPct < 0.5 && !subShieldUp) {
       ctx.globalAlpha = (1 - hpPct) * 0.3 * (0.5 + Math.sin(tick * 0.1) * 0.5);
       ctx.fillStyle = '#ff2200';
       ctx.beginPath();
@@ -2854,15 +2858,14 @@ export class ShmupRenderer {
   // armor plates slide outward and the core glows white-hot.
   private bossHullTvak(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, _dk: string, _md: string, tick: number, phase: number) {
     // ── Color palette matched to the T'VAK concept art ──
-    // BRIGHTENED so the silhouette actually reads against the dark nebula
-    // background — was using near-black values that made the whole hull
-    // invisible. Concept art's hull is dark gunmetal, but with strong
-    // diffuse light catching the armor edges. These values give that pop.
-    const armorDarkest = '#1a1a22';
-    const armorDark = '#2c2c38';
-    const armorMid = '#42424e';
-    const armorLight = '#5a5a66';
-    const armorAccent = '#7a7a86';     // brighter for top-lit edges
+    // BRIGHTENED again — the silhouette wings were still reading as
+    // invisible black against the dark nebula background. These values
+    // are warmer/lighter so the raptor wing shape actually shows.
+    const armorDarkest = '#252530';
+    const armorDark = '#3c3c4a';
+    const armorMid = '#52525e';
+    const armorLight = '#70707c';
+    const armorAccent = '#90909c';
     const conduitGreen = '#33ee55';
     const conduitGreenDim = '#0a4a18';
     const coreRed = '#ff2020';
@@ -2925,10 +2928,11 @@ export class ShmupRenderer {
     ctx.fill();
 
     // Full silhouette outline — gives the wings a readable contour against
-    // the dark background. Without this the matte hull fill is invisible.
-    ctx.strokeStyle = armorLight;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.85;
+    // the dark background. Made bright + thick so the raptor wing shape
+    // is the FIRST thing the player sees, not just the internal details.
+    ctx.strokeStyle = armorAccent;
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.moveTo(0, -H * 0.50);
     ctx.lineTo(W * 0.06, -H * 0.46);
@@ -3278,15 +3282,39 @@ export class ShmupRenderer {
     ctx.globalAlpha = 1;
 
     // ── Window/port lights scattered on the wings ──
-    ctx.fillStyle = '#ffaa44';
-    for (let i = 0; i < 14; i++) {
+    // Concept has dozens of small red eye-lights all over the wings.
+    // More of them, alternating red/amber.
+    for (let i = 0; i < 24; i++) {
       const side = i % 2 === 0 ? -1 : 1;
-      // pseudo-random but deterministic positions
-      const px = side * (W * 0.14 + (i * 11 % 17) * W * 0.015);
-      const py = -H * 0.2 + (i * 23 % 19) * H * 0.05;
-      const winPulse = 0.4 + 0.4 * Math.sin(tick * 0.04 + i * 1.3);
+      const px = side * (W * 0.18 + (i * 7 % 13) * W * 0.018);
+      const py = -H * 0.22 + (i * 17 % 23) * H * 0.04;
+      const winPulse = 0.45 + 0.4 * Math.sin(tick * 0.04 + i * 1.3);
       ctx.globalAlpha = winPulse;
-      ctx.fillRect(px - 1, py - 0.5, 2, 1.5);
+      ctx.fillStyle = i % 3 === 0 ? '#ff4422' : '#ffaa44';
+      ctx.beginPath();
+      ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Glowing red accent dots on the wings (concept's bright red specks) ──
+    ctx.fillStyle = '#ff3030';
+    for (let i = 0; i < 10; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const px = side * (W * 0.28 + (i * 5 % 7) * W * 0.02);
+      const py = -H * 0.05 + (i * 11 % 9) * H * 0.04;
+      const pulse = 0.6 + 0.4 * Math.sin(tick * 0.1 + i * 1.7);
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Hot core
+      ctx.fillStyle = '#ffaaaa';
+      ctx.globalAlpha = pulse * 0.8;
+      ctx.beginPath();
+      ctx.arc(px, py, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff3030';
     }
     ctx.globalAlpha = 1;
 

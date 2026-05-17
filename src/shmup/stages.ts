@@ -94,7 +94,7 @@ export const STAGES: Stage[] = [
         { type: 'fighter', faction: 'klingon', x: 0.5, path: zigzag(0.5) },
       ]},
     ],
-    boss: { name: "T'VAK CLASS ASSAULT VESSEL", type: 'tvak', hp: 520, width: 360, height: 290, phases: 4, faction: 'klingon' },
+    boss: { name: "T'VAK CLASS ASSAULT VESSEL", type: 'tvak', hp: 1200, width: 360, height: 290, phases: 4, faction: 'klingon' },
   },
 
   // ── Stage 2: Romulan Nebula ───────────────────────────────
