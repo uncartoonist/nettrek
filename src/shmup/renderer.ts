@@ -1457,6 +1457,81 @@ export class ShmupRenderer {
     }
     ctx.globalAlpha = 1;
 
+    // ── Bullet curtains (rising music-driven walls with a gap) ──
+    for (const c of state.curtains) {
+      const gapCenter = c.gapX * w;
+      const gapL = gapCenter - c.gapHalfWidth;
+      const gapR = gapCenter + c.gapHalfWidth;
+      // Outer glow band
+      const wallGrad = ctx.createLinearGradient(0, c.y - 10, 0, c.y + 10);
+      wallGrad.addColorStop(0, `hsla(${c.hue}, 90%, 60%, 0)`);
+      wallGrad.addColorStop(0.5, `hsla(${c.hue}, 95%, 65%, 0.85)`);
+      wallGrad.addColorStop(1, `hsla(${c.hue}, 90%, 60%, 0)`);
+      ctx.fillStyle = wallGrad;
+      // Left segment of wall
+      if (gapL > 0) ctx.fillRect(0, c.y - 10, gapL, 20);
+      // Right segment of wall
+      if (gapR < w) ctx.fillRect(gapR, c.y - 10, w - gapR, 20);
+      // Inner bright core line on the damaging band
+      ctx.fillStyle = `hsla(${c.hue}, 100%, 85%, 0.9)`;
+      if (gapL > 0) ctx.fillRect(0, c.y - 1.5, gapL, 3);
+      if (gapR < w) ctx.fillRect(gapR, c.y - 1.5, w - gapR, 3);
+      // Gap markers (subtle inward chevrons so the eye finds the gap)
+      ctx.strokeStyle = `hsla(${c.hue}, 100%, 90%, 0.7)`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(gapL - 8, c.y - 4); ctx.lineTo(gapL, c.y); ctx.lineTo(gapL - 8, c.y + 4);
+      ctx.moveTo(gapR + 8, c.y - 4); ctx.lineTo(gapR, c.y); ctx.lineTo(gapR + 8, c.y + 4);
+      ctx.stroke();
+    }
+
+    // ── Pulse walls (scanning energy lines with a gap) ──
+    for (const wall of state.pulseWalls) {
+      ctx.save();
+      if (wall.axis === 'horizontal') {
+        const gapCenter = wall.gapAt * w;
+        const gapL = gapCenter - wall.gapSize / 2;
+        const gapR = gapCenter + wall.gapSize / 2;
+        const wallGrad = ctx.createLinearGradient(0, wall.pos - 8, 0, wall.pos + 8);
+        wallGrad.addColorStop(0, 'rgba(120,200,255,0)');
+        wallGrad.addColorStop(0.5, 'rgba(120,200,255,0.8)');
+        wallGrad.addColorStop(1, 'rgba(120,200,255,0)');
+        ctx.fillStyle = wallGrad;
+        if (gapL > 0) ctx.fillRect(0, wall.pos - 8, gapL, 16);
+        if (gapR < w) ctx.fillRect(gapR, wall.pos - 8, w - gapR, 16);
+        ctx.fillStyle = 'rgba(220,240,255,0.95)';
+        if (gapL > 0) ctx.fillRect(0, wall.pos - 1, gapL, 2);
+        if (gapR < w) ctx.fillRect(gapR, wall.pos - 1, w - gapR, 2);
+      } else {
+        const gapCenter = wall.gapAt * h;
+        const gapT = gapCenter - wall.gapSize / 2;
+        const gapB = gapCenter + wall.gapSize / 2;
+        const wallGrad = ctx.createLinearGradient(wall.pos - 8, 0, wall.pos + 8, 0);
+        wallGrad.addColorStop(0, 'rgba(120,200,255,0)');
+        wallGrad.addColorStop(0.5, 'rgba(120,200,255,0.8)');
+        wallGrad.addColorStop(1, 'rgba(120,200,255,0)');
+        ctx.fillStyle = wallGrad;
+        if (gapT > 0) ctx.fillRect(wall.pos - 8, 0, 16, gapT);
+        if (gapB < h) ctx.fillRect(wall.pos - 8, gapB, 16, h - gapB);
+      }
+      ctx.restore();
+    }
+
+    // ── Signature label (briefly shown when a music mechanic fires) ──
+    if (state.signatureLabelTimer > 0 && state.signatureLabel) {
+      const alpha = Math.min(1, state.signatureLabelTimer / 60) * 0.85;
+      ctx.globalAlpha = alpha;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ff66aa';
+      ctx.font = 'bold 18px Courier New';
+      ctx.fillText('♫ ' + state.signatureLabel + ' ♫', w / 2, h * 0.18);
+      ctx.font = '10px Courier New';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText('the song is playing the level', w / 2, h * 0.18 + 16);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
+    }
+
     // ── Chain level indicator (top-center) — static, no strobing ──
     if (state.chainLevel >= 3) {
       ctx.textAlign = 'center';

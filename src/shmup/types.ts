@@ -246,6 +246,31 @@ export interface ShmupState {
   explosionZones: ExplosionZone[];
   // Music drop transformations
   dropCount: number;          // drops detected this stage
+  // ── Signature mechanics — music-driven challenges per song ──
+  curtains: BulletCurtain[];   // rising bullet walls (for 'curtain' signature)
+  pulseWalls: PulseWall[];     // scanning energy walls (for 'pulse_walls' signature)
+  signatureLabel: string;      // text shown briefly when a signature fires
+  signatureLabelTimer: number; // frames remaining
+}
+
+export interface BulletCurtain {
+  y: number;             // current y position (rising upward)
+  vy: number;            // upward velocity
+  gapX: number;          // gap center, fraction of screen width (0-1)
+  gapHalfWidth: number;  // half the width of the safe gap, in pixels
+  hue: number;           // color hue
+  life: number;          // frames remaining (despawn when off-screen anyway)
+  damaging: boolean;     // active hit-box
+}
+
+export interface PulseWall {
+  axis: 'horizontal' | 'vertical';
+  pos: number;            // current y (horizontal) or x (vertical)
+  vel: number;            // speed
+  gapAt: number;          // gap center along the other axis, fraction (0-1)
+  gapSize: number;        // gap size in pixels
+  life: number;
+  damaging: boolean;
 }
 
 export interface ExplosionZone {

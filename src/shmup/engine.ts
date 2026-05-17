@@ -6,6 +6,8 @@ import {
 } from './types';
 import { STAGES } from './stages';
 import type { DirectorCommand } from './director';
+import { profileForStage } from './musicProfiles';
+import type { SignatureMechanic } from './musicProfiles';
 
 let nextEnemyId = 1;
 
@@ -55,6 +57,10 @@ export function createShmupState(): ShmupState {
     chainTimer: 0,
     explosionZones: [],
     dropCount: 0,
+    curtains: [],
+    pulseWalls: [],
+    signatureLabel: '',
+    signatureLabelTimer: 0,
   };
 }
 
@@ -582,6 +588,9 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     return o.pos.y < H + 60 && o.hp > 0;
   });
   state.obstacles.push(...newSplits);
+
+  // Signature hazards (bullet curtains, pulse walls) — music-driven walls
+  updateSignatureHazards(state, W, H);
 
   // Player bullets vs obstacles
   for (const bullet of state.playerBullets) {
@@ -1912,6 +1921,17 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
   if (cmd.bgPulse > state.beatPulse) state.beatPulse = cmd.bgPulse;
   state.musicIntensity = cmd.scrollSpeedMult;
 
+  // ── SIGNATURE MECHANIC TRIGGER ──────────────────────────────────
+  // The director declares which signature to fire (one per song profile).
+  // The engine spawns the actual challenge here. This is the music
+  // literally creating gameplay events.
+  if (cmd.signatureTrigger) {
+    const profile = profileForStage(state.currentStage);
+    state.signatureLabel = profile.signatureLabel;
+    state.signatureLabelTimer = 90;
+    fireSignature(state, cmd.signatureTrigger, W, H);
+  }
+
   // Music drop transformation — evolve enemies on big moments
   if (cmd.fleetEvent) {
     state.dropCount++;
@@ -1988,25 +2008,20 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
     }
   }
 
-  // Spawn obstacle from director
-  // Spawn obstacles driven by music mood
+  // Spawn obstacle from director — type comes from active song's profile
   if (cmd.spawnObstacle && W > 0 && state.obstacles.length < 8) {
     const intensity = state.musicIntensity;
-    const roll = Math.random();
+    // Director already picked the type via profile weights; fall back to
+    // intensity-based selection only if it didn't (defensive).
     let obsType: 'rock' | 'mine' | 'barrier' | 'vortex' | 'comet' | 'energyribbon' | 'splitter';
-
-    if (intensity > 0.8) {
-      // Peak energy — spectacular obstacles
-      obsType = roll < 0.3 ? 'vortex' : roll < 0.5 ? 'comet' : roll < 0.7 ? 'energyribbon' : 'barrier';
-    } else if (intensity > 0.5) {
-      // Moderate — mix of interesting types
-      obsType = roll < 0.25 ? 'splitter' : roll < 0.45 ? 'comet' : roll < 0.65 ? 'barrier' : roll < 0.85 ? 'mine' : 'energyribbon';
-    } else if (intensity > 0.25) {
-      // Low-moderate — mostly rocks with occasional interest
-      obsType = roll < 0.5 ? 'rock' : roll < 0.7 ? 'splitter' : roll < 0.85 ? 'mine' : 'comet';
+    if (cmd.spawnObstacleType) {
+      obsType = cmd.spawnObstacleType;
     } else {
-      // Quiet — graceful floating rocks
-      obsType = roll < 0.8 ? 'rock' : 'comet';
+      const roll = Math.random();
+      if (intensity > 0.8)      obsType = roll < 0.3 ? 'vortex' : roll < 0.5 ? 'comet' : roll < 0.7 ? 'energyribbon' : 'barrier';
+      else if (intensity > 0.5) obsType = roll < 0.25 ? 'splitter' : roll < 0.45 ? 'comet' : roll < 0.65 ? 'barrier' : roll < 0.85 ? 'mine' : 'energyribbon';
+      else if (intensity > 0.25) obsType = roll < 0.5 ? 'rock' : roll < 0.7 ? 'splitter' : roll < 0.85 ? 'mine' : 'comet';
+      else obsType = roll < 0.8 ? 'rock' : 'comet';
     }
 
     const radius = obsType === 'vortex' ? 25 + Math.random() * 15
@@ -2032,4 +2047,162 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
       splitCount: obsType === 'splitter' ? 2 : undefined,
     });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SIGNATURE MECHANICS — the music creates the challenge
+// ═══════════════════════════════════════════════════════════════════
+// Each song profile owns one signature. When the song hits a drop, the
+// director declares the signature and this function spawns the actual
+// gameplay event. The mechanic should feel like the music itself is
+// generating a moment of challenge that the player must read and react.
+function fireSignature(state: ShmupState, sig: SignatureMechanic, W: number, H: number): void {
+  switch (sig) {
+    case 'curtain': {
+      // Bullet curtain rises from below the screen with a single safe gap.
+      // The drop creates the wall; the player must reposition into the gap.
+      // Visual: a horizontal pink-magenta band of bullets rushing up.
+      const gapX = 0.15 + Math.random() * 0.7;
+      state.curtains.push({
+        y: H + 30,
+        vy: 2.6 + state.musicIntensity * 0.6,
+        gapX,
+        gapHalfWidth: 55 + Math.random() * 20, // ~110-150px gap
+        hue: 330 + Math.random() * 20,         // pink-magenta
+        life: 240,
+        damaging: true,
+      });
+      break;
+    }
+
+    case 'pulse_walls': {
+      // Energy walls scan across the screen with a gap to thread.
+      // Pick a horizontal wall sweeping up; alternate axes on subsequent hits.
+      state.pulseWalls.push({
+        axis: 'horizontal',
+        pos: H + 20,
+        vel: -2.5,
+        gapAt: 0.2 + Math.random() * 0.6,
+        gapSize: 90 + Math.random() * 30,
+        life: 240,
+        damaging: true,
+      });
+      break;
+    }
+
+    case 'vortex_storm': {
+      // Three gravity wells appear in a triangle around the player area.
+      // The challenge is navigating between their pulls.
+      const targets = [
+        { x: W * 0.25, y: H * 0.45 },
+        { x: W * 0.75, y: H * 0.45 },
+        { x: W * 0.5,  y: H * 0.25 },
+      ];
+      for (const t of targets) {
+        state.obstacles.push({
+          pos: { ...t },
+          vel: { x: 0, y: 0.3 },
+          radius: 28,
+          hp: 999, // indestructible — endure them
+          type: 'vortex',
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: 0.05,
+          pullStrength: 0.25 + state.musicIntensity * 0.2,
+        });
+      }
+      break;
+    }
+
+    case 'swarm': {
+      // Reinforce the existing swarm spawns with a wide V-formation of fighters.
+      const stage = state.stages[state.currentStage];
+      const faction = stage?.faction || 'klingon';
+      const n = 7;
+      for (let i = 0; i < n; i++) {
+        const px = (0.15 + (i / (n - 1)) * 0.7) * W;
+        spawnEnemy(state, 'fighter', faction, px);
+      }
+      break;
+    }
+
+    case 'siege': {
+      // Push a heavy line of bombers/cruisers.
+      const stage = state.stages[state.currentStage];
+      const faction = stage?.faction || 'klingon';
+      spawnEnemy(state, 'cruiser', faction, W * 0.3);
+      spawnEnemy(state, 'cruiser', faction, W * 0.7);
+      spawnEnemy(state, 'bomber',  faction, W * 0.5);
+      break;
+    }
+
+    case 'loop':
+    case 'drone':
+      // These signatures express themselves through other code paths
+      // (enemy weights, density, quiet-section spawn). No drop event needed.
+      break;
+
+    case 'finale': {
+      // Final stage: fire curtain + vortex storm simultaneously
+      fireSignature(state, 'curtain', W, H);
+      fireSignature(state, 'vortex_storm', W, H);
+      break;
+    }
+  }
+}
+
+// ── Update curtains and pulse walls per frame (called from updateShmup) ──
+export function updateSignatureHazards(state: ShmupState, W: number, H: number): void {
+  const p = state.player;
+
+  // Curtains: rise upward. Damage the player if they're inside the wall
+  // and NOT inside the safe gap.
+  for (const c of state.curtains) {
+    c.y += c.vy * -1;       // vy stored positive; rise = decrease y
+    c.life--;
+    if (c.damaging && p.alive && p.invulnTimer <= 0) {
+      const dy = Math.abs(p.pos.y - c.y);
+      // Wall is ~16px thick visually; damage band ~14px
+      if (dy < 14) {
+        const gapCenter = c.gapX * W;
+        const dx = Math.abs(p.pos.x - gapCenter);
+        if (dx > c.gapHalfWidth) {
+          hitPlayer(state, {});
+        }
+      }
+    }
+  }
+  state.curtains = state.curtains.filter(c => c.y > -40 && c.life > 0);
+
+  // Pulse walls: scan in one direction.
+  for (const wall of state.pulseWalls) {
+    wall.pos += wall.vel;
+    wall.life--;
+    if (wall.damaging && p.alive && p.invulnTimer <= 0) {
+      if (wall.axis === 'horizontal') {
+        const dy = Math.abs(p.pos.y - wall.pos);
+        if (dy < 14) {
+          const gapCenter = wall.gapAt * W;
+          const dx = Math.abs(p.pos.x - gapCenter);
+          if (dx > wall.gapSize / 2) {
+            hitPlayer(state, {});
+          }
+        }
+      } else {
+        const dx = Math.abs(p.pos.x - wall.pos);
+        if (dx < 14) {
+          const gapCenter = wall.gapAt * H;
+          const dy = Math.abs(p.pos.y - gapCenter);
+          if (dy > wall.gapSize / 2) {
+            hitPlayer(state, {});
+          }
+        }
+      }
+    }
+  }
+  state.pulseWalls = state.pulseWalls.filter(w =>
+    w.life > 0 &&
+    (w.axis === 'horizontal' ? (w.pos > -40 && w.pos < H + 40) : (w.pos > -40 && w.pos < W + 40))
+  );
+
+  if (state.signatureLabelTimer > 0) state.signatureLabelTimer--;
 }
