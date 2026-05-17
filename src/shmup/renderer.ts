@@ -316,7 +316,15 @@ export class ShmupRenderer {
       this.drawPowerUpIcon(ctx, pu.pos.x, pu.pos.y, pu.type, state.tick);
     }
 
-    // Enemy bullets — unique shapes per enemy type (color-coded)
+    // Enemy bullets — UNIFIED THREAT COLOR (hot magenta-red) so they always
+    // read as "danger, dodge". Shape varies per enemy so you can still tell
+    // who's shooting, but the color is reserved for enemy fire alone.
+    // Palette: outer halo #ff2266, body #ff3377 / #ff5588, hot core #ffeeff
+    const THREAT_HALO = '#ff2266';
+    const THREAT_BODY = '#ff3377';
+    const THREAT_BODY_HOT = '#ff5599';
+    const THREAT_CORE = '#ffeeff';
+
     for (const bullet of state.enemyBullets) {
       const fadeAlpha = Math.min(1, bullet.ttl / 15);
       if (fadeAlpha <= 0) continue;
@@ -325,124 +333,97 @@ export class ShmupRenderer {
 
       const r = bullet.radius;
       const c = bullet.color;
+      // Original color string is still used to pick which SHAPE to render
+      // (preserves "fighter fires bolts, cruiser fires diamonds" recognition)
 
       if (c.startsWith('#ff22') || c.startsWith('#ff44')) {
-        // Fighter — small red elongated bolt
-        ctx.fillStyle = c;
-        ctx.globalAlpha = 0.9 * fadeAlpha;
+        // Fighter — elongated bolt
         const angle = Math.atan2(bullet.vel.y, bullet.vel.x);
         ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r * 0.6, r * 2.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffaaaa';
-        ctx.globalAlpha = 0.6 * fadeAlpha;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r * 0.25, r * 1.2, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Outer halo
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.25 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 1.1, r * 3, 0, 0, Math.PI * 2); ctx.fill();
+        // Body
+        ctx.fillStyle = THREAT_BODY;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.65, r * 2.2, 0, 0, Math.PI * 2); ctx.fill();
+        // Hot core
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.85 * fadeAlpha;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.25, r * 1.3, 0, 0, Math.PI * 2); ctx.fill();
       } else if (c.startsWith('#ff88') || c.startsWith('#ffaa')) {
-        // Bomber — orange plasma blob with pulsing glow
+        // Bomber — pulsing plasma blob
         const pulse = 1 + Math.sin(state.tick * 0.15 + bullet.pos.x) * 0.2;
-        ctx.fillStyle = c;
-        ctx.globalAlpha = 0.15 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2.2 * pulse, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 0.85 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * pulse, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffdd88';
-        ctx.globalAlpha = 0.5 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.22 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 2.4 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_BODY_HOT;
+        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2); ctx.fill();
       } else if (c.startsWith('#22ff') || c.startsWith('#44ff') || c.startsWith('#88ff')) {
-        // Cruiser — green diamond/rhombus shape
-        ctx.fillStyle = c;
-        ctx.globalAlpha = 0.12 * fadeAlpha;
+        // Cruiser — diamond/rhombus
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.22 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_BODY;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
         ctx.beginPath();
-        ctx.arc(0, 0, r * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 0.9 * fadeAlpha;
-        ctx.beginPath();
-        ctx.moveTo(0, -r * 1.8);
-        ctx.lineTo(-r * 0.8, 0);
-        ctx.lineTo(0, r * 1.8);
-        ctx.lineTo(r * 0.8, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.4 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(0, -r * 1.8); ctx.lineTo(-r * 0.8, 0); ctx.lineTo(0, r * 1.8); ctx.lineTo(r * 0.8, 0);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.75 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, Math.PI * 2); ctx.fill();
       } else if (c.startsWith('#bb44') || c.startsWith('#cc44')) {
-        // Elite — purple spinning orb with ring
+        // Elite — orb with rotating ring
         const spin = state.tick * 0.1 + bullet.pos.y * 0.05;
-        ctx.fillStyle = c;
-        ctx.globalAlpha = 0.1 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 0.85 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fill();
-        // Rotating ring
-        ctx.strokeStyle = '#ee88ff';
-        ctx.globalAlpha = 0.5 * fadeAlpha;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 1.4, spin, spin + Math.PI * 1.2);
-        ctx.stroke();
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.5 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (c.startsWith('#ff') && c.includes('ee') || c.startsWith('#ddcc') || c.startsWith('#ffee')) {
-        // Turret — yellow sharp needle
-        ctx.fillStyle = c;
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.22 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_BODY_HOT;
         ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.65 * fadeAlpha;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.45, spin, spin + Math.PI * 1.2); ctx.stroke();
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2); ctx.fill();
+      } else if ((c.startsWith('#ff') && c.includes('ee')) || c.startsWith('#ddcc') || c.startsWith('#ffee')) {
+        // Turret — sharp needle
         const angle = Math.atan2(bullet.vel.y, bullet.vel.x);
         ctx.rotate(angle);
+        // Halo trail
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.18 * fadeAlpha;
         ctx.beginPath();
-        ctx.moveTo(r * 3, 0);
-        ctx.lineTo(-r, -r * 0.5);
-        ctx.lineTo(-r, r * 0.5);
-        ctx.closePath();
-        ctx.fill();
-        // Bright tip
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.moveTo(r * 3.2, 0); ctx.lineTo(-r * 1.2, -r * 0.9); ctx.lineTo(-r * 1.2, r * 0.9);
+        ctx.closePath(); ctx.fill();
+        // Body
+        ctx.fillStyle = THREAT_BODY;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
         ctx.beginPath();
-        ctx.arc(r * 1.5, 0, r * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        // Trail line
-        ctx.strokeStyle = c;
-        ctx.globalAlpha = 0.3 * fadeAlpha;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-r * 2, 0);
-        ctx.lineTo(r * 2, 0);
-        ctx.stroke();
+        ctx.moveTo(r * 3, 0); ctx.lineTo(-r, -r * 0.5); ctx.lineTo(-r, r * 0.5);
+        ctx.closePath(); ctx.fill();
+        // Hot tip
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.85 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(r * 1.8, 0, r * 0.4, 0, Math.PI * 2); ctx.fill();
       } else {
-        // Default (boss bullets, etc) — standard glow orb
-        ctx.fillStyle = c;
-        ctx.globalAlpha = 0.12 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 0.9 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.globalAlpha = 0.5 * fadeAlpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2);
-        ctx.fill();
+        // Default (boss bullets, etc) — glowing orb
+        ctx.fillStyle = THREAT_HALO;
+        ctx.globalAlpha = 0.22 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_BODY;
+        ctx.globalAlpha = 0.95 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = THREAT_CORE;
+        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2); ctx.fill();
       }
 
       ctx.restore();
