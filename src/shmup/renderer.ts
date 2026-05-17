@@ -2690,9 +2690,49 @@ export class ShmupRenderer {
         // Named hardpoints (T'VAK) draw in their weapon's color; generic
         // weak points keep the existing yellow.
         const wpColor = wp.color || '#ffdd00';
-        const isBig = !!wp.weaponType; // bigger glow for boss weapon hardpoints
+        const isBig = !!wp.weaponType;
         const ringR = isBig ? 14 : 12;
         if (wp.alive) {
+          // ── Plasma + Tractor get the iconic CONCENTRIC PURPLE RINGS ──
+          // (matches the concept art exactly: 3 nested rings + bright core
+          // on a dark backplate)
+          if (wp.weaponType === 'plasma' || wp.weaponType === 'tractor') {
+            const auraSize = 18;
+            // Dark backplate
+            ctx.fillStyle = '#1a0a1a';
+            ctx.beginPath(); ctx.arc(wpX, wpY, auraSize, 0, Math.PI * 2); ctx.fill();
+            // Outer aura
+            const auraG = ctx.createRadialGradient(wpX, wpY, 0, wpX, wpY, auraSize * 1.6);
+            auraG.addColorStop(0, wpColor);
+            auraG.addColorStop(1, 'transparent');
+            ctx.fillStyle = auraG;
+            ctx.globalAlpha = 0.5 + Math.sin(tick * 0.1 + wpX * 0.03) * 0.2;
+            ctx.beginPath(); ctx.arc(wpX, wpY, auraSize * 1.6, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1;
+            // 3 concentric rings
+            ctx.strokeStyle = wpColor;
+            ctx.lineWidth = 1.5;
+            for (let r = 0; r < 3; r++) {
+              const ringFrac = 0.9 - r * 0.25;
+              ctx.globalAlpha = 0.9 - r * 0.2;
+              ctx.beginPath(); ctx.arc(wpX, wpY, auraSize * ringFrac, 0, Math.PI * 2); ctx.stroke();
+            }
+            // Bright central core
+            ctx.fillStyle = '#ffeeff';
+            ctx.globalAlpha = 0.9 + Math.sin(tick * 0.15 + wpX) * 0.1;
+            ctx.beginPath(); ctx.arc(wpX, wpY, 3.5, 0, Math.PI * 2); ctx.fill();
+            // HP ring (outside the concentric rings)
+            ctx.globalAlpha = 0.7;
+            ctx.strokeStyle = wpColor;
+            ctx.lineWidth = 2;
+            const wpPct1 = wp.maxHp > 0 ? Math.max(0, Math.min(1, wp.hp / wp.maxHp)) : 0;
+            ctx.beginPath();
+            ctx.arc(wpX, wpY, auraSize + 4, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * wpPct1));
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            continue;
+          }
+          // ── Default named hardpoint (disruptor / missile / phaser / torpedo) ──
           // Outer aura
           const auraG = ctx.createRadialGradient(wpX, wpY, 0, wpX, wpY, ringR * 1.6);
           auraG.addColorStop(0, wpColor);
@@ -2825,11 +2865,16 @@ export class ShmupRenderer {
   // armor plates slide outward and the core glows white-hot.
   private bossHullTvak(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, _dk: string, _md: string, tick: number, phase: number) {
     // ── Color palette matched to the T'VAK concept art ──
-    const armorDarkest = '#080810';
-    const armorDark = '#13131c';
-    const armorMid = '#22222a';
-    const armorLight = '#34343e';
-    const conduitGreen = '#22cc44';
+    // BRIGHTENED so the silhouette actually reads against the dark nebula
+    // background — was using near-black values that made the whole hull
+    // invisible. Concept art's hull is dark gunmetal, but with strong
+    // diffuse light catching the armor edges. These values give that pop.
+    const armorDarkest = '#1a1a22';
+    const armorDark = '#2c2c38';
+    const armorMid = '#42424e';
+    const armorLight = '#5a5a66';
+    const armorAccent = '#7a7a86';     // brighter for top-lit edges
+    const conduitGreen = '#33ee55';
     const conduitGreenDim = '#0a4a18';
     const coreRed = '#ff2020';
     const corePulse = 0.65 + Math.sin(tick * 0.08) * 0.3;
@@ -2890,10 +2935,49 @@ export class ShmupRenderer {
     ctx.closePath();
     ctx.fill();
 
-    // Subtle warm-tone rim light along the silhouette top (matches concept's
-    // orange edge highlight where the studio key light catches the armor)
-    ctx.strokeStyle = 'rgba(120, 60, 20, 0.45)';
-    ctx.lineWidth = 1.2;
+    // Full silhouette outline — gives the wings a readable contour against
+    // the dark background. Without this the matte hull fill is invisible.
+    ctx.strokeStyle = armorLight;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.50);
+    ctx.lineTo(W * 0.06, -H * 0.46);
+    ctx.lineTo(W * 0.10, -H * 0.40);
+    ctx.lineTo(W * 0.16, -H * 0.36);
+    ctx.lineTo(W * 0.28, -H * 0.32);
+    ctx.lineTo(W * 0.38, -H * 0.22);
+    ctx.lineTo(W * 0.46, -H * 0.10);
+    ctx.lineTo(W * 0.50 + spreadOff, -H * 0.02);
+    ctx.lineTo(W * 0.46 + spreadOff, H * 0.08);
+    ctx.lineTo(W * 0.50 + spreadOff, H * 0.18);
+    ctx.lineTo(W * 0.42, H * 0.28);
+    ctx.lineTo(W * 0.34, H * 0.34);
+    ctx.lineTo(W * 0.24, H * 0.36);
+    ctx.lineTo(W * 0.18, H * 0.42);
+    ctx.lineTo(W * 0.16, H * 0.50);
+    ctx.lineTo(-W * 0.16, H * 0.50);
+    ctx.lineTo(-W * 0.18, H * 0.42);
+    ctx.lineTo(-W * 0.24, H * 0.36);
+    ctx.lineTo(-W * 0.34, H * 0.34);
+    ctx.lineTo(-W * 0.42, H * 0.28);
+    ctx.lineTo(-W * 0.50 - spreadOff, H * 0.18);
+    ctx.lineTo(-W * 0.46 - spreadOff, H * 0.08);
+    ctx.lineTo(-W * 0.50 - spreadOff, -H * 0.02);
+    ctx.lineTo(-W * 0.46, -H * 0.10);
+    ctx.lineTo(-W * 0.38, -H * 0.22);
+    ctx.lineTo(-W * 0.28, -H * 0.32);
+    ctx.lineTo(-W * 0.16, -H * 0.36);
+    ctx.lineTo(-W * 0.10, -H * 0.40);
+    ctx.lineTo(-W * 0.06, -H * 0.46);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Warm top rim accent — catches the "light" on the upper armor curves
+    ctx.strokeStyle = '#aa5522';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.6;
     ctx.beginPath();
     ctx.moveTo(-W * 0.46, -H * 0.10);
     ctx.lineTo(-W * 0.38, -H * 0.22);
@@ -2905,6 +2989,7 @@ export class ShmupRenderer {
     ctx.lineTo(W * 0.38, -H * 0.22);
     ctx.lineTo(W * 0.46, -H * 0.10);
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // ── Mid armor — defines the inner wing plating ──
     ctx.fillStyle = armorMid;
@@ -2922,10 +3007,10 @@ export class ShmupRenderer {
     ctx.closePath();
     ctx.fill();
 
-    // Inner armor rim highlight
-    ctx.strokeStyle = '#4a4a55';
+    // Inner armor rim highlight — brighter so plating reads
+    ctx.strokeStyle = armorAccent;
     ctx.lineWidth = 1.2;
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.7;
     ctx.stroke();
     ctx.globalAlpha = 1;
 

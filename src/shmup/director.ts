@@ -341,7 +341,13 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
     cmd.fleetEvent = true;
     cmd.screenShake = 2;
     cmd.particleBurst = true;
-    cmd.signatureTrigger = profile.signature;
+    // Signature mechanic only fires DURING the level — never during the
+    // boss encounter (the boss has its own attack patterns; a curtain or
+    // vortex storm on top of that is visually overwhelming and previously
+    // appeared as a "surprise horizontal line").
+    if (!state.bossActive) {
+      cmd.signatureTrigger = profile.signature;
+    }
 
     // Drop wave: amplify with power and armada (more enemies arrive on
     // the drop when the player is loaded out or approaching the boss).

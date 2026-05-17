@@ -705,14 +705,18 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
         if (enemy.type === 'boss' && enemy.weakPoints) {
           const survivingSubs = enemy.weakPoints.some(wp => wp.alive && wp.weaponType);
           if (survivingSubs) {
+            // Snapshot impact point BEFORE we zero the bullet so the
+            // deflect sparks render at the correct location (previously
+            // they spawned at -999 which left no visible spark).
+            const impactX = bullet.pos.x;
+            const impactY = bullet.pos.y;
             bullet.pos.y = -999;
             bullet.ttl = 0;
             events.shieldDeflect = true;
-            // Cyan deflect spark
             for (let i = 0; i < 5; i++) {
               const a = Math.random() * Math.PI * 2;
               state.particles.push({
-                pos: { x: bullet.pos.x, y: bullet.pos.y },
+                pos: { x: impactX, y: impactY },
                 vel: { x: Math.cos(a) * 2.5, y: Math.sin(a) * 2.5 },
                 life: 10, maxLife: 10, color: '#88ddff', size: 2,
               });
@@ -1525,11 +1529,16 @@ function runTvakDeathSequence(state: ShmupState, boss: Enemy): void {
     }
   }
 
-  // Complete — call killEnemy for real
+  // Complete — call killEnemy for real and push the boss off-screen so
+  // the enemy-filter removes it. Without this push the boss sits dead at
+  // the top of the screen forever (pos.y < H + 100 keeps it in the array)
+  // and state.enemies.length === 0 never becomes true → victory never
+  // triggers and the game appears to lock up.
   if (t >= 180) {
     boss.hp = 0;
     state.slowMotion = 90;
     killEnemy(state, boss, { bossKilled: true });
+    boss.pos.y = state.screenH + 200; // ensure filter removes it next frame
   }
 }
 
@@ -1547,8 +1556,10 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
     ang: Math.atan2(state.player.pos.y - boss.pos.y, state.player.pos.x - boss.pos.x),
   };
 
-  // Signature pulse — every ~5 seconds while alive
-  if (pt > 0 && pt % 300 === 0) fireBossSignature(state, boss);
+  // (Removed periodic boss signature pulse — it was firing the stage's
+  // signature mechanic (e.g. bullet curtain) on top of the boss's own
+  // weapons, producing a surprise horizontal sweep across the screen.
+  // The boss has plenty of attack patterns of its own.)
 
   switch (boss.bossType) {
     // ── 0. T'VAK CLASS ASSAULT VESSEL (Klingon, stage 1) ───────
