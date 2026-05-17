@@ -176,6 +176,16 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
     aggression: profile.aggression,
   };
 
+  // ── Stop spawning new enemies once the stage timer has elapsed ──
+  // Otherwise the trickle/heartbeat refills the screen forever and the
+  // boss-spawn condition (enemies === 0) is never met. The engine has a
+  // hard fallback at duration+240, but this lets the screen clear naturally
+  // so the boss makes a clean entrance.
+  const stageDur = state.stages[state.currentStage]?.duration || 2100;
+  if (state.tick >= stageDur && !state.bossActive) {
+    return cmd; // empty command — let the screen drain for the boss
+  }
+
   spawnCD--; fireCD--; puCD--; fleetCD--; obsCD--;
   guaranteedSpawnTimer--;
   if (dropRecovery > 0) dropRecovery--;

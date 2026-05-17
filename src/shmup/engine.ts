@@ -456,7 +456,17 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     if (state.tick >= stage.duration - 120 && state.bossWarning === 0 && !state.bossActive && stage.boss) {
       state.bossWarning = 120;
     }
-    if (state.tick >= stage.duration && state.enemies.length === 0 && stage.boss) {
+    // Boss spawns when either:
+    //   a) we're past duration AND the screen is clear, OR
+    //   b) we're at least 4 seconds past duration regardless of enemies
+    //      (so the director can't postpone the boss indefinitely with trickle spawns)
+    const livingEnemies = state.enemies.filter(e => e.alive).length;
+    const pastDuration = state.tick >= stage.duration;
+    const wayPastDuration = state.tick >= stage.duration + 240;
+    if (stage.boss && (
+        (pastDuration && livingEnemies === 0) ||
+        wayPastDuration
+    )) {
       spawnBoss(state, stage.boss);
       state.phase = 'boss';
       state.bossActive = true;
