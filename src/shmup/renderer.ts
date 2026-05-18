@@ -2844,13 +2844,55 @@ export class ShmupRenderer {
     // Draw unique hull based on stage boss type
     this.drawBossHull(ctx, W, H, color, tick, phase, enemy.faction, enemy.bossType || 'warbird');
 
-    // Shield shimmer effect
-    ctx.globalAlpha = 0.15 + Math.sin(tick * 0.04) * 0.08;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, W * 0.55, H * 0.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
+    // ── Hull shield bubble ── when subsystems still alive, this is a CLEAR
+    // visual cue: "stop shooting the hull, target the cannons." Was an
+    // almost-invisible 0.23 alpha line; now a hex-faceted bubble with a
+    // breathing alpha and a brighter ring. Players see at a glance the
+    // boss is protected. When subsystems are down, the bubble disappears
+    // and the hull is visibly exposed.
+    if (subShieldUp) {
+      const breathe = 0.55 + Math.sin(tick * 0.06) * 0.18;
+      const bubbleR = Math.max(W, H) * 0.6;
+      // Outer hex-pattern shield (procedural — looks like a force field)
+      const segments = 24;
+      ctx.strokeStyle = '#88ccff';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.35 * breathe;
+      ctx.beginPath();
+      for (let i = 0; i <= segments; i++) {
+        const a = (Math.PI * 2 / segments) * i;
+        const rj = bubbleR * (0.92 + Math.sin(a * 6 + tick * 0.05) * 0.04);
+        const x = Math.cos(a) * rj;
+        const y = Math.sin(a) * rj * 0.85;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // Inner bright rim
+      ctx.strokeStyle = '#aaeeff';
+      ctx.lineWidth = 0.8;
+      ctx.globalAlpha = 0.55 * breathe;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, bubbleR * 0.86, bubbleR * 0.73, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // Faint inner fill (very subtle, sells the "force field" feel)
+      const sgrad = ctx.createRadialGradient(0, 0, bubbleR * 0.3, 0, 0, bubbleR);
+      sgrad.addColorStop(0, 'rgba(140,220,255,0)');
+      sgrad.addColorStop(1, `rgba(140,220,255,${0.10 * breathe})`);
+      ctx.fillStyle = sgrad;
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, bubbleR, bubbleR * 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // No subsystems — original faint shimmer (boss is in vulnerable form)
+      ctx.globalAlpha = 0.15 + Math.sin(tick * 0.04) * 0.08;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, W * 0.55, H * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     // Weak points — glowing orbs that pulse
     if (enemy.weakPoints) {

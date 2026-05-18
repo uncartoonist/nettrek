@@ -841,6 +841,13 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     if (bullet.ttl <= 0) continue;
     for (const enemy of state.enemies) {
       if (!enemy.alive) continue;
+      // ── Spawn invulnerability ──
+      // Bullets do nothing to enemies that haven't fully entered the
+      // playfield yet. Before this fix, fast bullets killed approaching
+      // ships off-screen — the player saw nothing and got no satisfaction
+      // from the kill. Now the encounter starts only when both can see it.
+      // Bosses are exempt: their entrance is its own choreographed event.
+      if (enemy.type !== 'boss' && enemy.pos.y < enemy.height * 0.4) continue;
       if (hitTest(bullet.pos, bullet.radius, enemy.pos, enemy.width / 2)) {
         // ── Subsystem shielding ──
         // For bosses that carry named weapon hardpoints (T'VAK and future
@@ -851,21 +858,28 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
           const survivingSubs = enemy.weakPoints.some(wp => wp.alive && wp.weaponType);
           if (survivingSubs) {
             // Snapshot impact point BEFORE we zero the bullet so the
-            // deflect sparks render at the correct location (previously
-            // they spawned at -999 which left no visible spark).
+            // deflect sparks render at the correct location.
             const impactX = bullet.pos.x;
             const impactY = bullet.pos.y;
             bullet.pos.y = -999;
             bullet.ttl = 0;
             events.shieldDeflect = true;
-            for (let i = 0; i < 5; i++) {
+            // Stronger deflect FX — bright blue spark fan + ring + brief
+            // shield hex pulse on the boss hull. Tells the player
+            // unambiguously "this bounced — find a different target."
+            for (let i = 0; i < 9; i++) {
               const a = Math.random() * Math.PI * 2;
               state.particles.push({
                 pos: { x: impactX, y: impactY },
-                vel: { x: Math.cos(a) * 2.5, y: Math.sin(a) * 2.5 },
-                life: 10, maxLife: 10, color: '#88ddff', size: 2,
+                vel: { x: Math.cos(a) * 3.5, y: Math.sin(a) * 3.5 },
+                life: 14, maxLife: 14, color: i < 3 ? '#ffffff' : '#88ddff', size: 2 + Math.random() * 1.5,
               });
             }
+            // Mark the boss with a brief shield-flash overlay (cyan, not the
+            // damage-white). Reuse hitFlash but in cyan-territory via a
+            // separate field would be cleaner, but for now a soft flash
+            // alongside the cyan sparks reads as "shield was struck."
+            enemy.hitFlash = Math.max(enemy.hitFlash ?? 0, 4);
             continue;
           }
         }
@@ -2302,25 +2316,24 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
     if (enemy.pos.y < targetY) {
       enemy.pos.y += 0.6;
     } else {
-      // Phase-dependent movement
+      // ── Phase-dependent movement ──
+      // Single oscillator per axis per phase. NO superimposed cos+sin —
+      // those created beat patterns that read as jitter. Target position
+      // is lerped (not set) so phase transitions don't snap.
       const phase = enemy.phase || 0;
-      if (phase === 0) {
-        // Phase 1: slow menacing sway
-        enemy.pos.x = W / 2 + Math.sin(t * 0.012) * (W * 0.2);
-        enemy.pos.y = targetY + Math.sin(t * 0.008) * 15;
-      } else if (phase === 1) {
-        // Phase 2: faster lateral sweeps
-        enemy.pos.x = W / 2 + Math.sin(t * 0.02) * (W * 0.3);
-        enemy.pos.y = targetY + Math.sin(t * 0.015) * 25 - 10;
-      } else if (phase === 2) {
-        // Phase 3: aggressive figure-8 pattern
-        enemy.pos.x = W / 2 + Math.sin(t * 0.025) * (W * 0.35);
-        enemy.pos.y = targetY + Math.sin(t * 0.02) * 35 + Math.cos(t * 0.03) * 15;
-      } else {
-        // Phase 4+: rage — erratic, fast moves
-        enemy.pos.x = W / 2 + Math.sin(t * 0.035) * (W * 0.3) + Math.cos(t * 0.05) * 40;
-        enemy.pos.y = targetY + Math.sin(t * 0.03) * 40;
-      }
+      const phaseSpec: { freqX: number; ampX: number; freqY: number; ampY: number; bias: number }[] = [
+        { freqX: 0.010, ampX: W * 0.20, freqY: 0.007, ampY: 12, bias:  0 }, // Phase 1: slow menacing sway
+        { freqX: 0.016, ampX: W * 0.26, freqY: 0.012, ampY: 18, bias: -8 }, // Phase 2: wider lateral sweeps
+        { freqX: 0.020, ampX: W * 0.30, freqY: 0.016, ampY: 24, bias: -4 }, // Phase 3: faster but still smooth
+        { freqX: 0.026, ampX: W * 0.32, freqY: 0.020, ampY: 28, bias:  0 }, // Phase 4: aggressive but coherent
+      ];
+      const spec = phaseSpec[Math.min(phase, phaseSpec.length - 1)];
+      const wantX = W / 2 + Math.sin(t * spec.freqX) * spec.ampX;
+      const wantY = targetY + spec.bias + Math.sin(t * spec.freqY) * spec.ampY;
+      // Critically-damped lerp toward the target — feels heavy (capital
+      // ship inertia) and absorbs phase transitions without snapping.
+      enemy.pos.x += (wantX - enemy.pos.x) * 0.08;
+      enemy.pos.y += (wantY - enemy.pos.y) * 0.08;
     }
 
     // Phase transitions based on HP thresholds
@@ -2330,9 +2343,11 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
     if (enemy.phase !== undefined && enemy.phase !== expectedPhase) {
       enemy.phase = expectedPhase;
       enemy.phaseTimer = 0;
-      // Screen effects for phase change
-      state.screenShake = 10 + expectedPhase * 3;
-      state.screenFlash = 0.5;
+      // Screen effects for phase change — toned down (was 10 + phase*3,
+      // which jolted to 19 shake at phase 3 and read as bouncing more
+      // than 'phase transition'). Still strong enough to feel epic.
+      state.screenShake = Math.max(state.screenShake, 6 + expectedPhase * 1.5);
+      state.screenFlash = Math.max(state.screenFlash, 0.35);
       state.screenFlashColor = FACTION_COLORS[enemy.faction];
       // Phase transition explosion
       for (let i = 0; i < 50; i++) {
@@ -3001,7 +3016,10 @@ function handleBossWeakPointHits(state: ShmupState, events: ShmupEvents): void {
 
       const wpX = boss.pos.x + wp.offset.x;
       const wpY = boss.pos.y + wp.offset.y;
-      if (!hitTest(bullet.pos, bullet.radius, { x: wpX, y: wpY }, 12)) continue;
+      // Generous hit radius — on a 360px-wide T'VAK, a 12px hitbox at each
+      // mount makes the weak points nearly impossible to land on. 28px is
+      // large enough that aimed fire at a visible cannon actually registers.
+      if (!hitTest(bullet.pos, bullet.radius, { x: wpX, y: wpY }, 28)) continue;
 
       wp.hp -= bullet.damage * 2; // double damage on weak points
       // For named-weapon subsystems (T'VAK) the main hull is shielded
