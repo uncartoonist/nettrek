@@ -125,6 +125,10 @@ export class ShmupRenderer {
   private h = 0;
   private stars: { x: number; y: number; speed: number; brightness: number }[] = [];
   private farStars: { x: number; y: number; brightness: number }[] = [];
+  // Galactic-depth layer: barely moves, fills the void with depth
+  private deepStars: { x: number; y: number; brightness: number; hue: number }[] = [];
+  // Foreground dust motes: drift across the front, sell the speed
+  private dustMotes: { x: number; y: number; speed: number; size: number }[] = [];
   private envObjects: EnvObject[] = [];
   private nebulaImgs: HTMLImageElement[] = [];
   private nebulasLoaded = false;
@@ -137,12 +141,28 @@ export class ShmupRenderer {
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
-    // Multi-layer starfield
+    // Multi-layer starfield — four depths for real parallax
     for (let i = 0; i < 100; i++) {
       this.stars.push({ x: Math.random(), y: Math.random(), speed: 0.5 + Math.random() * 2, brightness: 0.3 + Math.random() * 0.7 });
     }
     for (let i = 0; i < 50; i++) {
       this.farStars.push({ x: Math.random(), y: Math.random(), brightness: 0.1 + Math.random() * 0.2 });
+    }
+    // Galactic dust — barely-moving distant stars, faint tinted (blue/white/amber)
+    for (let i = 0; i < 70; i++) {
+      this.deepStars.push({
+        x: Math.random(), y: Math.random(),
+        brightness: 0.05 + Math.random() * 0.12,
+        hue: 200 + Math.random() * 60,  // 200-260, cold blue-violet
+      });
+    }
+    // Foreground dust motes — drift fast across the front of the action
+    for (let i = 0; i < 25; i++) {
+      this.dustMotes.push({
+        x: Math.random(), y: Math.random(),
+        speed: 3 + Math.random() * 4,
+        size: 0.5 + Math.random() * 1.5,
+      });
     }
 
     // Load all background images
@@ -256,6 +276,13 @@ export class ShmupRenderer {
 
       // (removed: per-beat faction-colored screen tint)
       ctx.globalAlpha = 1;
+    }
+
+    // Galactic backdrop stars — barely move (parallax depth)
+    for (const star of this.deepStars) {
+      const sy = ((star.y * h + state.scrollY * 0.04) % h + h) % h;
+      ctx.fillStyle = `hsla(${star.hue},80%,75%,${star.brightness})`;
+      ctx.fillRect(star.x * w, sy, 1, 1);
     }
 
     // Far stars (slow parallax) — on top of nebula
@@ -1744,6 +1771,22 @@ export class ShmupRenderer {
       ctx.beginPath();
       ctx.arc(state.player.pos.x, state.player.pos.y, state.player.width * 0.7, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Foreground dust motes ── sells the speed of forward motion.
+    // These draw on top of gameplay but under the HUD. Scroll multiplier
+    // ensures they slow when the music is quiet and surge on drops.
+    {
+      const motePower = Math.min(1.4, state.scrollSpeed / 1.0);
+      ctx.fillStyle = 'rgba(220,230,255,0.5)';
+      for (const m of this.dustMotes) {
+        const sy = ((m.y * h + state.scrollY * m.speed * motePower) % (h + 80) + (h + 80)) % (h + 80) - 40;
+        // Streak length proportional to speed — sense of motion
+        const streak = m.speed * 1.4 * motePower;
+        ctx.globalAlpha = 0.18 + m.size * 0.18;
+        ctx.fillRect(m.x * w, sy, m.size, streak);
+      }
       ctx.globalAlpha = 1;
     }
 
