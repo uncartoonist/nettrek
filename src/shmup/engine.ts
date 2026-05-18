@@ -723,11 +723,17 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     if (!enemy.alive) continue;
     updateEnemy(state, enemy, W, H);
 
-    // Enemy firing
-    enemy.fireTimer--;
-    if (enemy.fireTimer <= 0 && p.alive) {
-      fireEnemyWeapon(state, enemy, p.pos);
-      enemy.fireTimer = enemy.fireCooldown;
+    // Enemy firing — bosses keep their own cooldown logic. All other
+    // enemies fire EXCLUSIVELY on the music's beat (triggered by the
+    // director below). The fireTimer field now counts how many beats
+    // have been missed; we'll skip the cooldown tick here entirely.
+    // (Beat-driven fire is handled in applyDirectorCommand → triggerFire.)
+    if (enemy.type === 'boss') {
+      enemy.fireTimer--;
+      if (enemy.fireTimer <= 0 && p.alive) {
+        fireEnemyWeapon(state, enemy, p.pos);
+        enemy.fireTimer = enemy.fireCooldown;
+      }
     }
   }
   state.enemies = state.enemies.filter(e => e.alive || e.pos.y < H + 100);
@@ -2881,17 +2887,32 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
   }
 
   // ── Waveform payload trigger ──
-  // The current beat band + amplitude is stashed on state so fireEnemyWeapon
-  // can shape projectiles to match the music's current texture (bass = long
-  // life heavy slow, mid = normal, high = short life fast proximity).
+  // EVERY beat fires EVERY eligible enemy. Each enemy type has a beat
+  // cadence so different ships fire at different rhythms — fighters and
+  // turrets fire on every beat, cruisers every other, bombers every
+  // third. This is what gives the game a perpetual heartbeat: the music
+  // literally pulses the projectiles into existence.
+  //
+  // fireTimer is repurposed as a "beats since last fire" counter.
   if (cmd.triggerFire) {
     state.currentBeatType = cmd.beatType ?? 'mid';
     state.currentBeatStrength = cmd.beatStrength ?? 0.5;
-    state.beatFlashTimer = 12;
+    state.beatFlashTimer = 14;
+    // Per-type beat cadence — how many beats between fires
+    const beatEvery: Record<string, number> = {
+      fighter: 1,   // fires every beat — fastest
+      turret:  1,
+      elite:   2,   // every 2nd beat
+      cruiser: 2,
+      bomber:  3,   // slow heavy — every 3rd beat
+    };
     for (const enemy of state.enemies) {
       if (!enemy.alive || enemy.type === 'boss') continue;
-      if (enemy.fireTimer < enemy.fireCooldown * 0.5) {
-        enemy.fireTimer = 0; // force fire next frame
+      const cadence = beatEvery[enemy.type] ?? 2;
+      enemy.fireTimer = (enemy.fireTimer ?? 0) + 1;
+      if (enemy.fireTimer >= cadence && state.player.alive) {
+        fireEnemyWeapon(state, enemy, state.player.pos);
+        enemy.fireTimer = 0;
       }
     }
   }

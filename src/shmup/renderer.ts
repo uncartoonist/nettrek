@@ -313,22 +313,24 @@ export class ShmupRenderer {
     const THREAT_CORE = '#ffeeff';
 
     // ── Music heartbeat — drives the pulse of EVERY enemy bullet ──
-    // state.beatPulse spikes to ~0.5-0.7 on every beat (bass/mid/high)
-    // and decays at ~0.93/frame. The live bandBass also adds a slower
-    // sustained breathing. Together this gives every projectile —
-    // including long-lifespan bass bullets — a continuous throb in
-    // time with the music. The game feels alive even mid-flight.
-    const bp = state.beatPulse;                     // sharp thump (0-1)
-    const lowBreath = state.bandBass * 0.35;        // sustained low rumble
-    const pulse = Math.min(1.1, bp + lowBreath);    // total pulse intensity
-    // Tiny tick-based jitter so even a dead-quiet song still breathes
-    const calmBreath = 0.05 * Math.sin(state.tick * 0.06);
-    const sizePulse = 1 + pulse * 0.30 + calmBreath;       // halo size mult
-    const corePulse = 1 + pulse * 0.18;                    // core size mult
-    const alphaPulse = 1 + pulse * 0.35;                   // brightness boost
-    // Hue shift on bass beats — gets brighter / hotter as bass thumps
+    // state.beatPulse spikes hard on every beat (bass/mid/high) and
+    // decays at ~0.93/frame. Even long-lifespan bass projectiles that
+    // have been on screen for seconds keep visibly THROBBING on every
+    // subsequent beat. The screen has an unmistakable heartbeat under it.
+    const bp = state.beatPulse;
+    const lowBreath = state.bandBass * 0.4;
+    const pulse = Math.min(1.4, bp + lowBreath);
+    const calmBreath = 0.08 * Math.sin(state.tick * 0.06);
+    // MUCH stronger size pulse — bullets visibly expand and contract.
+    const sizePulse = 1 + pulse * 0.65 + calmBreath;
+    const corePulse = 1 + pulse * 0.32;
+    const alphaPulse = 1 + pulse * 0.6;
+    // Sharp peak flash — extra bright ring drawn around each bullet
+    // when the beat is at its peak (bp > 0.3). Decays with bp.
+    const peakFlash = Math.max(0, bp - 0.15);
+    // Hue shift on bass beats — halo runs hotter when the bass kicks
     const haloR = Math.round(60 + bp * 80);
-    const haloG = Math.round(40 + bp * 40);
+    const haloG = Math.round(40 + bp * 70);
 
     for (const bullet of state.enemyBullets) {
       const fadeAlpha = Math.min(1, bullet.ttl / 15);
@@ -340,21 +342,27 @@ export class ShmupRenderer {
       const c = bullet.color;
 
       // ── Universal threat warning halo — beat-driven throb ──
-      // Halo size scales with state.beatPulse so every bullet visibly
-      // thumps on the beat. Even a long-lived bass projectile that has
-      // been on screen for 3 seconds keeps pulsing on each subsequent
-      // beat. Halo gets BRIGHTER + slightly hotter on bass thumps.
       const baseHaloR = Math.max(8, r * 2.8);
       const haloRPulsed = baseHaloR * sizePulse;
       const haloGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, haloRPulsed);
-      haloGrad.addColorStop(0, `rgba(255, ${haloR}, 110, ${Math.min(1, 0.55 * fadeAlpha * alphaPulse)})`);
-      haloGrad.addColorStop(0.55, `rgba(255, ${haloG}, 90, ${Math.min(1, 0.25 * fadeAlpha * alphaPulse)})`);
+      haloGrad.addColorStop(0, `rgba(255, ${haloR}, 110, ${Math.min(1, 0.65 * fadeAlpha * alphaPulse)})`);
+      haloGrad.addColorStop(0.5, `rgba(255, ${haloG}, 90, ${Math.min(1, 0.35 * fadeAlpha * alphaPulse)})`);
       haloGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = haloGrad;
       ctx.beginPath(); ctx.arc(0, 0, haloRPulsed, 0, Math.PI * 2); ctx.fill();
-      // Apply a subtle core scale to the bullet's own shape too via the
-      // canvas transform — so the body silhouette also throbs (but less
-      // dramatically, so the hitbox stays honest)
+
+      // ── Peak-beat flash ring ──
+      // A bright white-pink ring that snaps around each bullet at the
+      // exact moment of a beat. Fades fast with the beat decay so it
+      // really reads as "PUMP" rather than ambient glow.
+      if (peakFlash > 0.02) {
+        ctx.strokeStyle = `rgba(255, 200, 220, ${Math.min(1, peakFlash * 1.4 * fadeAlpha)})`;
+        ctx.lineWidth = 1.8 + peakFlash * 2;
+        const ringR = baseHaloR * (1.05 + peakFlash * 0.55);
+        ctx.beginPath(); ctx.arc(0, 0, ringR, 0, Math.PI * 2); ctx.stroke();
+      }
+
+      // Body silhouette also throbs (less dramatic so hitbox stays honest)
       ctx.scale(corePulse, corePulse);
       // Shape source of truth: bullet.shape if explicitly set (e.g. T'VAK
       // weapon hardpoints), otherwise the legacy color-prefix dispatch
