@@ -47,6 +47,10 @@ export interface PlayerShip {
   tractorSlowTimer: number;
 }
 
+// Waveform payload context — set on every triggerFire frame so enemy
+// weapon code can shape the projectile to the music's current band.
+export type BeatBand = 'bass' | 'mid' | 'high';
+
 // ── Enemies ────────────────────────────────────────────────
 export type EnemyType = 'fighter' | 'bomber' | 'cruiser' | 'elite' | 'turret' | 'boss';
 
@@ -246,6 +250,14 @@ export interface ShmupState {
   // Music-reactive state
   beatPulse: number;      // 0-1, decays each frame — for visual beat effects
   musicIntensity: number;  // 0-1, overall energy from analyzer
+  // Live music bands (smoothed) — for the waveform indicator + payload sizing
+  bandBass: number;       // 0-1
+  bandMid: number;        // 0-1
+  bandHigh: number;       // 0-1
+  // Current beat being fired (set on triggerFire frames)
+  currentBeatType: BeatBand;
+  currentBeatStrength: number; // 0-1, amplitude of the most recent peak
+  beatFlashTimer: number;      // counts down, drives the visual pulse on the EQ
   // Screen dimensions
   screenW: number;
   screenH: number;

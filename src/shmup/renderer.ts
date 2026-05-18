@@ -1755,6 +1755,9 @@ export class ShmupRenderer {
     // Armory icon bar — top center
     this.drawArmoryBar(ctx, state, w);
 
+    // Live music waveform EQ — top-left, under HUD bar
+    this.drawWaveformIndicator(ctx, state);
+
     // Respawn countdown overlay
     if (state.phase === 'respawning') {
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -4202,6 +4205,64 @@ export class ShmupRenderer {
       ctx.globalAlpha = 1;
     }
 
+    ctx.textAlign = 'left';
+  }
+
+  // ── Live waveform / beat indicator ──
+  // Tiny 3-band EQ in the top-left showing live BASS / MID / HIGH energy.
+  // Each band flashes when its beat fires, and the bar that fired colors
+  // the most recent payload's type so the player can SEE the heartbeat
+  // and anticipate what kind of bullets are about to launch.
+  private drawWaveformIndicator(ctx: CanvasRenderingContext2D, state: ShmupState): void {
+    const baseX = 12;
+    const baseY = 90;  // below the existing HUD score readout
+    const barW = 6;
+    const barH = 28;
+    const gap = 5;
+    const flash = state.beatFlashTimer / 12;
+
+    const bands: { level: number; label: string; color: string; isLive: boolean }[] = [
+      { level: state.bandBass, label: 'B', color: '#ff3366', isLive: state.currentBeatType === 'bass' && flash > 0 },
+      { level: state.bandMid,  label: 'M', color: '#ffaa44', isLive: state.currentBeatType === 'mid'  && flash > 0 },
+      { level: state.bandHigh, label: 'H', color: '#44ddff', isLive: state.currentBeatType === 'high' && flash > 0 },
+    ];
+
+    // Backplate
+    const plateW = (barW + gap) * bands.length + 16;
+    const plateH = barH + 22;
+    ctx.fillStyle = 'rgba(8,14,20,0.55)';
+    ctx.fillRect(baseX - 6, baseY - 6, plateW, plateH);
+    ctx.strokeStyle = 'rgba(120,160,200,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(baseX - 6 + 0.5, baseY - 6 + 0.5, plateW - 1, plateH - 1);
+
+    // Bars
+    for (let i = 0; i < bands.length; i++) {
+      const b = bands[i];
+      const x = baseX + i * (barW + gap);
+      // Dim background bar
+      ctx.fillStyle = 'rgba(60,80,100,0.35)';
+      ctx.fillRect(x, baseY, barW, barH);
+      // Filled portion — live level
+      const fill = Math.max(0, Math.min(1, b.level));
+      const fy = baseY + barH - barH * fill;
+      ctx.fillStyle = b.color;
+      ctx.globalAlpha = 0.75;
+      ctx.fillRect(x, fy, barW, barH * fill);
+      ctx.globalAlpha = 1;
+      // Flash if this band just fired a payload
+      if (b.isLive) {
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.6 * flash;
+        ctx.fillRect(x - 1, baseY - 1, barW + 2, barH + 2);
+        ctx.globalAlpha = 1;
+      }
+      // Label
+      ctx.fillStyle = b.isLive ? '#ffffff' : '#aaaaaa';
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(b.label, x + barW / 2, baseY + barH + 11);
+    }
     ctx.textAlign = 'left';
   }
 

@@ -27,6 +27,12 @@ export interface DirectorCommand {
   spawnObstacleType?: 'rock' | 'mine' | 'barrier' | 'vortex' | 'comet' | 'energyribbon' | 'splitter';
   signatureTrigger?: SignatureMechanic; // tells engine to fire a signature mechanic event this frame
   aggression: number;                    // 0-1, profile aggression for fire patterns
+  // ── Waveform payload — which band peaked + how strong ──
+  // The engine reads these on triggerFire to modulate bullet lifespan,
+  // size, and speed. Bass beats fire long-lived heavy slow shots;
+  // hihat beats fire short-lived fast proximity sparks; mid is normal.
+  beatType?: 'bass' | 'mid' | 'high';
+  beatStrength?: number;  // 0-1, amplitude of the peak that fired
 }
 
 // ── Smoothed state ──
@@ -403,15 +409,31 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   }
 
   // ══════════════════════════════════════════════════════════════
-  // FIRE HEARTBEAT — music's only gameplay job now
+  // WAVEFORM PAYLOAD — music's only gameplay job now
   // ══════════════════════════════════════════════════════════════
-  // Every bass OR mid beat triggers all on-screen enemies that are ready
-  // to fire. The game has a perpetual heartbeat under it: enemies shoot
-  // on the drum, regardless of stage/profile. Aggression + power + armada
-  // tighten how fast the cooldown can refresh.
-  const beatHit = energy.bassHit || (energy.midHit && sMid > 0.2);
-  if (beatHit && fireCD <= 0) {
+  // Every peak in the music's waveform fires a payload from all on-screen
+  // enemies. The BAND that peaked determines what the payload feels like:
+  //   bass kick   → LONG-LIFE HEAVY SLOW shot (sustained sweeping threat)
+  //   mid snare   → NORMAL shot (balanced)
+  //   hihat snap  → SHORT-LIFE FAST SMALL shot (proximity-only, lingers
+  //                 just long enough to bite if you're close)
+  // So sometimes the threat reaches across the screen, sometimes it's
+  // a quick sting — driven entirely by the music's texture.
+  //
+  // beatStrength is the amplitude at the moment of fire; bigger peaks
+  // produce bigger payloads.
+  let beatType: 'bass' | 'mid' | 'high' | undefined;
+  let beatStrength = 0;
+  // Classify in priority order — bass beats are the heaviest and win when
+  // both bass + mid hit on the same frame.
+  if (energy.bassHit && sBass > 0.18) { beatType = 'bass'; beatStrength = sBass; }
+  else if (energy.midHit && sHigh > 0.35 && sHigh > sMid * 0.7) { beatType = 'high'; beatStrength = sHigh; }
+  else if (energy.midHit && sMid > 0.18) { beatType = 'mid'; beatStrength = sMid; }
+
+  if (beatType && fireCD <= 0) {
     cmd.triggerFire = true;
+    cmd.beatType = beatType;
+    cmd.beatStrength = Math.min(1, beatStrength);
     const cooldownBase = 38 - profile.aggression * 18;
     const tighten = 1 + power * 0.5 + (armada - 1) * 0.6;
     fireCD = Math.max(6, Math.floor(cooldownBase / tighten));

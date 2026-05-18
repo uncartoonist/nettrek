@@ -39,6 +39,12 @@ export function createShmupState(): ShmupState {
     bossMaxHp: 0,
     beatPulse: 0,
     musicIntensity: 0,
+    bandBass: 0,
+    bandMid: 0,
+    bandHigh: 0,
+    currentBeatType: 'mid',
+    currentBeatStrength: 0,
+    beatFlashTimer: 0,
     screenW: 0,
     screenH: 0,
     screenShake: 0,
@@ -107,6 +113,8 @@ function createPlayer(): PlayerShip {
     tractorSlowTimer: 0,
   };
 }
+
+// Defaults for the new waveform state — applied lazily in createShmupState below.
 
 function loadUpgrades(): Record<string, number> {
   try {
@@ -1290,6 +1298,13 @@ function fireEnemyWeapon(state: ShmupState, enemy: Enemy, playerPos: Vec2): void
   const bulletCap = state.deathCount >= 3 ? 20 : state.deathCount >= 1 ? 25 : 30;
   if (state.enemyBullets.length > bulletCap) return;
 
+  // ── Waveform payload context ──
+  // Remember how many bullets exist BEFORE this enemy fires. After the
+  // switch we'll modulate just the newly-pushed bullets by the current
+  // beat band: bass = long-life heavy slow, hihat = short-life fast small,
+  // mid = unchanged. This is what gives the game its musical heartbeat.
+  const beatStart = state.enemyBullets.length;
+
   switch (enemy.type) {
     case 'fighter': {
       // Fast red bolt — short range, easy to dodge
@@ -1380,6 +1395,35 @@ function fireEnemyWeapon(state: ShmupState, enemy: Enemy, playerPos: Vec2): void
     case 'boss':
       fireBossPattern(state, enemy);
       break;
+  }
+
+  // ── Apply the waveform modulation to the bullets just fired ──
+  // beatType comes from the music director's most recent triggerFire.
+  // bass: bullets live ~2x longer, ~1.4x bigger, ~0.65x speed (sustained sweeping threat)
+  // mid:  normal (no change)
+  // high: bullets live ~0.4x (short proximity bite), ~0.8x size, ~1.3x speed
+  // The strength of the beat scales these — bigger peaks = bigger payloads.
+  const beat = state.currentBeatType;
+  const bs = state.currentBeatStrength;
+  let ttlMult = 1, rMult = 1, sMult = 1;
+  if (beat === 'bass') {
+    ttlMult = 1.8 + bs * 0.4;
+    rMult = 1.35 + bs * 0.25;
+    sMult = 0.65;
+  } else if (beat === 'high') {
+    ttlMult = 0.42;
+    rMult = 0.82;
+    sMult = 1.30 + bs * 0.15;
+  }
+  if (ttlMult !== 1 || rMult !== 1 || sMult !== 1) {
+    for (let i = beatStart; i < state.enemyBullets.length; i++) {
+      const b = state.enemyBullets[i];
+      b.ttl = Math.max(8, Math.floor(b.ttl * ttlMult));
+      b.maxTtl = b.ttl;
+      b.radius = b.radius * rMult;
+      b.vel.x *= sMult;
+      b.vel.y *= sMult;
+    }
   }
 }
 
@@ -2836,16 +2880,22 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
     spawnEnemy(state, e.type, e.faction, e.x * W, undefined, undefined, e.drop);
   }
 
-  // Trigger fire — make all enemies fire NOW (on the beat)
+  // ── Waveform payload trigger ──
+  // The current beat band + amplitude is stashed on state so fireEnemyWeapon
+  // can shape projectiles to match the music's current texture (bass = long
+  // life heavy slow, mid = normal, high = short life fast proximity).
   if (cmd.triggerFire) {
+    state.currentBeatType = cmd.beatType ?? 'mid';
+    state.currentBeatStrength = cmd.beatStrength ?? 0.5;
+    state.beatFlashTimer = 12;
     for (const enemy of state.enemies) {
       if (!enemy.alive || enemy.type === 'boss') continue;
-      // Only fire if cooldown is close (don't override long cooldowns)
       if (enemy.fireTimer < enemy.fireCooldown * 0.5) {
         enemy.fireTimer = 0; // force fire next frame
       }
     }
   }
+  if (state.beatFlashTimer > 0) state.beatFlashTimer--;
 
   // Spawn floating powerup during quiet sections
   if (cmd.spawnPowerUp && W > 0) {

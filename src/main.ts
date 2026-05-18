@@ -459,6 +459,12 @@ function loop() {
     musicAnalyzer.update();
     const energy = musicAnalyzer.energy;
 
+    // Stash smoothed live band levels on state so the renderer can draw
+    // the waveform EQ indicator. Smoothing keeps the bars from juddering.
+    state.bandBass = state.bandBass * 0.6 + energy.bass * 0.4;
+    state.bandMid  = state.bandMid  * 0.6 + energy.mid  * 0.4;
+    state.bandHigh = state.bandHigh * 0.6 + energy.high * 0.4;
+
     // Director translates music energy into gameplay commands
     if (state.phase === 'playing' && !state.bossActive) {
       const cmd = getDirectorCommand(energy, state);
