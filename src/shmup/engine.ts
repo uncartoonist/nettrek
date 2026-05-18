@@ -446,6 +446,13 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       }
 
       if (target) {
+        // Phaser also respects death-sequence invulnerability — see the
+        // bullet path. Without this, phaser damage during the T'VAK death
+        // sequence dragged hp negative and the second killEnemy zeroed
+        // alive before pos.y was pushed off-screen → victory never fired.
+        if (target.type === 'boss' && target.deathSequence !== undefined) {
+          p.phaserCharge -= DRAIN_RATE * 0.4;
+        } else {
         // ── Subsystem shielding applies to the phaser too ──
         // Previously the phaser drained boss.hp directly, bypassing the
         // shield. That caused boss kills with the phaser, lockups, and
@@ -500,6 +507,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
             color: '#ff6633', life: 30, maxLife: 30,
           });
         }
+        } // end of death-sequence-else
       } else {
         // No target found within range — end beam
         p.phaserBeamActive = false;
@@ -848,6 +856,14 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       // from the kill. Now the encounter starts only when both can see it.
       // Bosses are exempt: their entrance is its own choreographed event.
       if (enemy.type !== 'boss' && enemy.pos.y < enemy.height * 0.4) continue;
+      // ── Death-sequence invulnerability ──
+      // Once a boss enters its scripted death sequence, further bullets do
+      // nothing. Without this, hp was pinned to 1 by the sequence and the
+      // NEXT bullet would call killEnemy on the standard path — setting
+      // alive=false before runTvakDeathSequence reached frame 180. That
+      // meant the boss was never pushed off-screen, state.enemies.length
+      // never hit 0, and victory never triggered. Game appeared to lock.
+      if (enemy.type === 'boss' && enemy.deathSequence !== undefined) continue;
       if (hitTest(bullet.pos, bullet.radius, enemy.pos, enemy.width / 2)) {
         // ── Subsystem shielding ──
         // For bosses that carry named weapon hardpoints (T'VAK and future

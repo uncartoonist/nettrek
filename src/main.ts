@@ -439,6 +439,64 @@ function quitToHangar() {
 document.getElementById('pause-resume')!.addEventListener('click', (e) => { e.stopPropagation(); hidePauseMenu(); });
 document.getElementById('pause-quit')!.addEventListener('click', (e) => { e.stopPropagation(); quitToHangar(); });
 
+// ── Game-over menu ── tap-friendly retry + return-to-hangar buttons.
+// Shown automatically when state.phase transitions to 'gameover' (the game
+// loop polls and reveals/hides this overlay). Mobile users have no ENTER key
+// to press, so this is the only way out on phone.
+const gameOverMenu = document.createElement('div');
+gameOverMenu.id = 'gameover-menu';
+gameOverMenu.style.cssText = `
+  position:fixed;inset:0;z-index:200;display:none;
+  background:rgba(0,0,0,0.78);
+  font-family:'Courier New',monospace;
+  flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  padding:20px;text-align:center;
+`;
+gameOverMenu.innerHTML = `
+  <h2 style="color:#ff4444;font-size:clamp(26px,6vw,40px);letter-spacing:6px;margin:0;text-shadow:0 0 24px rgba(255,60,60,0.4);">MISSION FAILED</h2>
+  <div id="gameover-stats" style="color:#cccccc;font-size:clamp(11px,2.8vw,13px);letter-spacing:1px;margin-bottom:14px;"></div>
+  <button id="gameover-retry" style="padding:14px 36px;font-size:clamp(14px,3.5vw,18px);font-weight:bold;background:rgba(0,204,255,0.12);border:2px solid #0cc;color:#0cc;cursor:pointer;font-family:'Courier New';border-radius:6px;letter-spacing:2px;min-width:220px;">RETRY MISSION</button>
+  <button id="gameover-hangar" style="padding:14px 36px;font-size:clamp(14px,3.5vw,18px);font-weight:bold;background:rgba(255,221,0,0.10);border:2px solid #cc9;color:#fda;cursor:pointer;font-family:'Courier New';border-radius:6px;letter-spacing:2px;min-width:220px;">RETURN TO HANGAR</button>
+`;
+document.body.appendChild(gameOverMenu);
+
+let gameOverVisible = false;
+function showGameOverMenu() {
+  if (gameOverVisible) return;
+  gameOverVisible = true;
+  const statsEl = document.getElementById('gameover-stats');
+  if (statsEl) {
+    statsEl.innerHTML = `
+      <div>SCORE&nbsp;&nbsp;${state.score.toLocaleString()}</div>
+      <div>COINS&nbsp;&nbsp;⚡${state.player.stars}</div>
+    `;
+  }
+  gameOverMenu.style.display = 'flex';
+  const pb = document.getElementById('pause-btn'); if (pb) pb.style.display = 'none';
+}
+function hideGameOverMenu() {
+  gameOverVisible = false;
+  gameOverMenu.style.display = 'none';
+}
+
+document.getElementById('gameover-retry')!.addEventListener('click', (e) => {
+  e.stopPropagation();
+  hideGameOverMenu();
+  initAudio();
+  resetDirector();
+  startStage(state, state.currentStage);
+  playStageMusic(state.currentStage);
+  const pb = document.getElementById('pause-btn'); if (pb) pb.style.display = 'block';
+});
+document.getElementById('gameover-hangar')!.addEventListener('click', (e) => {
+  e.stopPropagation();
+  hideGameOverMenu();
+  state.phase = 'hangar';
+  stopMusic();
+  setTimeout(() => playMainTheme(), 500);
+  hangar.show();
+});
+
 // Pause button in top-right corner
 document.getElementById('pause-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -498,6 +556,14 @@ function loop() {
 
   if (state.phase === 'playing' || state.phase === 'boss' || state.phase === 'respawning' || state.phase === 'gameover' || state.phase === 'victory') {
     renderer.render(state);
+  }
+
+  // Show / hide the game-over menu based on phase. Reveal once when phase
+  // first enters 'gameover'; hide on any other phase (retry / hangar / etc).
+  if (state.phase === 'gameover' && !gameOverVisible) {
+    showGameOverMenu();
+  } else if (state.phase !== 'gameover' && gameOverVisible) {
+    hideGameOverMenu();
   }
 
   requestAnimationFrame(loop);
