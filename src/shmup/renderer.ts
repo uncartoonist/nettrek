@@ -2054,6 +2054,33 @@ export class ShmupRenderer {
 
     if (p.invulnTimer > 0 && state.tick % 6 < 3) return;
 
+    // ── Combo aura ── faint ring around the ship that scales with combo
+    // level. Replaces the removed text popups with a constant ambient
+    // visual reward for chains. Drawn before the player transform so it
+    // sits behind the ship.
+    if (state.combo >= 3) {
+      const tier = Math.min(1, (state.combo - 2) / 13);  // 3 kills = faint, 15+ = max
+      const auraR = p.width * (1.0 + tier * 0.5);
+      const pulse = 0.6 + Math.sin(state.tick * 0.18) * 0.3;
+      const hue = 50 - tier * 50;  // yellow → red
+      ctx.strokeStyle = `hsl(${hue}, 95%, 60%)`;
+      ctx.lineWidth = 1.5 + tier * 1.5;
+      ctx.globalAlpha = 0.35 * pulse * (0.6 + tier * 0.4);
+      ctx.beginPath();
+      ctx.arc(p.pos.x, p.pos.y, auraR, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner glow at higher tiers
+      if (tier > 0.5) {
+        ctx.strokeStyle = `hsl(${hue}, 100%, 75%)`;
+        ctx.lineWidth = 0.8;
+        ctx.globalAlpha = 0.55 * pulse * tier;
+        ctx.beginPath();
+        ctx.arc(p.pos.x, p.pos.y, auraR * 0.78, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     ctx.save();
     ctx.translate(p.pos.x, p.pos.y);
 
