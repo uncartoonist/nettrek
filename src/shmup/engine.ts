@@ -2671,6 +2671,34 @@ function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
       type: 'shield', value: 1, magnetizable: true,
     });
   }
+
+  // ── Kill weight ── bigger ships earn camera + screen feedback. Fighters
+  // pop quietly; cruisers/elites jolt the screen; bosses get full handling
+  // in the death sequence (not here).
+  if (enemy.type !== 'boss') {
+    if (scale >= 1.8) {
+      // Elite / cruiser — meaningful shake + brief flash
+      state.screenShake = Math.max(state.screenShake, 5 + scale);
+      state.screenFlash = Math.max(state.screenFlash, 0.22);
+      state.screenFlashColor = '#ffd29a';
+      // Lingering smoke plume that drifts down (looks like wreckage smoke)
+      for (let i = 0; i < 14; i++) {
+        state.particles.push({
+          pos: { x: cx + (Math.random() - 0.5) * W * 0.5, y: cy + (Math.random() - 0.5) * H * 0.5 },
+          vel: { x: (Math.random() - 0.5) * 0.8, y: 0.4 + Math.random() * 0.6 },
+          life: 70 + Math.random() * 50, maxLife: 120,
+          color: ['#332218', '#1f1812', '#2a1f15'][Math.floor(Math.random() * 3)],
+          size: 5 + Math.random() * 7,
+        });
+      }
+    } else if (scale >= 1.4) {
+      // Bomber / turret — modest shake
+      state.screenShake = Math.max(state.screenShake, 3 + scale);
+    } else {
+      // Fighter — tiny shake so a chain of kills still feels rhythmic
+      state.screenShake = Math.max(state.screenShake, 1.5);
+    }
+  }
 }
 
 function hitPlayer(state: ShmupState, events: ShmupEvents): void {
