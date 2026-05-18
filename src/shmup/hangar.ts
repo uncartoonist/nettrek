@@ -294,14 +294,35 @@ export class HangarScreen {
       #hangar-screen {
         position: fixed; inset: 0; z-index: 100;
         background: radial-gradient(ellipse at center, #001525 0%, #000508 100%);
-        display: flex; align-items: center; justify-content: center;
-        font-family: 'Courier New', monospace; color: #ccc; overflow-y: auto;
+        font-family: 'Courier New', monospace; color: #ccc;
+        /* Native vertical scroll — block layout. Previously used
+           flex+align-items:center which clipped the top of overflowing
+           content on phones. Horizontal centering happens on .hangar-panel
+           via margin:auto so the layout still looks centered. */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       #hangar-wireframe {
         position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
         pointer-events: none; z-index: 0; opacity: 0.035;
       }
-      .hangar-panel { text-align: center; max-width: 700px; padding: 30px; width: 100%; position: relative; z-index: 1; }
+      .hangar-panel {
+        text-align: center; max-width: 700px; width: 100%;
+        margin: 0 auto; padding: 30px;
+        position: relative; z-index: 1; box-sizing: border-box;
+        /* Honor iPhone notch / home indicator */
+        padding-top: max(30px, env(safe-area-inset-top));
+        padding-bottom: max(30px, env(safe-area-inset-bottom));
+      }
+      @media (max-width: 480px) {
+        .hangar-panel { padding: 18px 14px; padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+        .hangar-title { font-size: 28px !important; letter-spacing: 3px !important; }
+        .hangar-stars { font-size: 14px !important; margin-bottom: 18px !important; }
+        .upgrade-row { gap: 8px !important; padding: 10px 6px !important; }
+        .upgrade-name { font-size: 12px !important; }
+        .upgrade-desc { font-size: 10px !important; }
+        .bar-seg { width: 10px !important; height: 8px !important; }
+      }
       .hangar-title { color: #0cc; font-size: 42px; letter-spacing: 6px; margin-bottom: 6px; text-shadow: 0 0 30px rgba(0,204,255,0.3); }
       .hangar-stars { color: #ffdd00; font-size: 18px; margin-bottom: 28px; }
       .hangar-upgrades { text-align: left; margin-bottom: 30px; }
