@@ -4283,32 +4283,60 @@ export class ShmupRenderer {
     const s = Math.min(1, w / 500);
     const fs = Math.max(9, Math.floor(11 * s));
 
-    // Left side — score + lives only
-    ctx.font = `${fs}px Courier New`;
+    // ── Bottom-left status panel ── backplate so critical info reads against
+    // bright nebula backgrounds. Lives are biggest (most consequential),
+    // shields below, then score and combo. The panel auto-sizes to content.
+    const panelX = 8;
+    const panelY = h - 64;
+    const panelW = 140;
+    const panelH = 60;
+    ctx.fillStyle = 'rgba(6,12,20,0.55)';
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+    ctx.strokeStyle = 'rgba(120,160,200,0.20)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+    // Lives — prominent hearts, slightly pulsing when low
+    const heartSize = Math.max(13, Math.floor(15 * s));
+    ctx.font = `${heartSize}px Courier New`;
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#ccc';
-    ctx.fillText(`${state.score.toLocaleString()}`, 10, h - 12);
+    const lowLives = p.lives <= 1;
+    const lifePulse = lowLives ? 0.7 + Math.sin(state.tick * 0.18) * 0.3 : 1;
+    ctx.fillStyle = lowLives ? '#ff4444' : '#ff8888';
+    ctx.globalAlpha = lifePulse;
+    ctx.fillText('♥'.repeat(Math.max(0, p.lives)), panelX + 8, panelY + 18);
+    ctx.globalAlpha = 1;
 
-    // Combo (only when active)
-    if (state.combo > 1) {
-      ctx.fillStyle = '#ffdd00';
-      ctx.fillText(`x${state.combo}`, 10, h - 28);
-    }
-
-    // Lives + shields — bottom left
-    ctx.fillStyle = '#ff8888';
-    ctx.fillText('♥'.repeat(p.lives), 10, h - 44);
+    // Shields — distinct row below lives
     if (p.shields > 0) {
-      ctx.fillStyle = '#44ff44';
-      ctx.globalAlpha = 0.7;
-      ctx.fillText('■'.repeat(Math.max(0, p.shields)), 10 + p.lives * 12, h - 44);
+      ctx.font = `${Math.max(10, Math.floor(12 * s))}px Courier New`;
+      ctx.fillStyle = '#44ff88';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText('▮'.repeat(Math.max(0, p.shields)), panelX + 8, panelY + 34);
       ctx.globalAlpha = 1;
     }
 
-    // Right side — coins only
+    // Score
+    ctx.font = `${fs}px Courier New`;
+    ctx.fillStyle = '#cccccc';
+    ctx.fillText(state.score.toLocaleString(), panelX + 8, panelY + 50);
+
+    // Combo (only when active, sits to the right of score)
+    if (state.combo > 1) {
+      ctx.fillStyle = '#ffdd00';
+      const comboGlow = 0.7 + Math.sin(state.tick * 0.2) * 0.3;
+      ctx.globalAlpha = comboGlow;
+      ctx.fillText(`×${state.combo}`, panelX + 80, panelY + 50);
+      ctx.globalAlpha = 1;
+    }
+
+    // Right side — coins
     ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(6,12,20,0.55)';
+    ctx.fillRect(w - 70, h - 28, 62, 22);
     ctx.fillStyle = '#ffdd00';
-    ctx.fillText(`⚡${p.stars}`, w - 50, h - 12);
+    ctx.font = `${fs + 1}px Courier New`;
+    ctx.fillText(`⚡${p.stars}`, w - 14, h - 12);
 
     // Stage name
     const stage = state.stages[state.currentStage];
