@@ -228,7 +228,10 @@ function updateInput(): void {
     const dy = targetY - state.player.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 2) {
-      const speed = Math.min(dist, 60) / 60;
+      // Wider ramp (0→100px) than before (0→60px) so the ship doesn't
+      // slam into max speed for small motions — feels smoother under
+      // pencil/touch where micro-jitter is common.
+      const speed = Math.min(dist, 100) / 100;
       input.moveX = (dx / dist) * speed;
       input.moveY = (dy / dist) * speed;
     } else {

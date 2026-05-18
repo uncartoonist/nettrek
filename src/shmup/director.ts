@@ -7,14 +7,14 @@
 // Bass = power. Mid = rhythm. High = sparkle.
 
 import type { MusicEnergy } from '../audio/analyzer';
-import type { ShmupState, Faction, EnemyType, PowerUpType } from './types';
+import type { ShmupState, Faction, EnemyType, PowerUpType, MoveStyle } from './types';
 import {
   profileForStage, sampleEnemy, sampleObstacle, getTriggerEnergy,
   type MusicProfile, type SignatureMechanic,
 } from './musicProfiles';
 
 export interface DirectorCommand {
-  spawnEnemies: { type: EnemyType; faction: Faction; x: number; drop?: PowerUpType }[];
+  spawnEnemies: { type: EnemyType; faction: Faction; x: number; drop?: PowerUpType; formationId?: number; moveStyle?: MoveStyle; hp?: number; yOffset?: number }[];
   triggerFire: boolean;
   spawnPowerUp: PowerUpType | null;
   scrollSpeedMult: number;
@@ -64,6 +64,7 @@ export function resetDirector(): void {
   rhythmPhase = 0;
   intensityMemory = 0;
   framesSinceBeat = 0;
+  nextFormationId = 1;
 }
 
 // ── Player power score — how loaded out is the ship right now? ──
@@ -71,7 +72,7 @@ export function resetDirector(): void {
 // this to crank up spawn density / max enemies / cadence so a maxed-out
 // loadout still feels meaningfully challenged. "If my ship has tons of
 // firepower and it's destroying everything, it's not very fun."
-function playerPower(state: ShmupState): number {
+export function playerPower(state: ShmupState): number {
   const p = state.player;
   const weaponScore = (
     Math.min(5, p.mainGunLevel) / 5 +
@@ -256,7 +257,100 @@ const FORMATIONS: FormationFn[] = [
     out.push({ type: 'fighter', faction, x: 0.68 });
     return out;
   },
+  // ─── PAWN SWARM — 12-16 expendable fighters in 2 wide rows ───
+  // Low HP each, but the sheer count means the player has to thread
+  // through bullets while killing them. They naturally screen any heavier
+  // ships spawning behind in the same wave window.
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 12 + Math.floor(d * 4);
+    const row1 = Math.ceil(n / 2);
+    const row2 = n - row1;
+    // Front row — top of screen
+    for (let i = 0; i < row1; i++) {
+      const x = 0.06 + (i / Math.max(1, row1 - 1)) * 0.88;
+      out.push({ type: 'fighter', faction, x, hp: 2, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    // Second row — staggered, slightly behind
+    for (let i = 0; i < row2; i++) {
+      const x = 0.12 + (i / Math.max(1, row2 - 1)) * 0.76;
+      out.push({ type: 'fighter', faction, x, hp: 2, yOffset: -80 });
+    }
+    return out;
+  },
+  // ─── VANGUARD — pawn screen + heavy escort behind ───
+  // 6-8 pawns at the front (yOffset 0) act as a shield wall while one
+  // cruiser/elite spawns ~200px farther back. By the time the pawns reach
+  // mid-screen and start dying, the heavy is in firing position. This is
+  // the formation the user specifically asked for.
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const npawns = 6 + Math.floor(d * 3);
+    const heavy: EnemyType = d > 0.45 ? 'elite' : 'cruiser';
+    // Pawn screen across the front
+    for (let i = 0; i < npawns; i++) {
+      const x = 0.12 + (i / Math.max(1, npawns - 1)) * 0.76;
+      out.push({ type: 'fighter', faction, x, hp: 2 });
+    }
+    // Heavy escort, well behind the screen — patrols independently
+    out.push({ type: heavy, faction, x: 0.5, yOffset: -220, moveStyle: 'patrol', drop: pickDrop(d, energy) });
+    return out;
+  },
+  // ─── BREACH WAVE — pawn V-screen + elite at the back point ───
+  // Tactical-feeling formation: pawns fan outward forming a V that
+  // protects the elite directly behind. The elite stays alive longer
+  // and gets close enough to threaten the player with its homing orbs.
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const npawns = 7;
+    // V-shape — outer pawns higher (farther from player), tip lower (closer)
+    for (let i = 0; i < npawns; i++) {
+      const t = i / (npawns - 1);
+      const x = 0.2 + t * 0.6;
+      const dy = -Math.abs(t - 0.5) * 100;  // wings spawn further back
+      out.push({ type: 'fighter', faction, x, hp: 2, yOffset: dy });
+    }
+    // Elite tucked behind the tip of the V — orbits once it arrives
+    out.push({ type: 'elite', faction, x: 0.5, yOffset: -260, moveStyle: 'orbit', drop: pickDrop(d, energy) });
+    return out;
+  },
 ];
+
+// Formation movement classification — which indices fly as a tight unit
+// (locked-formation style) vs which fly loose (free patrol / orbit). Tight
+// formations get a shared formationId so they descend in lockstep instead
+// of every ship oscillating independently. Loose formations let each ship
+// pick its own movement style for variety.
+//   0  V-shape           — tight
+//   1  Inverted V        — tight
+//   2  Line abreast      — tight
+//   3  Diagonal sweep    — loose (sweep entry)
+//   4  Pincer            — loose
+//   5  Scatter cloud     — loose
+//   6  Column            — tight
+//   7  Mirror pair       — loose
+//   8  Side rush         — loose (dive entry)
+//   9  Snake             — tight
+//  10  Ramming spear     — tight
+//  11  Heavy + escorts   — loose
+const TIGHT_FORMATIONS = new Set([
+  0, 1, 2, 6, 9, 10,
+  // Pawn-screen formations (12, 13, 14) — pawns hold a tight wall to deflect
+  // fire while their heavy escort closes the distance. Heavies in 13/14
+  // explicitly set their own moveStyle so they aren't pinned to the wall.
+  12, 13, 14,
+]);
+// Loose formations that should bias toward a specific entry style
+const LOOSE_ENTRY: Record<number, MoveStyle> = {
+  3: 'patrol',  // diagonal sweep → patrol after entry
+  4: 'patrol',  // pincer → patrol the flanks
+  5: 'patrol',  // scatter → individual patrols
+  7: 'orbit',   // mirror pair → orbit the flanks
+  8: 'dive',    // side rush → aggressive dive
+  11: 'patrol', // heavy + escorts → escorts patrol around heavy
+};
+
+let nextFormationId = 1;
 
 // Pick a random formation, possibly biased by profile's dominant band.
 // Bass profiles slightly prefer heavier formations; high profiles prefer
@@ -267,7 +361,25 @@ function makeFormation(d: number, faction: Faction, energy: MusicEnergy, profile
   const r = Math.random();
   if (profile.dominantBand === 'high' && r < 0.4) idx = [3, 5, 8, 9][Math.floor(Math.random() * 4)]; // diagonal / scatter / siderush / snake
   else if (profile.dominantBand === 'bass' && r < 0.4) idx = [6, 7, 10, 11][Math.floor(Math.random() * 4)]; // column / mirror / spear / heavy
-  return FORMATIONS[idx](d, faction, energy, profile);
+  const spawns = FORMATIONS[idx](d, faction, energy, profile);
+  if (TIGHT_FORMATIONS.has(idx)) {
+    const fid = nextFormationId++;
+    for (const s of spawns) {
+      // Respect any explicit moveStyle from the formation (e.g. heavies in
+      // vanguard / breach formations that want to patrol independently of
+      // the pawn wall).
+      if (s.moveStyle === undefined) {
+        s.formationId = fid;
+        s.moveStyle = 'formation';
+      }
+    }
+  } else {
+    const entry = LOOSE_ENTRY[idx];
+    if (entry) for (const s of spawns) {
+      if (s.moveStyle === undefined) s.moveStyle = entry;
+    }
+  }
+  return spawns;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -338,9 +450,11 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   // ══════════════════════════════════════════════════════════════
   // SCROLL SPEED — breathes with the music
   // Quiet = slow drift. Intense = rushing forward. Drops = surge.
+  // Tightened range so quiet→intense isn't a 2x swing — keeps the
+  // playfield feeling controllable instead of zoomy.
   // ══════════════════════════════════════════════════════════════
-  const baseScroll = 0.7 + normalizedEnergy * 0.5;
-  const dropSurge = energy.isDrop ? 0.4 : 0;
+  const baseScroll = 0.65 + normalizedEnergy * 0.35;
+  const dropSurge = energy.isDrop ? 0.25 : 0;
   cmd.scrollSpeedMult = baseScroll + dropSurge;
 
   // ══════════════════════════════════════════════════════════════

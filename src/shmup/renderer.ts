@@ -1689,17 +1689,6 @@ export class ShmupRenderer {
       ctx.globalAlpha = 1;
     }
 
-    // ── Chain level indicator (top-center) — static, no strobing ──
-    if (state.chainLevel >= 3) {
-      ctx.textAlign = 'center';
-      ctx.fillStyle = state.chainLevel >= 8 ? '#ff4444' : state.chainLevel >= 5 ? '#ffaa00' : '#44ffaa';
-      ctx.globalAlpha = 0.75;
-      ctx.font = `bold ${12 + Math.min(state.chainLevel, 6)}px Courier New`;
-      ctx.fillText(`⚡ CHAIN x${state.chainLevel}`, w / 2, h - 20);
-      ctx.textAlign = 'left';
-      ctx.globalAlpha = 1;
-    }
-
     // Particles — with glow and trails for premium feel
     for (const p of state.particles) {
       const alpha = p.life / p.maxLife;
@@ -2201,6 +2190,9 @@ export class ShmupRenderer {
     const p = state.player;
     const target = state.enemies.find(e => e.id === p.lockOnTarget && e.alive);
     if (!target) return;
+    // Guard against bad target positions (off-screen / NaN) — otherwise the
+    // beam can stretch across the whole screen, painting an "errant line".
+    if (!isFinite(target.pos.x) || !isFinite(target.pos.y)) return;
 
     const t = state.tick;
     const intensity = Math.max(0.3, p.phaserCharge);
@@ -2218,24 +2210,22 @@ export class ShmupRenderer {
     const px = -ny;
     const py = nx;
 
-    // ── Outer atmospheric haze ──
-    ctx.strokeStyle = '#ff5522';
-    ctx.lineWidth = 14 + intensity * 6;
-    ctx.globalAlpha = 0.10 * intensity;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+    // Beam strokes use 'butt' caps. Previously 'round' caps created a 10px
+    // semicircle of orange at each endpoint — visible as an orange disc
+    // around the target on long beams.
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
 
-    // ── Mid beam body ──
+    // ── Mid beam body — primary visible beam ──
     ctx.strokeStyle = '#ff7733';
-    ctx.lineWidth = 7 + intensity * 3;
+    ctx.lineWidth = 4 + intensity * 2;
     ctx.globalAlpha = 0.55 * intensity;
     ctx.beginPath();
     ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
 
     // ── Inner blazing core ──
     ctx.strokeStyle = '#ffdd99';
-    ctx.lineWidth = 3 + intensity * 1.5;
+    ctx.lineWidth = 2 + intensity * 1;
     ctx.globalAlpha = 0.95 * intensity;
     ctx.beginPath();
     ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
@@ -2248,33 +2238,25 @@ export class ShmupRenderer {
       const cy = sy + ny * len * pulsePos;
       ctx.globalAlpha = (1 - pulsePos) * 0.7 * intensity;
       ctx.beginPath();
-      ctx.ellipse(cx, cy, 5 + (1 - pulsePos) * 4, 1.8, Math.atan2(ny, nx), 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 4 + (1 - pulsePos) * 3, 1.4, Math.atan2(ny, nx), 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // ── Electric crackle along the beam (3 segments, jittered each frame) ──
+    // ── Subtle crackle along the beam ──
     ctx.strokeStyle = '#ffe9aa';
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.55 * intensity;
+    ctx.globalAlpha = 0.4 * intensity;
     ctx.beginPath();
-    let prevX = sx;
-    let prevY = sy;
     const segs = 6;
+    ctx.moveTo(sx, sy);
     for (let i = 1; i <= segs; i++) {
       const ft = i / segs;
-      const jitter = (Math.sin(t * 0.5 + i * 1.7) + Math.sin(t * 0.83 + i * 2.3)) * 3 * intensity;
+      const jitter = (Math.sin(t * 0.5 + i * 1.7) + Math.sin(t * 0.83 + i * 2.3)) * 2 * intensity;
       const cx2 = sx + nx * len * ft + px * jitter;
       const cy2 = sy + ny * len * ft + py * jitter;
-      if (i === 1) ctx.moveTo(prevX, prevY);
       ctx.lineTo(cx2, cy2);
-      prevX = cx2; prevY = cy2;
     }
     ctx.stroke();
-
-    // (Removed: muzzle-glow + impact-scorch radial gradients. On big
-    // targets — bosses especially — those gradients bloomed into a
-    // giant orange disc that ate the screen. The beam itself reads as
-    // 'phaser hitting that thing' just fine.)
 
     // ── Lock-on reticle — small fixed-size cross, never blooms ──
     // Capped so even on a giant T'VAK boss the reticle stays compact

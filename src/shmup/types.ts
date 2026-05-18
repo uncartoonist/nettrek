@@ -54,6 +54,15 @@ export type BeatBand = 'bass' | 'mid' | 'high';
 // ── Enemies ────────────────────────────────────────────────
 export type EnemyType = 'fighter' | 'bomber' | 'cruiser' | 'elite' | 'turret' | 'boss';
 
+// ── Movement archetype for non-boss enemies ──────────────────────
+// formation: locked to a spawn-time x, descends slowly with the formation
+// patrol:    swoops to a settle-y then strafes left-right
+// drift:     gentle descent with subtle horizontal wobble
+// orbit:     circles around homeX while descending
+// dive:      angled approach toward the player then continues past
+// anchor:    settles near the top of the screen and holds station
+export type MoveStyle = 'formation' | 'patrol' | 'drift' | 'orbit' | 'dive' | 'anchor';
+
 export interface Enemy {
   id: number;
   type: EnemyType;
@@ -70,6 +79,13 @@ export interface Enemy {
   path?: PathPoint[];     // scripted movement path
   pathIdx: number;
   dropType?: PowerUpType;
+  // ── Movement profile ──
+  moveStyle?: MoveStyle;
+  formationId?: number;   // enemies sharing this id fly as a group
+  homeX?: number;         // anchor x for the oscillation/orbit
+  moveSeed?: number;      // randomization for phase offsets, etc
+  settleY?: number;       // y the enemy settles at for patrol/anchor styles
+  enterTimer?: number;    // frames since spawn, used for entry curves
   // Boss specific
   phase?: number;
   phaseTimer?: number;
@@ -359,10 +375,10 @@ export interface TerrainSegment {
 }
 
 // ── Constants ──────────────────────────────────────────────
-export const PLAYER_SPEED = 14;
+export const PLAYER_SPEED = 11;
 export const PLAYER_WIDTH = 28;
 export const PLAYER_HEIGHT = 32;
-export const SCROLL_SPEED = 1.5;
+export const SCROLL_SPEED = 1.0;
 export const INVULN_TIME = 90; // 1.5 seconds
 
 export const FACTION_COLORS: Record<Faction, string> = {
@@ -373,12 +389,12 @@ export const FACTION_COLORS: Record<Faction, string> = {
 };
 
 export const ENEMY_STATS: Record<EnemyType, { hp: number; width: number; height: number; fireCooldown: number }> = {
-  fighter:  { hp: 3,   width: 36, height: 34, fireCooldown: 90 },
-  bomber:   { hp: 8,   width: 50, height: 44, fireCooldown: 130 },
-  cruiser:  { hp: 20,  width: 64, height: 70, fireCooldown: 70 },
-  elite:    { hp: 35,  width: 54, height: 54, fireCooldown: 50 },
-  turret:   { hp: 15,  width: 40, height: 40, fireCooldown: 80 },
-  boss:     { hp: 150, width: 160, height: 100, fireCooldown: 30 },
+  fighter:  { hp: 6,    width: 36, height: 34, fireCooldown: 90 },
+  bomber:   { hp: 18,   width: 50, height: 44, fireCooldown: 130 },
+  cruiser:  { hp: 55,   width: 64, height: 70, fireCooldown: 70 },
+  elite:    { hp: 95,   width: 54, height: 54, fireCooldown: 50 },
+  turret:   { hp: 35,   width: 40, height: 40, fireCooldown: 80 },
+  boss:     { hp: 1200, width: 160, height: 100, fireCooldown: 30 },
 };
 
 // ── Environment Objects ────────────────────────────────────

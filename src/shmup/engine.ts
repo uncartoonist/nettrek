@@ -1,11 +1,12 @@
 import {
   ShmupState, PlayerShip, Enemy, Bullet, PowerUp, Particle, Obstacle, Outpost, TerrainSegment, Vec2,
-  GamePhase, EnemyType, PowerUpType, Faction, OutpostType, TerrainType,
+  GamePhase, EnemyType, PowerUpType, Faction, OutpostType, TerrainType, MoveStyle,
   PLAYER_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT, SCROLL_SPEED, INVULN_TIME,
   FACTION_COLORS, ENEMY_STATS,
 } from './types';
 import { STAGES } from './stages';
 import type { DirectorCommand } from './director';
+import { playerPower } from './director';
 import { profileForStage } from './musicProfiles';
 import type { SignatureMechanic } from './musicProfiles';
 
@@ -1118,18 +1119,6 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   if (state.chainTimer > 0) state.chainTimer--;
   else state.chainLevel = Math.max(0, state.chainLevel - 1);
 
-  // Chain popup — only at meaningful milestones (3, 5, 8) on the first frame
-  // they're reached, so we don't spam a popup on every kill in a long chain.
-  if (state.chainTimer === 49 && (state.chainLevel === 3 || state.chainLevel === 5 || state.chainLevel === 8)) {
-    const chainText = state.chainLevel >= 8 ? 'UNSTOPPABLE!' : state.chainLevel >= 5 ? `CHAIN x${state.chainLevel}!!` : `CHAIN x${state.chainLevel}`;
-    state.popups.push({
-      pos: { x: state.screenW / 2, y: state.screenH * 0.3 },
-      text: chainText,
-      color: state.chainLevel >= 8 ? '#ff4444' : state.chainLevel >= 5 ? '#ffaa00' : '#44ffaa',
-      life: 40, maxLife: 40,
-    });
-  }
-
   // ── Adaptive difficulty — decay dominance toward neutral ──
   state.dominanceScore *= 0.998;
 
@@ -1140,7 +1129,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     state.slowMotion = 90;
     state.screenFlash = 1;
     state.screenFlashColor = '#ffffff';
-    state.screenShake = 15;
+    state.screenShake = 10;
     // Convert all remaining enemy bullets into coins (satisfying screen clear)
     for (const bullet of state.enemyBullets) {
       state.powerUps.push({
@@ -1645,7 +1634,7 @@ function runTvakDeathSequence(state: ShmupState, boss: Enemy): void {
   if (t === 140) {
     state.screenFlash = 1;
     state.screenFlashColor = '#ffffff';
-    state.screenShake = 20;
+    state.screenShake = 12;
     // Massive radial particle burst
     for (let i = 0; i < 120; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -1906,21 +1895,62 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
   }
 }
 
-function spawnEnemy(state: ShmupState, type: EnemyType, faction: Faction, x: number, path?: any[], hp?: number, dropType?: PowerUpType): void {
+// Default movement style by enemy type when the director doesn't specify one.
+// Loose formations and ad-hoc spawns flow through this. Each type has its own
+// flavor so the screen has visual variety even without explicit choreography.
+function defaultMoveStyle(type: EnemyType): MoveStyle {
+  switch (type) {
+    case 'fighter': return Math.random() < 0.7 ? 'patrol' : 'dive';
+    case 'bomber':  return 'drift';
+    case 'cruiser': return 'patrol';
+    case 'elite':   return Math.random() < 0.5 ? 'orbit' : 'patrol';
+    case 'turret':  return 'anchor';
+    case 'boss':    return 'drift';
+  }
+}
+
+function spawnEnemy(
+  state: ShmupState,
+  type: EnemyType,
+  faction: Faction,
+  x: number,
+  path?: any[],
+  hp?: number,
+  dropType?: PowerUpType,
+  moveStyle?: MoveStyle,
+  formationId?: number,
+  yOffset?: number,
+): void {
   const stats = ENEMY_STATS[type];
   // Gentle difficulty curve — barely any pressure early, steadily builds
   const duration = state.stages[state.currentStage]?.duration || 2100;
   const progress = Math.min(state.tick / duration, 1);
   const stageBonus = 1 + state.currentStage * 0.12;
-  // HP: starts at 80%, reaches 150% by end of level
-  const hpScale = (0.8 + progress * 0.7) * stageBonus;
+  // ── HP scales with PLAYER POWER ──
+  // A maxed-out loadout sees ~2.4x HP enemies. Without this scaling, late-
+  // game weapons (level 3 phaser, missiles, drone) one-frame everything.
+  // Pawn formations pass an explicit low hp value that still scales — they
+  // remain expendable shields but not entirely free.
+  const power = playerPower(state);
+  const powerMult = 1 + power * 1.4;
+  const hpScale = (0.8 + progress * 0.7) * stageBonus * powerMult;
   // Fire rate: starts at 170% cooldown (very slow), drops to 70% (fast) by end
   const fireScale = Math.max(0.7, 1.7 - progress * 1.0);
-  const scaledHp = Math.ceil((hp || stats.hp) * hpScale);
+  const scaledHp = Math.max(1, Math.ceil((hp || stats.hp) * hpScale));
+  const W = state.screenW;
+  const H = state.screenH;
+  const style: MoveStyle = moveStyle ?? defaultMoveStyle(type);
+  // Where this ship wants to settle vertically (used by patrol/anchor/orbit)
+  const settleY =
+    type === 'turret'  ? H * 0.18 :
+    type === 'cruiser' ? H * 0.30 :
+    type === 'elite'   ? H * 0.35 :
+    type === 'bomber'  ? H * 0.45 :
+                         H * 0.38;
   state.enemies.push({
     id: nextEnemyId++,
     type, faction,
-    pos: { x, y: -stats.height },
+    pos: { x, y: -stats.height + (yOffset ?? 0) },
     vel: { x: 0, y: 2 },
     width: stats.width,
     height: stats.height,
@@ -1932,6 +1962,12 @@ function spawnEnemy(state: ShmupState, type: EnemyType, faction: Faction, x: num
     path: path as any,
     pathIdx: 0,
     dropType,
+    moveStyle: style,
+    formationId,
+    homeX: x,
+    moveSeed: Math.random() * Math.PI * 2,
+    settleY,
+    enterTimer: 0,
   });
 }
 
@@ -2286,58 +2322,102 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
     return;
   }
 
-  // Smooth flowing movement based on enemy type and ID (creates unique but predictable paths)
+  // ── Non-boss movement — dispatch on moveStyle ──
+  // Each ship has a moveStyle assigned at spawn (defaultMoveStyle by type, or
+  // a director-supplied override). The style determines flight pattern;
+  // homeX, moveSeed, settleY, and enterTimer are per-enemy memory used by
+  // the styles to remain smooth and individual.
+  enemy.enterTimer = (enemy.enterTimer ?? 0) + 1;
   const t = state.tick;
-  const seed = enemy.id * 7.3; // unique per enemy
-  // Gentle speed ramp — very slow drift early, moderate by end
+  const seed = enemy.moveSeed ?? (enemy.id * 0.73);
   const duration = state.stages[state.currentStage]?.duration || 2100;
   const progress = Math.min(state.tick / duration, 1);
-  const speedRamp = 0.4 + progress * 0.6; // 40% speed at start, 100% by end
-  const rawSpeed = { fighter: 1.6, bomber: 1.0, cruiser: 0.6, elite: 1.2, turret: 0.5, boss: 0 }[enemy.type] || 1.0;
+  // Gentle ramp — slow drift early, full pace by end. Top speed cut roughly
+  // 40% vs the old code so small ships no longer "zoom" across.
+  const speedRamp = 0.55 + progress * 0.45;
+  const rawSpeed = {
+    fighter: 0.95, bomber: 0.75, cruiser: 0.55, elite: 0.85, turret: 0.40, boss: 0,
+  }[enemy.type] || 0.8;
   const baseSpeed = rawSpeed * speedRamp;
+  const homeX = enemy.homeX ?? enemy.pos.x;
+  const settleY = enemy.settleY ?? H * 0.4;
+  const style: MoveStyle = enemy.moveStyle ?? 'drift';
 
-  switch (enemy.type) {
-    case 'fighter': {
-      // Fighters: graceful sweeping arcs — sine wave horizontally while drifting down
-      const freq = 0.015 + (seed % 5) * 0.003;
-      const amplitude = W * 0.15 + (seed % 3) * W * 0.05;
-      const startX = enemy.path?.[0]?.x ?? 0.5;
-      enemy.pos.x = (startX * W) + Math.sin(t * freq + seed) * amplitude;
+  switch (style) {
+    case 'formation': {
+      // Locked to homeX, descends straight with a gentle group-bob. The
+      // formationId-shared phase keeps a squadron rocking in sync — looks
+      // like a flight pattern instead of independent oscillators.
+      const fphase = enemy.formationId !== undefined ? enemy.formationId * 1.7 : seed;
+      enemy.pos.x = homeX + Math.sin(t * 0.025 + fphase) * 4;
       enemy.pos.y += baseSpeed;
       break;
     }
-    case 'bomber': {
-      // Bombers: slow steady descent with gentle lateral drift
-      const drift = Math.sin(t * 0.008 + seed) * 0.4;
-      enemy.pos.x += drift;
+    case 'patrol': {
+      // Curve in to settleY, then strafe left-right across a band that
+      // straddles homeX. Below settleY they coast slowly downward so they
+      // eventually clear the screen instead of camping forever.
+      const eased = Math.min(1, enemy.enterTimer / 60); // 1 second to settle
+      if (enemy.pos.y < settleY) {
+        // Easing entry — quick start, gentle settle
+        enemy.pos.y += baseSpeed * (1 + (1 - eased) * 1.4);
+      } else {
+        enemy.pos.y += baseSpeed * 0.25;
+      }
+      // Strafe begins as soon as they're descending; widens once settled
+      const strafeWidth = W * 0.18 * eased;
+      enemy.pos.x = homeX + Math.sin(t * 0.018 + seed) * strafeWidth;
+      break;
+    }
+    case 'drift': {
+      // Slow, heavy descent with a small lateral wobble. Bombers and
+      // anything that wants to feel weighty.
+      enemy.pos.x += Math.sin(t * 0.008 + seed) * 0.35;
       enemy.pos.y += baseSpeed;
       break;
     }
-    case 'cruiser': {
-      // Cruisers: majestically slow, barely move horizontally, imposing presence
-      enemy.pos.x += Math.sin(t * 0.006 + seed) * 0.3;
-      enemy.pos.y += baseSpeed;
+    case 'orbit': {
+      // Circle around a center that drifts slowly downward. Each ship has
+      // its own radius and phase so a pair never overlaps. Looks like
+      // they're "flying around the screen" — exactly the user's ask.
+      const radius = W * 0.10 + (seed % 1) * W * 0.05;
+      const omega = 0.022 + (seed % 1) * 0.008;
+      enemy.pos.x = homeX + Math.cos(t * omega + seed) * radius;
+      enemy.pos.y += baseSpeed * 0.6;
+      // Add a vertical bob to make the orbit visibly elliptical
+      enemy.pos.y += Math.sin(t * omega * 2 + seed) * 0.25;
       break;
     }
-    case 'elite': {
-      // Elites: figure-8 or spiral patterns — more aggressive but still smooth
-      const phase = (t * 0.02 + seed);
-      const startX = enemy.path?.[0]?.x ?? 0.5;
-      enemy.pos.x = (startX * W) + Math.sin(phase) * W * 0.18;
-      enemy.pos.y += baseSpeed + Math.cos(phase * 0.5) * 0.5;
+    case 'dive': {
+      // Aggressive curved approach — angles toward the player's current x
+      // for the first second, then continues past. Used by side-rush
+      // formations and ~20% of free-flying fighters.
+      const target = enemy.enterTimer < 60 ? state.player.pos.x : homeX + (homeX - W / 2);
+      const lerp = 0.025;
+      enemy.pos.x += (target - enemy.pos.x) * lerp;
+      enemy.pos.y += baseSpeed * 1.4;
       break;
     }
-    case 'turret': {
-      // Turrets: very slow drift, almost stationary platforms
-      enemy.pos.y += baseSpeed;
-      enemy.pos.x += Math.sin(t * 0.004 + seed) * 0.2;
+    case 'anchor': {
+      // Settle high on the screen and hold position with tiny drift. The
+      // turret archetype — fires from a fixed platform until destroyed.
+      if (enemy.pos.y < settleY) {
+        enemy.pos.y += baseSpeed;
+      } else {
+        // Damped settle, then micro-drift
+        enemy.pos.y += (settleY - enemy.pos.y) * 0.05;
+        enemy.pos.x = homeX + Math.sin(t * 0.006 + seed) * 6;
+      }
       break;
     }
   }
 
-  // Soft clamping — keep enemies from drifting off screen edges
-  if (enemy.pos.x < enemy.width) enemy.pos.x += 0.5;
-  if (enemy.pos.x > W - enemy.width) enemy.pos.x -= 0.5;
+  // Edge-deflect — push enemies back into the playfield rather than letting
+  // them ride the wall. Stronger than the old 0.5px nudge so orbit/patrol
+  // styles can't slip off-screen.
+  const margin = enemy.width;
+  if (enemy.pos.x < margin) enemy.pos.x += (margin - enemy.pos.x) * 0.15;
+  if (enemy.pos.x > W - margin) enemy.pos.x -= (enemy.pos.x - (W - margin)) * 0.15;
 
   // Remove if far off screen bottom
   if (enemy.pos.y > H + 80) enemy.alive = false;
@@ -2380,18 +2460,8 @@ function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
   state.score += totalScore;
   state.dominanceScore += 1;
 
-  // Floating score popup
-  const popupText = state.combo > 3 ? `+${totalScore} x${state.combo}` : `+${totalScore}`;
-  const popupColor = state.combo > 8 ? '#ffdd00' : state.combo > 4 ? '#44ffaa' : '#ffffff';
-  state.popups.push({
-    pos: { x: enemy.pos.x, y: enemy.pos.y },
-    text: popupText,
-    color: popupColor,
-    life: 45,
-    maxLife: 45,
-  });
-
-  // Combo streak rewards — every 15 kills in a row drops a bonus
+  // Combo streak rewards — every 15 kills in a row drops a bonus. No popup
+  // or flash; the dropped power-up itself is the visible reward.
   if (state.combo > 0 && state.combo % 15 === 0) {
     const bonusTypes: PowerUpType[] = ['emp', 'overdrive', 'drone', 'score2x', 'bomb', 'shield'];
     const bonusType = bonusTypes[Math.floor(Math.random() * bonusTypes.length)];
@@ -2399,9 +2469,6 @@ function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
       pos: { ...enemy.pos }, vel: { x: 0, y: -1 },
       type: bonusType, value: 1, magnetizable: false,
     });
-    state.upgradeFlash = `${state.combo} KILL STREAK!`;
-    state.upgradeFlashTimer = 60;
-    // No screen flash for kill streaks — the popup carries the signal
   }
 
   // ═══ CHAIN REACTION — explosion damages nearby enemies ═══
@@ -2910,7 +2977,7 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
 
   // Spawn enemies from director
   for (const e of cmd.spawnEnemies) {
-    spawnEnemy(state, e.type, e.faction, e.x * W, undefined, undefined, e.drop);
+    spawnEnemy(state, e.type, e.faction, e.x * W, undefined, e.hp, e.drop, e.moveStyle, e.formationId, e.yOffset);
   }
 
   // ── Beat-driven fire ──
