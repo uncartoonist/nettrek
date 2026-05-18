@@ -342,10 +342,20 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   cmd.scrollSpeedMult = baseScroll + dropSurge;
 
   // ══════════════════════════════════════════════════════════════
-  // VISUAL PULSE — the screen breathes with the bass
+  // VISUAL PULSE — the screen + every projectile breathes with EVERY beat
   // ══════════════════════════════════════════════════════════════
-  if (energy.bassHit && sBass > 0.25) {
-    cmd.bgPulse = Math.min(sBass * 0.4, 0.5);
+  // bgPulse drives state.beatPulse, which the renderer multiplies into
+  // enemy-bullet visuals so they throb in time with the music. Driven
+  // by whichever band peaked, with bass hitting hardest.
+  if (energy.bassHit && sBass > 0.18) {
+    cmd.bgPulse = Math.max(cmd.bgPulse, Math.min(sBass * 0.55, 0.70));
+  }
+  if (energy.midHit && sMid > 0.18) {
+    cmd.bgPulse = Math.max(cmd.bgPulse, Math.min(sMid * 0.45, 0.55));
+  }
+  // Hihat-style high-frequency beats also push the pulse, just lighter.
+  if (energy.midHit && sHigh > 0.30) {
+    cmd.bgPulse = Math.max(cmd.bgPulse, Math.min(sHigh * 0.40, 0.45));
   }
   if (energy.midHit && sMid > 0.3) {
     cmd.particleBurst = true;
