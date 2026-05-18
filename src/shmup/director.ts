@@ -49,6 +49,7 @@ let dropRecovery = 0;       // cooldown after a drop (don't spam)
 let lastDropTick = -999;    // when the last drop happened
 let rhythmPhase = 0;        // oscillates with the beat — drives formation timing
 let intensityMemory = 0;    // slow-moving intensity (the "mood" of the last 10 seconds)
+let framesSinceBeat = 0;    // frames since last triggerFire — used by procedural-fallback heartbeat
 
 export function resetDirector(): void {
   sBass = sMid = sHigh = sOverall = 0;
@@ -62,6 +63,7 @@ export function resetDirector(): void {
   lastDropTick = -999;
   rhythmPhase = 0;
   intensityMemory = 0;
+  framesSinceBeat = 0;
 }
 
 // ── Player power score — how loaded out is the ship right now? ──
@@ -419,31 +421,38 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   }
 
   // ══════════════════════════════════════════════════════════════
-  // WAVEFORM PAYLOAD — music's only gameplay job now
+  // WAVEFORM PAYLOAD — every beat fires every enemy
   // ══════════════════════════════════════════════════════════════
-  // Every peak in the music's waveform fires a payload from all on-screen
-  // enemies. The BAND that peaked determines what the payload feels like:
-  //   bass kick   → LONG-LIFE HEAVY SLOW shot (sustained sweeping threat)
-  //   mid snare   → NORMAL shot (balanced)
-  //   hihat snap  → SHORT-LIFE FAST SMALL shot (proximity-only, lingers
-  //                 just long enough to bite if you're close)
-  // So sometimes the threat reaches across the screen, sometimes it's
-  // a quick sting — driven entirely by the music's texture.
-  //
-  // beatStrength is the amplitude at the moment of fire; bigger peaks
-  // produce bigger payloads.
+  // The band that peaked determines the payload feel:
+  //   bass kick   → LONG-LIFE HEAVY SLOW shot
+  //   mid snare   → NORMAL shot
+  //   hihat snap  → SHORT-LIFE FAST SMALL proximity shot
   let beatType: 'bass' | 'mid' | 'high' | undefined;
   let beatStrength = 0;
-  // Classify in priority order — bass beats are the heaviest and win when
-  // both bass + mid hit on the same frame.
-  if (energy.bassHit && sBass > 0.18) { beatType = 'bass'; beatStrength = sBass; }
-  else if (energy.midHit && sHigh > 0.35 && sHigh > sMid * 0.7) { beatType = 'high'; beatStrength = sHigh; }
-  else if (energy.midHit && sMid > 0.18) { beatType = 'mid'; beatStrength = sMid; }
+  // Lower thresholds — most music will fire reliably
+  if (energy.bassHit && sBass > 0.06) { beatType = 'bass'; beatStrength = Math.max(0.3, sBass); }
+  else if (energy.midHit && sHigh > 0.20 && sHigh > sMid * 0.6) { beatType = 'high'; beatStrength = Math.max(0.3, sHigh); }
+  else if (energy.midHit && sMid > 0.06) { beatType = 'mid'; beatStrength = Math.max(0.3, sMid); }
+
+  // ── Procedural fallback heartbeat ──
+  // If the music analyzer hasn't produced a usable beat for too long
+  // (muted audio, autoplay block, quiet track, etc), generate one
+  // ourselves so the game never stops firing. ~70 BPM = every ~50 frames.
+  framesSinceBeat++;
+  if (!beatType && framesSinceBeat > 50) {
+    // Pick a band based on the most-recent live music levels, or
+    // alternate procedurally if music is silent.
+    if (sBass > sMid && sBass > sHigh) beatType = 'bass';
+    else if (sHigh > sMid) beatType = 'high';
+    else beatType = 'mid';
+    beatStrength = Math.max(0.35, sOverall);
+  }
 
   if (beatType && fireCD <= 0) {
     cmd.triggerFire = true;
     cmd.beatType = beatType;
     cmd.beatStrength = Math.min(1, beatStrength);
+    framesSinceBeat = 0;
     const cooldownBase = 38 - profile.aggression * 18;
     const tighten = 1 + power * 0.5 + (armada - 1) * 0.6;
     fireCD = Math.max(6, Math.floor(cooldownBase / tighten));
