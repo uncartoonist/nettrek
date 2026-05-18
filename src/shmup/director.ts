@@ -122,78 +122,144 @@ function pickDrop(d: number, energy: MusicEnergy): PowerUpType | undefined {
   return types[Math.floor(Math.random() * types.length)];
 }
 
-// ── Formation builder — formation shape is chosen per profile's
-// dominant band, but enemy types come from the profile's weights ──
+// ══════════════════════════════════════════════════════════════════
+// FORMATIONS — 12 distinct wave shapes randomly sampled per spawn
+// ══════════════════════════════════════════════════════════════════
+// Each formation is a function that takes difficulty + faction + profile
+// and returns a list of enemies to spawn. The director picks a random
+// formation each time it spawns, so successive waves feel unpredictable.
+
+type FormationFn = (d: number, faction: Faction, energy: MusicEnergy, profile: MusicProfile) => DirectorCommand['spawnEnemies'];
+
+const FORMATIONS: FormationFn[] = [
+  // V — descending V shape, 4-6 enemies
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 4 + Math.floor(d * 2);
+    const cx = 0.3 + Math.random() * 0.4;
+    for (let i = 0; i < n; i++) {
+      const offset = (i - (n - 1) / 2) * 0.10;
+      out.push({ type: pickEnemy(d * 0.7, energy, profile), faction, x: cx + offset, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Inverted V (chevron pointing UP)
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 3 + Math.floor(d * 2);
+    const cx = 0.3 + Math.random() * 0.4;
+    for (let i = 0; i < n; i++) {
+      out.push({ type: pickEnemy(d * 0.7, energy, profile), faction, x: cx + (i - (n - 1) / 2) * 0.08, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Line abreast — wide row
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 5 + Math.floor(d * 2);
+    for (let i = 0; i < n; i++) {
+      const x = 0.1 + (i / (n - 1)) * 0.8;
+      out.push({ type: pickEnemy(d * 0.6, energy, profile), faction, x, drop: i === Math.floor(n / 2) ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Diagonal sweep — left-to-right or right-to-left
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const start = dir > 0 ? 0.15 : 0.85;
+    for (let i = 0; i < 5; i++) {
+      out.push({ type: 'fighter', faction, x: start + dir * i * 0.14, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Pincer — far left + far right
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.08, drop: pickDrop(d, energy) });
+    out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.92 });
+    if (d > 0.4) {
+      out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.18 });
+      out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.82 });
+    }
+    return out;
+  },
+  // Scatter cloud — 6-8 random positions
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 6 + Math.floor(d * 2);
+    for (let i = 0; i < n; i++) {
+      out.push({ type: 'fighter', faction, x: 0.08 + Math.random() * 0.84, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Column — 3 stacked tight at one x
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const cx = 0.2 + Math.random() * 0.6;
+    for (let i = 0; i < 3; i++) {
+      out.push({ type: pickEnemy(d * 0.7, energy, profile), faction, x: cx, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Mirror pair — heavy ships flanking center
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.32, drop: pickDrop(d, energy) });
+    out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.68 });
+    return out;
+  },
+  // Side rush — wave from one side
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const fromLeft = Math.random() < 0.5;
+    const base = fromLeft ? 0.05 : 0.65;
+    for (let i = 0; i < 4; i++) {
+      out.push({ type: 'fighter', faction, x: base + i * 0.07, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Snake — zigzag across the top
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const x = 0.2 + (i / (n - 1)) * 0.6 + Math.sin(i * 1.5) * 0.06;
+      out.push({ type: 'fighter', faction, x, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Ramming spear — tight central column of 3-4
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const n = 3 + Math.floor(d);
+    for (let i = 0; i < n; i++) {
+      const t = i === 0 ? pickEnemy(d, energy, profile) : 'fighter';
+      out.push({ type: t, faction, x: 0.48 + Math.random() * 0.04, drop: i === 0 ? pickDrop(d, energy) : undefined });
+    }
+    return out;
+  },
+  // Heavy single — one cruiser/elite with two fighter escorts
+  (d, faction, energy, profile) => {
+    const out: DirectorCommand['spawnEnemies'] = [];
+    const heavy: EnemyType = d > 0.5 ? 'elite' : 'cruiser';
+    out.push({ type: heavy, faction, x: 0.5, drop: pickDrop(d, energy) });
+    out.push({ type: 'fighter', faction, x: 0.32 });
+    out.push({ type: 'fighter', faction, x: 0.68 });
+    return out;
+  },
+];
+
+// Pick a random formation, possibly biased by profile's dominant band.
+// Bass profiles slightly prefer heavier formations; high profiles prefer
+// scatter/swarm; mid prefers structured formations.
 function makeFormation(d: number, faction: Faction, energy: MusicEnergy, profile: MusicProfile): DirectorCommand['spawnEnemies'] {
-  const out: DirectorCommand['spawnEnemies'] = [];
-
-  // Shape selection is driven by the PROFILE's dominant band (the song's
-  // identity), not the instantaneous frequency band. This makes each song
-  // feel consistent through quiet AND loud moments.
-  const shape = profile.dominantBand;
-
-  if (shape === 'bass') {
-    // BASS — heavy, centered, anchored. Few but strong.
-    out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.4 + Math.random() * 0.2, drop: pickDrop(d, energy) });
-    if (d > 0.55) {
-      // Wingmen on harder difficulty
-      out.push({ type: 'fighter', faction, x: 0.2 });
-      out.push({ type: 'fighter', faction, x: 0.8 });
-    }
-  } else if (shape === 'high') {
-    // HIGH — many fast, scattered across screen
-    const count = Math.min(6, 3 + Math.floor(d * 3));
-    for (let i = 0; i < count; i++) {
-      out.push({
-        type: pickEnemy(d * 0.6, energy, profile),
-        faction,
-        x: 0.1 + Math.random() * 0.8,
-        drop: i === 0 ? pickDrop(d, energy) : undefined,
-      });
-    }
-  } else if (shape === 'wide') {
-    // WIDE — mixed wave: heavy center + flanking light
-    out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.5, drop: pickDrop(d, energy) });
-    if (d > 0.3) {
-      out.push({ type: 'fighter', faction, x: 0.15 });
-      out.push({ type: 'fighter', faction, x: 0.85 });
-    }
-    if (d > 0.6) {
-      out.push({ type: pickEnemy(d * 0.8, energy, profile), faction, x: 0.3 });
-      out.push({ type: pickEnemy(d * 0.8, energy, profile), faction, x: 0.7 });
-    }
-  } else {
-    // MID — rhythmic, formation-based. Cycles through 4 shapes.
-    const form = Math.floor(rhythmPhase * 4) % 4;
-    if (form === 0) {
-      // V-formation
-      const n = 3 + Math.floor(d * 2);
-      const cx = 0.3 + Math.random() * 0.4;
-      for (let i = 0; i < n; i++) {
-        out.push({
-          type: pickEnemy(d * 0.7, energy, profile),
-          faction,
-          x: cx + (i - (n - 1) / 2) * 0.1,
-          drop: i === 0 ? pickDrop(d, energy) : undefined,
-        });
-      }
-    } else if (form === 1) {
-      // Pincer
-      out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.1, drop: pickDrop(d, energy) });
-      out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.9 });
-    } else if (form === 2) {
-      // Diagonal sweep
-      const dir = Math.random() < 0.5 ? 1 : -1;
-      for (let i = 0; i < 3; i++) {
-        out.push({ type: 'fighter', faction, x: 0.4 + dir * i * 0.15 });
-      }
-    } else {
-      // Mirror pair
-      out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.35, drop: pickDrop(d, energy) });
-      out.push({ type: pickEnemy(d, energy, profile), faction, x: 0.65 });
-    }
-  }
-  return out;
+  let idx = Math.floor(Math.random() * FORMATIONS.length);
+  // Light profile bias
+  const r = Math.random();
+  if (profile.dominantBand === 'high' && r < 0.4) idx = [3, 5, 8, 9][Math.floor(Math.random() * 4)]; // diagonal / scatter / siderush / snake
+  else if (profile.dominantBand === 'bass' && r < 0.4) idx = [6, 7, 10, 11][Math.floor(Math.random() * 4)]; // column / mirror / spear / heavy
+  return FORMATIONS[idx](d, faction, energy, profile);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -291,140 +357,64 @@ export function getDirectorCommand(energy: MusicEnergy, state: ShmupState): Dire
   const armadaBonus = Math.floor((armada - 1) * 6); // +0 to +6 enemies in last 30%
 
   // ══════════════════════════════════════════════════════════════
-  // SPAWNING — music tells us when and what; power+armada tell us how much
+  // SPAWNING — purely procedural rhythm. Music no longer gates spawns.
   // ══════════════════════════════════════════════════════════════
-  // Density biases CADENCE (how often we spawn), not the cap. Capping
-  // max enemies by density meant low-density songs could only ever have
-  // 3 enemies on screen, which felt empty.
-  const baseMax = 5 + Math.floor(d * 7) + Math.floor(normalizedEnergy * 3);
-  const maxEnemies = baseMax + powerBonus + armadaBonus;
+  // Spawn cadence varies randomly (quick burst / tight wave / normal / breath)
+  // so successive waves feel unpredictable. Formation is sampled randomly
+  // from FORMATIONS. Power + armada tighten the cadence so a loaded ship
+  // facing a boss-approach has noticeably more on-screen.
+  const baseMax = 7 + Math.floor(d * 8);
+  const maxEnemies = baseMax + powerBonus + armadaBonus;  // up to ~25 at peak
   const currentEnemies = state.enemies.filter(e => e.alive).length;
-  const canSpawn = currentEnemies < maxEnemies && spawnCD <= 0;
 
-  // ── QUIET SECTIONS: breathing room, powerups, scenery ──
-  if (quietStreak > 30) {
-    if (puCD <= 0 && quietStreak % 60 === 0) {
-      const types: PowerUpType[] = ['shield','weapon','missile','overdrive','drone','score2x'];
-      cmd.spawnPowerUp = types[Math.floor(Math.random() * types.length)];
-      puCD = 90;
-    }
-    // Drone-signature: spawn one tough enemy during sustained quiet
-    if (profile.signature === 'drone' && canSpawn && quietStreak === 60 && currentEnemies === 0) {
-      cmd.spawnEnemies.push({ type: d > 0.4 ? 'elite' : 'cruiser', faction, x: 0.5, drop: pickDrop(d, energy) });
-      spawnCD = 120;
-    }
-    if (obsCD <= 0 && Math.random() < 0.01) {
-      cmd.spawnObstacle = true;
-      cmd.spawnObstacleType = sampleObstacle(profile);
-      obsCD = 60;
-    }
-  }
-
-  // ── BUILD-UP: anticipation — spawn turrets, build tension ──
-  else if (buildStreak > 20) {
-    if (canSpawn && Math.random() < 0.03) {
-      cmd.spawnEnemies.push({ type: 'turret', faction, x: 0.15 + Math.random() * 0.7, drop: pickDrop(d, energy) });
-      spawnCD = 30;
-    }
-    cmd.screenShake = buildStreak > 40 ? 0.5 : 0;
-    if (obsCD <= 0 && Math.random() < 0.015 * density) {
-      cmd.spawnObstacle = true;
-      cmd.spawnObstacleType = sampleObstacle(profile);
-      obsCD = 40;
-    }
-  }
-
-  // ── DROP: signature mechanic fires here ──
-  else if (energy.isDrop && dropRecovery <= 0) {
-    dropRecovery = 180;
-    lastDropTick = tick;
-    cmd.fleetEvent = true;
-    cmd.screenShake = 2;
-    cmd.particleBurst = true;
-    // Signature mechanic only fires DURING the level — never during the
-    // boss encounter (the boss has its own attack patterns; a curtain or
-    // vortex storm on top of that is visually overwhelming and previously
-    // appeared as a "surprise horizontal line").
-    if (!state.bossActive) {
-      cmd.signatureTrigger = profile.signature;
-    }
-
-    // Drop wave: amplify with power and armada (more enemies arrive on
-    // the drop when the player is loaded out or approaching the boss).
-    const dropMult = (1 + power * 0.6) * armada;
-    const dropCount = Math.max(2, Math.floor((4 + Math.floor(d * 4) + state.currentStage) * density * dropMult));
-    for (let i = 0; i < dropCount; i++) {
-      cmd.spawnEnemies.push({
-        type: pickEnemy(d, energy, profile),
-        faction,
-        x: 0.08 + Math.random() * 0.84,
-        drop: i === 0 ? pickDrop(d, energy) : i === 1 ? 'shield' : undefined,
-      });
-    }
-    spawnCD = Math.max(20, Math.floor(45 / armada));
-    fleetCD = 180;
-
-    const dropPU: PowerUpType[] = ['overdrive','emp','drone','score2x'];
-    cmd.spawnPowerUp = dropPU[Math.floor(Math.random() * dropPU.length)];
-  }
-
-  // ── TRIGGER HIT: profile-specific band drives spawns ──
-  else if (trigger.hit && canSpawn) {
-    // Density biases the chance but with a floor so low-density songs
-    // (drone, lull) still spawn on most beats. Power and armada bump
-    // both the chance and how quickly we can spawn the next wave.
-    const intensityMult = (1 + power * 0.6) * armada;
-    const spawnChance = Math.max(0.25, (0.45 + d * 0.3 + normalizedEnergy * 0.2) * density * intensityMult);
-    if (Math.random() < spawnChance) {
-      cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
-      spawnCD = Math.floor((40 - normalizedEnergy * 15 - d * 10) / Math.max(0.5, density * intensityMult));
-    }
-  }
-
-  // ── HIHAT SWARM: swarm profile spawns fighter clusters on high-band spikes ──
-  else if (profile.signature === 'swarm' && energy.high > 0.55 && canSpawn && Math.random() < 0.08 * density * armada) {
-    const clusterX = 0.2 + Math.random() * 0.6;
-    // Cluster size scales with armada — more fighters near the boss
-    const clusterN = 3 + Math.floor((armada - 1) * 3);
-    for (let i = 0; i < clusterN; i++) {
-      cmd.spawnEnemies.push({ type: 'fighter', faction, x: clusterX + (Math.random() - 0.5) * 0.2 });
-    }
-    spawnCD = Math.max(15, Math.floor(30 / armada));
-  }
-
-  // ── GUARANTEED TRICKLE: never leave screen empty ──
-  // Fires whenever we're below the minimum presence, regardless of whether
-  // the analyzer is reporting music data. This makes the game still playable
-  // during the first frames before audio kicks in, between songs, or if the
-  // user has muted audio.
-  const minPresence = profile.signature === 'drone' ? 1 : 2;
-  if (guaranteedSpawnTimer <= 0 && currentEnemies < minPresence) {
+  if (spawnCD <= 0 && currentEnemies < maxEnemies) {
     cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
-    guaranteedSpawnTimer = Math.floor(90 - d * 30 - normalizedEnergy * 20);
-    spawnCD = 20;
+
+    // Choose next-spawn delay — random rhythm mode each time
+    const r = Math.random();
+    let base: number;
+    if (r < 0.18)      base = 24;   // quick burst — feels like a flurry
+    else if (r < 0.45) base = 48;   // tight wave — pressure
+    else if (r < 0.85) base = 80;   // normal cadence
+    else               base = 140;  // breathing room
+    // Tighten with power + armada so the level escalates without music gating
+    const tighten = 1 + power * 0.5 + (armada - 1) * 0.6;
+    spawnCD = Math.max(15, Math.floor(base / tighten));
   }
 
-  // ── BASELINE HEARTBEAT: even without any music signal, keep enemies
-  // arriving every ~3 seconds so the level always feels alive. The
-  // music-driven spawns above take priority; this only fires if nothing
-  // else has spawned recently and the screen has room.
-  if (
-    spawnCD <= 0 && currentEnemies < maxEnemies &&
-    state.tick % 180 === 0 && cmd.spawnEnemies.length === 0
-  ) {
+  // Guaranteed trickle if the screen unexpectedly drains
+  if (guaranteedSpawnTimer <= 0 && currentEnemies < 2) {
     cmd.spawnEnemies.push(...makeFormation(d, faction, energy, profile));
-    spawnCD = Math.max(40, 60 - state.currentStage * 4);
+    guaranteedSpawnTimer = 80;
   }
 
-  // ── FIRE SYNC — enemies shoot on the profile's trigger band hit ──
-  // Aggression scales fire rate: aggressive songs fire more often.
-  // Player power and armada both tighten the cooldown — a loaded player
-  // approaching the boss faces noticeably more incoming fire.
-  if (trigger.hit && trigger.value > 0.3 && fireCD <= 0) {
+  // Periodic powerup drops (untied from music quiet sections)
+  if (puCD <= 0 && Math.random() < 0.005) {
+    const types: PowerUpType[] = ['shield','weapon','missile','overdrive','drone','score2x','crew'];
+    cmd.spawnPowerUp = types[Math.floor(Math.random() * types.length)];
+    puCD = 240;
+  }
+
+  // Periodic obstacle drops driven by stage progress, not music
+  if (obsCD <= 0 && d > 0.15 && Math.random() < 0.005 * density) {
+    cmd.spawnObstacle = true;
+    cmd.spawnObstacleType = sampleObstacle(profile);
+    obsCD = Math.floor(60 - d * 15);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // FIRE HEARTBEAT — music's only gameplay job now
+  // ══════════════════════════════════════════════════════════════
+  // Every bass OR mid beat triggers all on-screen enemies that are ready
+  // to fire. The game has a perpetual heartbeat under it: enemies shoot
+  // on the drum, regardless of stage/profile. Aggression + power + armada
+  // tighten how fast the cooldown can refresh.
+  const beatHit = energy.bassHit || (energy.midHit && sMid > 0.2);
+  if (beatHit && fireCD <= 0) {
     cmd.triggerFire = true;
-    const cooldownBase = 40 - profile.aggression * 20;
-    const tighten = 1 + power * 0.6 + (armada - 1) * 0.7;
-    fireCD = Math.max(8, Math.floor((cooldownBase - normalizedEnergy * 10) / tighten));
+    const cooldownBase = 38 - profile.aggression * 18;
+    const tighten = 1 + power * 0.5 + (armada - 1) * 0.6;
+    fireCD = Math.max(6, Math.floor(cooldownBase / tighten));
   }
 
   // ── OBSTACLES — type chosen from profile, rate from high frequencies ──
