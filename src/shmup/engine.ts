@@ -2871,12 +2871,45 @@ function collectPowerUp(state: ShmupState, pu: PowerUp): void {
     state.upgradeFlash = flashText;
     state.upgradeFlashTimer = 90;
   }
-  // Sparkle particles
-  for (let i = 0; i < 8; i++) {
+
+  // ── Pickup burst ── color-coded sparkles + central white flash +
+  // upward-arcing trail so the player SEES the power flow into the ship.
+  // The slot in the armory bar already pulses via upgradeFlash matching,
+  // so this is purely the in-world celebration.
+  const pickupColor: Record<string, string> = {
+    weapon: '#0cffff', crew: '#88ddff', shield: '#44ff88', missile: '#ffaa00',
+    laser: '#ff44ff', phaser: '#ff8833', bomb: '#ff4444', magnet: '#ff88ff',
+    life: '#ff6666', emp: '#44ddff', overdrive: '#ff6622', drone: '#44ffaa',
+    score2x: '#ffdd00', star: '#ffee88',
+  };
+  const col = pickupColor[pu.type] || '#ffff88';
+  // Central white flash
+  for (let i = 0; i < 6; i++) {
+    state.particles.push({
+      pos: { ...pu.pos }, vel: { x: 0, y: 0 },
+      life: 5, maxLife: 5, color: '#ffffff', size: 4 + i,
+    });
+  }
+  // Color-coded radial burst
+  for (let i = 0; i < 14; i++) {
+    const a = (Math.PI * 2 / 14) * i + Math.random() * 0.4;
+    const spd = 2 + Math.random() * 3;
     state.particles.push({
       pos: { ...pu.pos },
-      vel: { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4 },
-      life: 15, maxLife: 15, color: '#ffff88', size: 2,
+      vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+      life: 16 + Math.random() * 10, maxLife: 26,
+      color: col, size: 1.8 + Math.random() * 1.5,
+    });
+  }
+  // Upward-arcing absorption trail toward the player
+  const dx = p.pos.x - pu.pos.x;
+  const dy = p.pos.y - pu.pos.y;
+  const dd = Math.max(1, Math.hypot(dx, dy));
+  for (let i = 0; i < 6; i++) {
+    state.particles.push({
+      pos: { x: pu.pos.x + (Math.random() - 0.5) * 8, y: pu.pos.y + (Math.random() - 0.5) * 8 },
+      vel: { x: (dx / dd) * (3 + Math.random() * 2), y: (dy / dd) * (3 + Math.random() * 2) },
+      life: 14, maxLife: 14, color: col, size: 1.5 + Math.random(),
     });
   }
 }
