@@ -100,7 +100,7 @@ export interface PathPoint {
 }
 
 // ── Bullets ────────────────────────────────────────────────
-export type BulletShape = 'bolt' | 'blob' | 'diamond' | 'orb' | 'needle' | 'missile' | 'torpedo' | 'phaserlance';
+export type BulletShape = 'bolt' | 'blob' | 'diamond' | 'orb' | 'needle' | 'missile' | 'torpedo' | 'phaserlance' | 'ripple';
 
 export interface Bullet {
   pos: Vec2;

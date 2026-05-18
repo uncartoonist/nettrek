@@ -748,9 +748,16 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
 
   // ── Update enemy bullets ───────────────────────────────────
   for (const bullet of state.enemyBullets) {
-    bullet.pos.x += bullet.vel.x;
-    bullet.pos.y += bullet.vel.y;
-    bullet.ttl--;
+    if (bullet.shape === 'ripple') {
+      // Ripple weapon — center is fixed, radius expands each frame.
+      // vel.x stores the per-frame expansion rate; vel.y is unused.
+      bullet.radius += bullet.vel.x;
+      bullet.ttl--;
+    } else {
+      bullet.pos.x += bullet.vel.x;
+      bullet.pos.y += bullet.vel.y;
+      bullet.ttl--;
+    }
   }
   state.enemyBullets = state.enemyBullets.filter(b => b.ttl > 0);
 
@@ -937,10 +944,23 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   // ── Collision: enemy bullets vs player ─────────────────────
   if (p.alive && p.invulnTimer <= 0) {
     for (const bullet of state.enemyBullets) {
-      if (hitTest(bullet.pos, bullet.radius, p.pos, p.width / 3)) {
-        bullet.pos.y = 9999;
-        hitPlayer(state, events);
-        break;
+      if (bullet.shape === 'ripple') {
+        // Ripple — player hit when on the expanding ring's edge band
+        const dx = p.pos.x - bullet.pos.x;
+        const dy = p.pos.y - bullet.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const ringThickness = 14; // damage band width
+        if (Math.abs(dist - bullet.radius) < ringThickness) {
+          bullet.ttl = 0; // consume ripple on hit
+          hitPlayer(state, events);
+          break;
+        }
+      } else {
+        if (hitTest(bullet.pos, bullet.radius, p.pos, p.width / 3)) {
+          bullet.pos.y = 9999;
+          hitPlayer(state, events);
+          break;
+        }
       }
     }
   }
@@ -1294,143 +1314,69 @@ function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolea
 }
 
 function fireEnemyWeapon(state: ShmupState, enemy: Enemy, playerPos: Vec2): void {
-  const angle = Math.atan2(playerPos.y - enemy.pos.y, playerPos.x - enemy.pos.x);
-  // Bullet speed scales with level progress — very slow at start
-  const dur = state.stages[state.currentStage]?.duration || 2100;
-  const prog = Math.min(state.tick / dur, 1);
-  const bSpd = 0.5 + prog * 0.5; // bullet speed multiplier: 50% → 100%
+  // ══════════════════════════════════════════════════════════════
+  // RIPPLE WEAPON — every ship drops a "stone in the water" on each beat
+  // ══════════════════════════════════════════════════════════════
+  // A ring spawns at the enemy's position and expands outward like a
+  // water ripple. The current beat band shapes the ripple:
+  //   bass  → big, slow, long-lived (rolling sweeping threat)
+  //   mid   → balanced
+  //   high  → small, fast, short-lived (proximity bite)
+  // Multiple ships emitting on the same beat create beautiful overlapping
+  // interference patterns. The player dodges between the ring edges.
+  // Bosses keep their own attack patterns and go through the legacy path.
+  if (enemy.type !== 'boss') {
+    const cap = state.deathCount >= 3 ? 30 : state.deathCount >= 1 ? 40 : 60;
+    if (state.enemyBullets.length > cap) return;
 
-  // Cap enemy bullets — adaptive: fewer bullets if player is struggling
-  const bulletCap = state.deathCount >= 3 ? 20 : state.deathCount >= 1 ? 25 : 30;
-  if (state.enemyBullets.length > bulletCap) return;
+    const beat = state.currentBeatType;
+    const bs = state.currentBeatStrength;
+    let expandRate = 2.6;
+    let ttl = 90;
+    let hue = 25;
+    if (beat === 'bass') {
+      expandRate = 1.6 + bs * 0.4;
+      ttl = 160 + Math.floor(bs * 60);
+      hue = 350;
+    } else if (beat === 'high') {
+      expandRate = 4.5 + bs * 0.8;
+      ttl = 32 + Math.floor(bs * 18);
+      hue = 195;
+    } else {
+      expandRate = 2.6 + bs * 0.4;
+      ttl = 90 + Math.floor(bs * 30);
+      hue = 330;
+    }
 
-  // ── Waveform payload context ──
-  // Remember how many bullets exist BEFORE this enemy fires. After the
-  // switch we'll modulate just the newly-pushed bullets by the current
-  // beat band: bass = long-life heavy slow, hihat = short-life fast small,
-  // mid = unchanged. This is what gives the game its musical heartbeat.
-  const beatStart = state.enemyBullets.length;
+    // Per-enemy flavor — different ship types feel different
+    let startR = 6;
+    switch (enemy.type) {
+      case 'fighter': startR = 4;  expandRate *= 1.10; break;
+      case 'bomber':  startR = 10; expandRate *= 0.85; ttl = Math.floor(ttl * 1.15); break;
+      case 'cruiser': startR = 12; expandRate *= 0.90; ttl = Math.floor(ttl * 1.10); break;
+      case 'elite':   startR = 8;  break;
+      case 'turret':  startR = 6;  expandRate *= 1.20; break;
+    }
 
-  switch (enemy.type) {
-    case 'fighter': {
-      // Fast red bolt — short range, easy to dodge
-      const t = 35;
-      state.enemyBullets.push({
-        pos: { x: enemy.pos.x, y: enemy.pos.y + enemy.height / 2 },
-        vel: { x: 0, y: 4 * bSpd },
-        damage: 1, radius: 3, isPlayer: false, color: '#ff2222', trail: true, ttl: t, maxTtl: t,
-      });
-      break;
-    }
-    case 'bomber': {
-      // Orange plasma spread — medium range, wide pattern
-      const t = 55;
-      const spread = 0.8 + prog * 0.3;
-      state.enemyBullets.push({
-        pos: { x: enemy.pos.x - 8, y: enemy.pos.y + enemy.height / 3 },
-        vel: { x: -spread * bSpd, y: 2.5 * bSpd },
-        damage: 1, radius: 5, isPlayer: false, color: '#ff8800', ttl: t, maxTtl: t,
-      });
-      state.enemyBullets.push({
-        pos: { x: enemy.pos.x + 8, y: enemy.pos.y + enemy.height / 3 },
-        vel: { x: spread * bSpd, y: 2.5 * bSpd },
-        damage: 1, radius: 5, isPlayer: false, color: '#ff8800', ttl: t, maxTtl: t,
-      });
-      // Center blob on later stages
-      if (state.currentStage >= 2) {
-        state.enemyBullets.push({
-          pos: { x: enemy.pos.x, y: enemy.pos.y + enemy.height / 3 },
-          vel: { x: 0, y: 3 * bSpd },
-          damage: 1, radius: 6, isPlayer: false, color: '#ffaa22', ttl: t, maxTtl: t,
-        });
-      }
-      break;
-    }
-    case 'cruiser': {
-      // Green phaser beam — long range, aimed, large
-      const t = 100;
-      state.enemyBullets.push({
-        pos: { x: enemy.pos.x, y: enemy.pos.y + enemy.height / 2 },
-        vel: { x: Math.cos(angle) * 2.8 * bSpd, y: Math.sin(angle) * 2.8 * bSpd },
-        damage: 1, radius: 6, isPlayer: false, color: '#22ff66', trail: true, ttl: t, maxTtl: t,
-      });
-      // Secondary turret shot from wing
-      if (state.currentStage >= 3 && state.tick % 2 === 0) {
-        const side = state.tick % 4 < 2 ? -1 : 1;
-        state.enemyBullets.push({
-          pos: { x: enemy.pos.x + side * enemy.width * 0.3, y: enemy.pos.y + enemy.height * 0.3 },
-          vel: { x: Math.cos(angle + side * 0.2) * 2 * bSpd, y: Math.sin(angle + side * 0.2) * 2 * bSpd },
-          damage: 1, radius: 4, isPlayer: false, color: '#88ffaa', ttl: 60, maxTtl: 60,
-        });
-      }
-      break;
-    }
-    case 'elite': {
-      // Purple energy orbs — spiral pattern, medium range
-      const t = 50;
-      const orbCount = 3 + Math.floor(state.currentStage / 2);
-      for (let i = 0; i < Math.min(orbCount, 5); i++) {
-        const a = (Math.PI * 2 / orbCount) * i + state.tick * 0.05;
-        state.enemyBullets.push({
-          pos: { ...enemy.pos },
-          vel: { x: Math.cos(a) * 2.2 * bSpd, y: Math.sin(a) * 2.2 * bSpd },
-          damage: 1, radius: 4, isPlayer: false, color: '#bb44ff', ttl: t, maxTtl: t,
-        });
-      }
-      break;
-    }
-    case 'turret': {
-      // Yellow precision laser — very long range, fast, narrow
-      const t = 90;
-      state.enemyBullets.push({
-        pos: { ...enemy.pos },
-        vel: { x: Math.cos(angle) * 3.5 * bSpd, y: Math.sin(angle) * 3.5 * bSpd },
-        damage: 1, radius: 3, isPlayer: false, color: '#ffee00', trail: true, ttl: t, maxTtl: t,
-      });
-      // Double-shot on later stages
-      if (state.currentStage >= 2) {
-        const offset = 0.15;
-        state.enemyBullets.push({
-          pos: { ...enemy.pos },
-          vel: { x: Math.cos(angle + offset) * 3 * bSpd, y: Math.sin(angle + offset) * 3 * bSpd },
-          damage: 1, radius: 2, isPlayer: false, color: '#ddcc00', trail: true, ttl: 70, maxTtl: 70,
-        });
-      }
-      break;
-    }
-    case 'boss':
-      fireBossPattern(state, enemy);
-      break;
+    state.enemyBullets.push({
+      pos: { x: enemy.pos.x, y: enemy.pos.y },
+      vel: { x: expandRate, y: 0 },   // ripples use vel.x as expandRate
+      damage: 1,
+      radius: startR,
+      isPlayer: false,
+      color: `hsl(${hue}, 90%, 65%)`,
+      ttl,
+      maxTtl: ttl,
+      shape: 'ripple',
+    });
+    return; // skip legacy bullet logic below
   }
 
-  // ── Apply the waveform modulation to the bullets just fired ──
-  // beatType comes from the music director's most recent triggerFire.
-  // bass: bullets live ~2x longer, ~1.4x bigger, ~0.65x speed (sustained sweeping threat)
-  // mid:  normal (no change)
-  // high: bullets live ~0.4x (short proximity bite), ~0.8x size, ~1.3x speed
-  // The strength of the beat scales these — bigger peaks = bigger payloads.
-  const beat = state.currentBeatType;
-  const bs = state.currentBeatStrength;
-  let ttlMult = 1, rMult = 1, sMult = 1;
-  if (beat === 'bass') {
-    ttlMult = 1.8 + bs * 0.4;
-    rMult = 1.35 + bs * 0.25;
-    sMult = 0.65;
-  } else if (beat === 'high') {
-    ttlMult = 0.42;
-    rMult = 0.82;
-    sMult = 1.30 + bs * 0.15;
-  }
-  if (ttlMult !== 1 || rMult !== 1 || sMult !== 1) {
-    for (let i = beatStart; i < state.enemyBullets.length; i++) {
-      const b = state.enemyBullets[i];
-      b.ttl = Math.max(8, Math.floor(b.ttl * ttlMult));
-      b.maxTtl = b.ttl;
-      b.radius = b.radius * rMult;
-      b.vel.x *= sMult;
-      b.vel.y *= sMult;
-    }
-  }
+  // ── Boss path ──
+  // Reference playerPos so the param isn't reported as unused; the
+  // boss attack functions consume state.player.pos themselves.
+  void playerPos;
+  fireBossPattern(state, enemy);
 }
 
 // ═══════════════════════════════════════════════════════════════════

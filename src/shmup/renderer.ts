@@ -335,6 +335,42 @@ export class ShmupRenderer {
     for (const bullet of state.enemyBullets) {
       const fadeAlpha = Math.min(1, bullet.ttl / 15);
       if (fadeAlpha <= 0) continue;
+
+      // ── Ripple weapon — expanding ring centered on the enemy's
+      // spawn position. Drawn outside the normal bullet pipeline because
+      // the visual is a stroked ring, not a translated body. The current
+      // expansion drives line thickness and brightness.
+      if (bullet.shape === 'ripple') {
+        const cx = bullet.pos.x;
+        const cy = bullet.pos.y;
+        const rad = bullet.radius;
+        const lifePct = bullet.ttl / bullet.maxTtl; // 1 at spawn, 0 at end
+        // Pulse with the beat so even mid-flight ripples thump
+        const ringPulse = 1 + state.beatPulse * 0.4;
+        // Soft glowing band
+        const haloThk = 18 * ringPulse;
+        ctx.lineCap = 'round';
+        // Outer wide soft halo
+        ctx.strokeStyle = bullet.color.replace('hsl', 'hsla').replace(')', `, ${0.18 * lifePct * fadeAlpha})`);
+        ctx.lineWidth = haloThk;
+        ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+        // Mid intensity band
+        ctx.strokeStyle = bullet.color.replace('hsl', 'hsla').replace(')', `, ${0.55 * lifePct * fadeAlpha})`);
+        ctx.lineWidth = 6 * ringPulse;
+        ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+        // Inner bright hot line — the actual damage ring
+        ctx.strokeStyle = `rgba(255, 240, 240, ${0.85 * lifePct * fadeAlpha})`;
+        ctx.lineWidth = 2 + state.beatPulse * 1.5;
+        ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+        // Source dot — small bright pip at the ripple's origin (fades fast)
+        const sourceAlpha = Math.max(0, (lifePct - 0.7) / 0.3);
+        if (sourceAlpha > 0) {
+          ctx.fillStyle = `rgba(255, 230, 230, ${sourceAlpha * fadeAlpha})`;
+          ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+        }
+        continue;
+      }
+
       ctx.save();
       ctx.translate(bullet.pos.x, bullet.pos.y);
 
