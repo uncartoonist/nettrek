@@ -747,17 +747,26 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   state.playerBullets = state.playerBullets.filter(b => b.ttl > 0 && b.pos.y > -20 && b.pos.y < H + 20);
 
   // ── Update enemy bullets ───────────────────────────────────
+  // Each bullet adds a small per-frame sine-weave to its trajectory so
+  // the cluster of particles fired on each beat forms a visibly waving
+  // packet, not a straight spray. The weave amplitude is small (~0.4
+  // px per frame perp to velocity) so the bullets still look aimed but
+  // shimmer like a wavefront.
   for (const bullet of state.enemyBullets) {
-    if (bullet.shape === 'ripple') {
-      // Ripple weapon — center is fixed, radius expands each frame.
-      // vel.x stores the per-frame expansion rate; vel.y is unused.
-      bullet.radius += bullet.vel.x;
-      bullet.ttl--;
-    } else {
-      bullet.pos.x += bullet.vel.x;
-      bullet.pos.y += bullet.vel.y;
-      bullet.ttl--;
-    }
+    bullet.pos.x += bullet.vel.x;
+    bullet.pos.y += bullet.vel.y;
+    // Perpendicular weave — phase keyed off bullet's initial x position
+    // so neighboring particles in a cluster oscillate slightly out of
+    // sync, producing the "pulsing wave" feel.
+    const age = (bullet.maxTtl - bullet.ttl) * 0.18;
+    const phase = bullet.pos.x * 0.011;
+    const perpX = -bullet.vel.y;
+    const perpY = bullet.vel.x;
+    const speed = Math.sqrt(bullet.vel.x * bullet.vel.x + bullet.vel.y * bullet.vel.y) || 1;
+    const wave = Math.cos(age + phase) * 0.45;
+    bullet.pos.x += (perpX / speed) * wave;
+    bullet.pos.y += (perpY / speed) * wave;
+    bullet.ttl--;
   }
   state.enemyBullets = state.enemyBullets.filter(b => b.ttl > 0);
 
@@ -944,23 +953,10 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   // ── Collision: enemy bullets vs player ─────────────────────
   if (p.alive && p.invulnTimer <= 0) {
     for (const bullet of state.enemyBullets) {
-      if (bullet.shape === 'ripple') {
-        // Ripple — player hit when on the expanding ring's edge band
-        const dx = p.pos.x - bullet.pos.x;
-        const dy = p.pos.y - bullet.pos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const ringThickness = 14; // damage band width
-        if (Math.abs(dist - bullet.radius) < ringThickness) {
-          bullet.ttl = 0; // consume ripple on hit
-          hitPlayer(state, events);
-          break;
-        }
-      } else {
-        if (hitTest(bullet.pos, bullet.radius, p.pos, p.width / 3)) {
-          bullet.pos.y = 9999;
-          hitPlayer(state, events);
-          break;
-        }
+      if (hitTest(bullet.pos, bullet.radius, p.pos, p.width / 3)) {
+        bullet.pos.y = 9999;
+        hitPlayer(state, events);
+        break;
       }
     }
   }
@@ -1315,68 +1311,97 @@ function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolea
 
 function fireEnemyWeapon(state: ShmupState, enemy: Enemy, playerPos: Vec2): void {
   // ══════════════════════════════════════════════════════════════
-  // RIPPLE WEAPON — every ship drops a "stone in the water" on each beat
+  // PULSE-WAVE PARTICLES — every ship fires a burst of glowing dots
   // ══════════════════════════════════════════════════════════════
-  // A ring spawns at the enemy's position and expands outward like a
-  // water ripple. The current beat band shapes the ripple:
-  //   bass  → big, slow, long-lived (rolling sweeping threat)
-  //   mid   → balanced
-  //   high  → small, fast, short-lived (proximity bite)
-  // Multiple ships emitting on the same beat create beautiful overlapping
-  // interference patterns. The player dodges between the ring edges.
-  // Bosses keep their own attack patterns and go through the legacy path.
-  if (enemy.type !== 'boss') {
-    const cap = state.deathCount >= 3 ? 30 : state.deathCount >= 1 ? 40 : 60;
-    if (state.enemyBullets.length > cap) return;
-
-    const beat = state.currentBeatType;
-    const bs = state.currentBeatStrength;
-    let expandRate = 2.6;
-    let ttl = 90;
-    let hue = 25;
-    if (beat === 'bass') {
-      expandRate = 1.6 + bs * 0.4;
-      ttl = 160 + Math.floor(bs * 60);
-      hue = 350;
-    } else if (beat === 'high') {
-      expandRate = 4.5 + bs * 0.8;
-      ttl = 32 + Math.floor(bs * 18);
-      hue = 195;
-    } else {
-      expandRate = 2.6 + bs * 0.4;
-      ttl = 90 + Math.floor(bs * 30);
-      hue = 330;
-    }
-
-    // Per-enemy flavor — different ship types feel different
-    let startR = 6;
-    switch (enemy.type) {
-      case 'fighter': startR = 4;  expandRate *= 1.10; break;
-      case 'bomber':  startR = 10; expandRate *= 0.85; ttl = Math.floor(ttl * 1.15); break;
-      case 'cruiser': startR = 12; expandRate *= 0.90; ttl = Math.floor(ttl * 1.10); break;
-      case 'elite':   startR = 8;  break;
-      case 'turret':  startR = 6;  expandRate *= 1.20; break;
-    }
-
-    state.enemyBullets.push({
-      pos: { x: enemy.pos.x, y: enemy.pos.y },
-      vel: { x: expandRate, y: 0 },   // ripples use vel.x as expandRate
-      damage: 1,
-      radius: startR,
-      isPlayer: false,
-      color: `hsl(${hue}, 90%, 65%)`,
-      ttl,
-      maxTtl: ttl,
-      shape: 'ripple',
-    });
-    return; // skip legacy bullet logic below
+  // On every beat, each enemy releases a small CLUSTER of particle bullets
+  // aimed at the player. Each particle is a glowing dot; the cluster as
+  // a whole acts as a "wave packet" — bullets fan out slightly, travel
+  // with a gentle sinusoidal weave, and pulse visually with the music.
+  // Multiple ships firing on the same beat creates the feel of multiple
+  // pulsing waves rolling toward the player, all synchronized to the drum.
+  //
+  // The beat BAND shapes the wave:
+  //   bass  → 3-4 large heavy slow particles, long-lived (rolling pulse)
+  //   mid   → 2-3 medium particles, balanced
+  //   high  → 4-5 small fast particles, short-lived (rapid pulse train)
+  if (enemy.type === 'boss') {
+    void playerPos;
+    fireBossPattern(state, enemy);
+    return;
   }
 
-  // ── Boss path ──
-  // Reference playerPos so the param isn't reported as unused; the
-  // boss attack functions consume state.player.pos themselves.
-  void playerPos;
-  fireBossPattern(state, enemy);
+  const cap = state.deathCount >= 3 ? 50 : state.deathCount >= 1 ? 65 : 80;
+  if (state.enemyBullets.length > cap) return;
+
+  // Aim direction toward the player at the moment of fire
+  const dx = state.player.pos.x - enemy.pos.x;
+  const dy = state.player.pos.y - enemy.pos.y;
+  const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+  const aimX = dx / dist;
+  const aimY = dy / dist;
+
+  // Beat-band shaping
+  const beat = state.currentBeatType;
+  const bs = state.currentBeatStrength;
+  let count = 3;
+  let speed = 2.6;
+  let ttl = 95;
+  let particleR = 4;
+  let spread = 0.18;
+  let color = '#ff66cc';
+  if (beat === 'bass') {
+    count = 3 + Math.floor(bs * 1.5);   // 3-4 particles
+    speed = 1.8 + bs * 0.3;             // slow heavy
+    ttl = 140 + Math.floor(bs * 40);    // long-lived
+    particleR = 5 + Math.floor(bs * 2); // big particles
+    spread = 0.22;
+    color = '#ff5577';                  // hot pink-red
+  } else if (beat === 'high') {
+    count = 4 + Math.floor(bs * 1.5);   // 4-5 particles
+    speed = 3.8 + bs * 0.6;             // fast
+    ttl = 38 + Math.floor(bs * 15);     // short
+    particleR = 2.5;                    // tiny
+    spread = 0.30;                      // wider fan
+    color = '#88ddff';                  // cyan
+  } else {
+    count = 2 + Math.floor(bs * 1.5);   // 2-3 particles
+    speed = 2.6 + bs * 0.4;
+    ttl = 85 + Math.floor(bs * 25);
+    particleR = 4;
+    spread = 0.18;
+    color = '#ff88dd';                  // magenta
+  }
+
+  // Per-enemy flavor — different ships fire slightly different packets
+  switch (enemy.type) {
+    case 'fighter': count = Math.max(2, count - 1);                      break;
+    case 'bomber':  particleR += 1; speed *= 0.85; ttl = Math.floor(ttl * 1.15); break;
+    case 'cruiser': count += 1; spread *= 0.7;                           break;
+    case 'elite':   count += 1;                                          break;
+    case 'turret':  spread *= 0.5; speed *= 1.10;                        break;
+  }
+
+  // Fire the cluster — particles fan out in a small arc around the aim
+  // direction, each with a slight sine-weave seeded by index so the
+  // packet doesn't fly straight.
+  const aimAngle = Math.atan2(aimY, aimX);
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0 : i / (count - 1) - 0.5;  // -0.5 .. +0.5
+    const a = aimAngle + t * spread;
+    state.enemyBullets.push({
+      pos: { x: enemy.pos.x, y: enemy.pos.y + enemy.height * 0.3 },
+      vel: { x: Math.cos(a) * speed, y: Math.sin(a) * speed },
+      damage: 1,
+      radius: particleR,
+      isPlayer: false,
+      color,
+      trail: true,
+      ttl,
+      maxTtl: ttl,
+      // Reuse 'orb' shape for fallback rendering — small glowy dot
+      shape: 'orb',
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
