@@ -584,58 +584,109 @@ export class ShmupRenderer {
       ctx.restore();
     }
 
-    // Player bullets — bright blue elongated bolts, clearly different from enemy fire
+    // Player bullets — each weapon type gets a distinct silhouette + trail.
+    // Trails are velocity-aligned streaks drawn before the body so the bullet
+    // reads as "moving fast" even when the projectile itself is small.
     for (const bullet of state.playerBullets) {
       ctx.save();
       ctx.translate(bullet.pos.x, bullet.pos.y);
+
+      // Velocity unit vector, reversed — points to where the bullet was.
+      const sp = Math.max(0.001, Math.hypot(bullet.vel.x, bullet.vel.y));
+      const tx = -bullet.vel.x / sp;
+      const ty = -bullet.vel.y / sp;
+
       if (bullet.color === '#ffaa00') {
-        // Missiles — orange with smoke trail
-        ctx.fillStyle = '#ffaa00';
-        ctx.globalAlpha = 0.9;
+        // ── Missile ── orange warhead, bright exhaust streak, smoke handled engine-side
+        const len = 14;
+        // Outer plume (wider, dimmer)
+        const grad = ctx.createLinearGradient(0, 0, tx * len, ty * len);
+        grad.addColorStop(0, 'rgba(255,170,0,0.85)');
+        grad.addColorStop(0.5, 'rgba(255,100,0,0.45)');
+        grad.addColorStop(1, 'rgba(255,80,0,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = bullet.radius * 1.4;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx * len, ty * len); ctx.stroke();
+        // Warhead — triangular tip pointing forward
+        ctx.fillStyle = '#ffcc44';
+        const ang = Math.atan2(bullet.vel.y, bullet.vel.x) + Math.PI / 2;
+        ctx.rotate(ang);
         ctx.beginPath();
-        ctx.moveTo(0, -bullet.radius * 1.5);
-        ctx.lineTo(-bullet.radius * 0.6, bullet.radius);
-        ctx.lineTo(bullet.radius * 0.6, bullet.radius);
+        ctx.moveTo(0, -bullet.radius * 1.6);
+        ctx.lineTo(-bullet.radius * 0.6, bullet.radius * 0.4);
+        ctx.lineTo(bullet.radius * 0.6, bullet.radius * 0.4);
         ctx.closePath();
         ctx.fill();
-        // Exhaust
-        ctx.fillStyle = '#ff6600';
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.ellipse(0, bullet.radius + 2, 2, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
       } else if (bullet.color === '#ff44ff') {
-        // Laser — bright magenta beam segment
-        ctx.fillStyle = '#ff44ff';
-        ctx.globalAlpha = 0.8;
-        ctx.fillRect(-bullet.radius * 0.3, -bullet.radius * 2, bullet.radius * 0.6, bullet.radius * 4);
-        ctx.fillStyle = '#ffaaff';
-        ctx.globalAlpha = 0.5;
-        ctx.fillRect(-bullet.radius * 0.15, -bullet.radius * 2, bullet.radius * 0.3, bullet.radius * 4);
+        // ── Laser ── long bright magenta streak, additive feel
+        const len = 22;
+        ctx.globalCompositeOperation = 'lighter';
+        const grad = ctx.createLinearGradient(0, 0, tx * len, ty * len);
+        grad.addColorStop(0, 'rgba(255,180,255,0.95)');
+        grad.addColorStop(0.4, 'rgba(255,80,255,0.6)');
+        grad.addColorStop(1, 'rgba(180,0,180,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = bullet.radius * 1.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx * len, ty * len); ctx.stroke();
+        // Bright core dot
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.arc(0, 0, bullet.radius * 0.45, 0, Math.PI * 2); ctx.fill();
       } else if (bullet.color === '#ff8833') {
-        // Phaser — orange sweeping beam
+        // ── Phaser bullet ── golden glow with halo
+        const len = 12;
+        const grad = ctx.createLinearGradient(0, 0, tx * len, ty * len);
+        grad.addColorStop(0, 'rgba(255,200,120,0.9)');
+        grad.addColorStop(1, 'rgba(255,120,40,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = bullet.radius * 1.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx * len, ty * len); ctx.stroke();
+        // Golden core
+        ctx.fillStyle = '#ffe0a0';
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.arc(0, 0, bullet.radius * 0.55, 0, Math.PI * 2); ctx.fill();
+        // Outer halo (gentler — no big disc)
         ctx.fillStyle = '#ff8833';
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath(); ctx.arc(0, 0, bullet.radius * 1.1, 0, Math.PI * 2); ctx.fill();
+      } else if (bullet.color === '#44ffaa') {
+        // ── Wingman drone shot ── green
+        const len = 10;
+        const grad = ctx.createLinearGradient(0, 0, tx * len, ty * len);
+        grad.addColorStop(0, 'rgba(68,255,170,0.8)');
+        grad.addColorStop(1, 'rgba(68,255,170,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = bullet.radius * 1.1;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx * len, ty * len); ctx.stroke();
+        ctx.fillStyle = '#aaffdd';
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.arc(0, 0, bullet.radius * 0.5, 0, Math.PI * 2); ctx.fill();
+      } else {
+        // ── Main gun / wing guns ── bright blue bolt with cyan streak
+        const len = 14;
+        const grad = ctx.createLinearGradient(0, 0, tx * len, ty * len);
+        grad.addColorStop(0, bullet.color);
+        grad.addColorStop(1, 'rgba(0,80,180,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = bullet.radius * 1.1;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx * len, ty * len); ctx.stroke();
+        // Body — elongated bolt
+        ctx.fillStyle = bullet.color;
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bullet.radius * 0.5, bullet.radius * 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // White-hot core
+        ctx.fillStyle = '#ffffff';
         ctx.globalAlpha = 0.85;
         ctx.beginPath();
-        ctx.ellipse(0, 0, bullet.radius * 0.6, bullet.radius * 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffcc88';
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, bullet.radius * 0.25, bullet.radius * 1.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Main gun / wing guns — bright blue elongated bolt
-        ctx.fillStyle = bullet.color;
-        ctx.globalAlpha = 0.9;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, bullet.radius * 0.5, bullet.radius * 2.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Bright core
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.7;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, bullet.radius * 0.2, bullet.radius * 1.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, bullet.radius * 0.22, bullet.radius * 1.3, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();

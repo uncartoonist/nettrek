@@ -745,6 +745,22 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     bullet.pos.x += bullet.vel.x;
     bullet.pos.y += bullet.vel.y;
     bullet.ttl--;
+    // Missile smoke trail — emit every 2 frames behind the warhead so the
+    // missile leaves a thick chemical trail you can read at a glance.
+    if (bullet.color === '#ffaa00' && state.tick % 2 === 0 && state.particles.length < 440) {
+      const sp = Math.max(0.001, Math.hypot(bullet.vel.x, bullet.vel.y));
+      const back = -bullet.radius * 1.4;
+      state.particles.push({
+        pos: {
+          x: bullet.pos.x + (bullet.vel.x / sp) * back + (Math.random() - 0.5) * 2,
+          y: bullet.pos.y + (bullet.vel.y / sp) * back + (Math.random() - 0.5) * 2,
+        },
+        vel: { x: (Math.random() - 0.5) * 0.4, y: 0.3 + Math.random() * 0.3 },
+        life: 14 + Math.random() * 10, maxLife: 24,
+        color: Math.random() > 0.5 ? '#664433' : '#886655',
+        size: 1.5 + Math.random() * 1.2,
+      });
+    }
   }
   state.playerBullets = state.playerBullets.filter(b => b.ttl > 0 && b.pos.y > -20 && b.pos.y < H + 20);
 
