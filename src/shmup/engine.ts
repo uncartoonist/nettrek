@@ -747,25 +747,43 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   state.playerBullets = state.playerBullets.filter(b => b.ttl > 0 && b.pos.y > -20 && b.pos.y < H + 20);
 
   // ── Update enemy bullets ───────────────────────────────────
-  // Each bullet adds a small per-frame sine-weave to its trajectory so
-  // the cluster of particles fired on each beat forms a visibly waving
-  // packet, not a straight spray. The weave amplitude is small (~0.4
-  // px per frame perp to velocity) so the bullets still look aimed but
-  // shimmer like a wavefront.
+  // Per-type behavior driven by the weapon profiles:
+  //   - Homing factor (elite orbs): rotate velocity toward player
+  //   - Perpendicular sine weave (small amplitude) so the trails shimmer
   for (const bullet of state.enemyBullets) {
+    // Homing — rotate velocity toward player by `homing` fraction per frame
+    const h = homingFactorForBullet(bullet.color);
+    if (h > 0 && p.alive) {
+      const tdx = p.pos.x - bullet.pos.x;
+      const tdy = p.pos.y - bullet.pos.y;
+      const td = Math.sqrt(tdx * tdx + tdy * tdy) || 1;
+      const tvx = (tdx / td);
+      const tvy = (tdy / td);
+      const curSpeed = Math.sqrt(bullet.vel.x ** 2 + bullet.vel.y ** 2) || 1;
+      // Blend current direction with target direction
+      const cvx = bullet.vel.x / curSpeed;
+      const cvy = bullet.vel.y / curSpeed;
+      const nx = cvx + (tvx - cvx) * h;
+      const ny = cvy + (tvy - cvy) * h;
+      const nn = Math.sqrt(nx * nx + ny * ny) || 1;
+      bullet.vel.x = (nx / nn) * curSpeed;
+      bullet.vel.y = (ny / nn) * curSpeed;
+    }
+
     bullet.pos.x += bullet.vel.x;
     bullet.pos.y += bullet.vel.y;
-    // Perpendicular weave — phase keyed off bullet's initial x position
-    // so neighboring particles in a cluster oscillate slightly out of
-    // sync, producing the "pulsing wave" feel.
-    const age = (bullet.maxTtl - bullet.ttl) * 0.18;
-    const phase = bullet.pos.x * 0.011;
-    const perpX = -bullet.vel.y;
-    const perpY = bullet.vel.x;
-    const speed = Math.sqrt(bullet.vel.x * bullet.vel.x + bullet.vel.y * bullet.vel.y) || 1;
-    const wave = Math.cos(age + phase) * 0.45;
-    bullet.pos.x += (perpX / speed) * wave;
-    bullet.pos.y += (perpY / speed) * wave;
+
+    // Subtle perpendicular weave (skip for very slow / drifting bullets)
+    const speed = Math.sqrt(bullet.vel.x ** 2 + bullet.vel.y ** 2);
+    if (speed > 1) {
+      const age = (bullet.maxTtl - bullet.ttl) * 0.16;
+      const phase = bullet.pos.x * 0.011;
+      const perpX = -bullet.vel.y / speed;
+      const perpY =  bullet.vel.x / speed;
+      const wave = Math.cos(age + phase) * 0.30;
+      bullet.pos.x += perpX * wave;
+      bullet.pos.y += perpY * wave;
+    }
     bullet.ttl--;
   }
   state.enemyBullets = state.enemyBullets.filter(b => b.ttl > 0);
@@ -1309,99 +1327,137 @@ function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolea
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// PER-ENEMY WEAPON PROFILES — fine-grained, ship-unique payloads
+// ══════════════════════════════════════════════════════════════════
+// Each enemy type has its own weapon archetype. The rule is:
+//   short lifespan  → fires FREQUENTLY (every beat or two) — pulse train
+//   long  lifespan  → fires SCARCELY (every 3-5 beats) — heavy item
+// This inverse relationship keeps the screen from drowning in long-lived
+// bullets while still giving every fire a rhythmic feel.
+//
+// fighter — fast laser pulses (short life, every beat)
+// bomber  — drifting mines (long life, every 4 beats, slow drift)
+// cruiser — plasma blobs (medium life, every 2 beats)
+// elite   — homing energy orbs (medium-long life, every 3 beats, weak homing)
+// turret  — precision needles (very short life, every beat)
+interface WeaponProfile {
+  shape: import('./types').BulletShape;
+  baseR: number;            // fine-grained — typically 1.5-4 px
+  baseSpeed: number;
+  baseLife: number;         // frames
+  beatsPerFire: number;     // cadence: longer life → more beats between fires
+  count: number;            // particles per pulse
+  spread: number;           // radians, fan width
+  color: string;
+  weaveAmp: number;         // perpendicular sine oscillation (px)
+  homing: number;           // 0-1 — fraction of velocity rotated toward player each frame
+  drifty: boolean;          // mines: don't aim, just drift slowly
+}
+
+const WEAPON_PROFILES: Record<string, WeaponProfile> = {
+  fighter: {
+    shape: 'bolt', baseR: 2.0, baseSpeed: 4.8, baseLife: 50,
+    beatsPerFire: 1, count: 1, spread: 0,
+    color: '#ff6655', weaveAmp: 0, homing: 0, drifty: false,
+  },
+  bomber: {
+    // Mine — slow drifting orb with long life
+    shape: 'orb', baseR: 3.5, baseSpeed: 0.7, baseLife: 320,
+    beatsPerFire: 4, count: 1, spread: 0,
+    color: '#ff3344', weaveAmp: 0, homing: 0, drifty: true,
+  },
+  cruiser: {
+    // Plasma — medium blob spread
+    shape: 'blob', baseR: 3.0, baseSpeed: 2.6, baseLife: 110,
+    beatsPerFire: 2, count: 3, spread: 0.30,
+    color: '#ff66dd', weaveAmp: 0.5, homing: 0, drifty: false,
+  },
+  elite: {
+    // Homing orb — medium-long life, fewer shots, weak tracking
+    shape: 'orb', baseR: 2.5, baseSpeed: 1.8, baseLife: 200,
+    beatsPerFire: 3, count: 1, spread: 0,
+    color: '#bb44ff', weaveAmp: 0, homing: 0.025, drifty: false,
+  },
+  turret: {
+    // Needle — precision pulse, very short life
+    shape: 'needle', baseR: 1.5, baseSpeed: 6.5, baseLife: 32,
+    beatsPerFire: 1, count: 1, spread: 0.04,
+    color: '#66ddff', weaveAmp: 0, homing: 0, drifty: false,
+  },
+};
+
 function fireEnemyWeapon(state: ShmupState, enemy: Enemy, playerPos: Vec2): void {
-  // ══════════════════════════════════════════════════════════════
-  // PULSE-WAVE PARTICLES — every ship fires a burst of glowing dots
-  // ══════════════════════════════════════════════════════════════
-  // On every beat, each enemy releases a small CLUSTER of particle bullets
-  // aimed at the player. Each particle is a glowing dot; the cluster as
-  // a whole acts as a "wave packet" — bullets fan out slightly, travel
-  // with a gentle sinusoidal weave, and pulse visually with the music.
-  // Multiple ships firing on the same beat creates the feel of multiple
-  // pulsing waves rolling toward the player, all synchronized to the drum.
-  //
-  // The beat BAND shapes the wave:
-  //   bass  → 3-4 large heavy slow particles, long-lived (rolling pulse)
-  //   mid   → 2-3 medium particles, balanced
-  //   high  → 4-5 small fast particles, short-lived (rapid pulse train)
   if (enemy.type === 'boss') {
     void playerPos;
     fireBossPattern(state, enemy);
     return;
   }
 
-  const cap = state.deathCount >= 3 ? 50 : state.deathCount >= 1 ? 65 : 80;
+  const profile = WEAPON_PROFILES[enemy.type];
+  if (!profile) return;
+
+  // Bullet cap
+  const cap = state.deathCount >= 3 ? 70 : state.deathCount >= 1 ? 90 : 120;
   if (state.enemyBullets.length > cap) return;
 
-  // Aim direction toward the player at the moment of fire
+  // ── Beat-strength modulation ──
+  // The music's amplitude shapes the size + count of each burst. Stronger
+  // peaks fire SLIGHTLY more particles at slightly larger sizes; quiet
+  // moments fire single small shots.
+  const bs = state.currentBeatStrength;
+  const sizeBoost = 1 + bs * 0.5;
+  const speedBoost = 1 + bs * 0.2;
+  const count = profile.count + (bs > 0.5 ? 1 : 0);
+
+  // Aim
   const dx = state.player.pos.x - enemy.pos.x;
   const dy = state.player.pos.y - enemy.pos.y;
   const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-  const aimX = dx / dist;
-  const aimY = dy / dist;
+  const aimAngle = Math.atan2(dy, dx);
 
-  // Beat-band shaping
-  const beat = state.currentBeatType;
-  const bs = state.currentBeatStrength;
-  let count = 3;
-  let speed = 2.6;
-  let ttl = 95;
-  let particleR = 4;
-  let spread = 0.18;
-  let color = '#ff66cc';
-  if (beat === 'bass') {
-    count = 3 + Math.floor(bs * 1.5);   // 3-4 particles
-    speed = 1.8 + bs * 0.3;             // slow heavy
-    ttl = 140 + Math.floor(bs * 40);    // long-lived
-    particleR = 5 + Math.floor(bs * 2); // big particles
-    spread = 0.22;
-    color = '#ff5577';                  // hot pink-red
-  } else if (beat === 'high') {
-    count = 4 + Math.floor(bs * 1.5);   // 4-5 particles
-    speed = 3.8 + bs * 0.6;             // fast
-    ttl = 38 + Math.floor(bs * 15);     // short
-    particleR = 2.5;                    // tiny
-    spread = 0.30;                      // wider fan
-    color = '#88ddff';                  // cyan
-  } else {
-    count = 2 + Math.floor(bs * 1.5);   // 2-3 particles
-    speed = 2.6 + bs * 0.4;
-    ttl = 85 + Math.floor(bs * 25);
-    particleR = 4;
-    spread = 0.18;
-    color = '#ff88dd';                  // magenta
-  }
-
-  // Per-enemy flavor — different ships fire slightly different packets
-  switch (enemy.type) {
-    case 'fighter': count = Math.max(2, count - 1);                      break;
-    case 'bomber':  particleR += 1; speed *= 0.85; ttl = Math.floor(ttl * 1.15); break;
-    case 'cruiser': count += 1; spread *= 0.7;                           break;
-    case 'elite':   count += 1;                                          break;
-    case 'turret':  spread *= 0.5; speed *= 1.10;                        break;
-  }
-
-  // Fire the cluster — particles fan out in a small arc around the aim
-  // direction, each with a slight sine-weave seeded by index so the
-  // packet doesn't fly straight.
-  const aimAngle = Math.atan2(aimY, aimX);
   for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0 : i / (count - 1) - 0.5;  // -0.5 .. +0.5
-    const a = aimAngle + t * spread;
+    const tFan = count === 1 ? 0 : i / (count - 1) - 0.5;
+    let angle: number;
+    let speed: number;
+    if (profile.drifty) {
+      // Mines drift slowly straight DOWN with a slight random sideways jitter
+      angle = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+      speed = profile.baseSpeed * (0.6 + Math.random() * 0.6);
+    } else {
+      angle = aimAngle + tFan * profile.spread;
+      speed = profile.baseSpeed * speedBoost;
+    }
+
     state.enemyBullets.push({
       pos: { x: enemy.pos.x, y: enemy.pos.y + enemy.height * 0.3 },
-      vel: { x: Math.cos(a) * speed, y: Math.sin(a) * speed },
+      vel: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
       damage: 1,
-      radius: particleR,
+      radius: profile.baseR * sizeBoost,
       isPlayer: false,
-      color,
-      trail: true,
-      ttl,
-      maxTtl: ttl,
-      // Reuse 'orb' shape for fallback rendering — small glowy dot
-      shape: 'orb',
+      color: profile.color,
+      trail: !profile.drifty,
+      ttl: profile.baseLife,
+      maxTtl: profile.baseLife,
+      shape: profile.shape,
+      // Reuse damage field as a tag — we store homing factor in the
+      // damage field's high bits? No — simpler: read from the profile
+      // at update time by looking up by enemy type. But the bullet
+      // doesn't carry the enemy ref. We'll store the homing factor as a
+      // tiny side-channel via the trail field — actually we'll just check
+      // the bullet's color in update and apply homing for elite color.
     });
   }
+
+  // Reference dist so it isn't unused (kept for potential future range gating)
+  void dist;
+}
+
+// Look up a weapon profile by bullet color to recover homing factor for
+// the per-bullet update tick. Cheap, side-channel-free.
+function homingFactorForBullet(color: string): number {
+  const profile = Object.values(WEAPON_PROFILES).find(p => p.color === color);
+  return profile?.homing ?? 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2857,31 +2913,25 @@ export function applyDirectorCommand(state: ShmupState, cmd: DirectorCommand): v
     spawnEnemy(state, e.type, e.faction, e.x * W, undefined, undefined, e.drop);
   }
 
-  // ── Waveform payload trigger ──
-  // EVERY beat fires EVERY eligible enemy. Each enemy type has a beat
-  // cadence so different ships fire at different rhythms — fighters and
-  // turrets fire on every beat, cruisers every other, bombers every
-  // third. This is what gives the game a perpetual heartbeat: the music
-  // literally pulses the projectiles into existence.
-  //
-  // fireTimer is repurposed as a "beats since last fire" counter.
+  // ── Beat-driven fire ──
+  // Each enemy uses its weapon profile's beatsPerFire cadence:
+  //   fighter/turret → every beat   (short-life shots, rapid pulse train)
+  //   cruiser        → every 2nd    (medium plasma blobs)
+  //   elite          → every 3rd    (long-life homing orbs — scarce)
+  //   bomber         → every 4th    (long-life mines — very scarce)
+  // The inverse relationship — short life = pulse often, long life =
+  // pulse rarely — keeps the screen readable while every shot still
+  // hits on the music's drum.
   if (cmd.triggerFire) {
     state.currentBeatType = cmd.beatType ?? 'mid';
     state.currentBeatStrength = cmd.beatStrength ?? 0.5;
     state.beatFlashTimer = 14;
-    // Per-type beat cadence — how many beats between fires
-    const beatEvery: Record<string, number> = {
-      fighter: 1,   // fires every beat — fastest
-      turret:  1,
-      elite:   2,   // every 2nd beat
-      cruiser: 2,
-      bomber:  3,   // slow heavy — every 3rd beat
-    };
     for (const enemy of state.enemies) {
       if (!enemy.alive || enemy.type === 'boss') continue;
-      const cadence = beatEvery[enemy.type] ?? 2;
+      const profile = WEAPON_PROFILES[enemy.type];
+      if (!profile) continue;
       enemy.fireTimer = (enemy.fireTimer ?? 0) + 1;
-      if (enemy.fireTimer >= cadence && state.player.alive) {
+      if (enemy.fireTimer >= profile.beatsPerFire && state.player.alive) {
         fireEnemyWeapon(state, enemy, state.player.pos);
         enemy.fireTimer = 0;
       }

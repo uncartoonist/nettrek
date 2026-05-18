@@ -312,25 +312,17 @@ export class ShmupRenderer {
     const THREAT_BODY_HOT = '#ff5599';
     const THREAT_CORE = '#ffeeff';
 
-    // ── Music heartbeat — drives the pulse of EVERY enemy bullet ──
-    // state.beatPulse spikes hard on every beat (bass/mid/high) and
-    // decays at ~0.93/frame. Even long-lifespan bass projectiles that
-    // have been on screen for seconds keep visibly THROBBING on every
-    // subsequent beat. The screen has an unmistakable heartbeat under it.
+    // ── Music heartbeat — modest pulse so fine-grained bullets stay fine ──
     const bp = state.beatPulse;
-    const lowBreath = state.bandBass * 0.4;
-    const pulse = Math.min(1.4, bp + lowBreath);
-    const calmBreath = 0.08 * Math.sin(state.tick * 0.06);
-    // MUCH stronger size pulse — bullets visibly expand and contract.
-    const sizePulse = 1 + pulse * 0.65 + calmBreath;
-    const corePulse = 1 + pulse * 0.32;
-    const alphaPulse = 1 + pulse * 0.6;
-    // Sharp peak flash — extra bright ring drawn around each bullet
-    // when the beat is at its peak (bp > 0.3). Decays with bp.
-    const peakFlash = Math.max(0, bp - 0.15);
-    // Hue shift on bass beats — halo runs hotter when the bass kicks
-    const haloR = Math.round(60 + bp * 80);
-    const haloG = Math.round(40 + bp * 70);
+    const lowBreath = state.bandBass * 0.25;
+    const pulse = Math.min(1.0, bp + lowBreath);
+    // Subtle size pump — bullets shouldn't bloat into blobs
+    const sizePulse = 1 + pulse * 0.25;
+    const corePulse = 1 + pulse * 0.15;
+    const alphaPulse = 1 + pulse * 0.4;
+    const peakFlash = Math.max(0, bp - 0.25);
+    const haloR = Math.round(60 + bp * 70);
+    const haloG = Math.round(40 + bp * 60);
 
     for (const bullet of state.enemyBullets) {
       const fadeAlpha = Math.min(1, bullet.ttl / 15);
@@ -342,28 +334,25 @@ export class ShmupRenderer {
       const r = bullet.radius;
       const c = bullet.color;
 
-      // ── Universal threat warning halo — beat-driven throb ──
-      const baseHaloR = Math.max(8, r * 2.8);
+      // ── Halo — PROPORTIONAL to bullet radius (no min cap) ──
+      // Small bullets get small halos. Fine-grained dots stay fine.
+      const baseHaloR = r * 2.2;
       const haloRPulsed = baseHaloR * sizePulse;
       const haloGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, haloRPulsed);
-      haloGrad.addColorStop(0, `rgba(255, ${haloR}, 110, ${Math.min(1, 0.65 * fadeAlpha * alphaPulse)})`);
-      haloGrad.addColorStop(0.5, `rgba(255, ${haloG}, 90, ${Math.min(1, 0.35 * fadeAlpha * alphaPulse)})`);
+      haloGrad.addColorStop(0, `rgba(255, ${haloR}, 110, ${Math.min(1, 0.5 * fadeAlpha * alphaPulse)})`);
+      haloGrad.addColorStop(0.55, `rgba(255, ${haloG}, 90, ${Math.min(1, 0.20 * fadeAlpha * alphaPulse)})`);
       haloGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = haloGrad;
       ctx.beginPath(); ctx.arc(0, 0, haloRPulsed, 0, Math.PI * 2); ctx.fill();
 
-      // ── Peak-beat flash ring ──
-      // A bright white-pink ring that snaps around each bullet at the
-      // exact moment of a beat. Fades fast with the beat decay so it
-      // really reads as "PUMP" rather than ambient glow.
-      if (peakFlash > 0.02) {
-        ctx.strokeStyle = `rgba(255, 200, 220, ${Math.min(1, peakFlash * 1.4 * fadeAlpha)})`;
-        ctx.lineWidth = 1.8 + peakFlash * 2;
-        const ringR = baseHaloR * (1.05 + peakFlash * 0.55);
+      // Peak-beat flash ring — thinner, smaller
+      if (peakFlash > 0.05) {
+        ctx.strokeStyle = `rgba(255, 220, 230, ${Math.min(1, peakFlash * 1.0 * fadeAlpha)})`;
+        ctx.lineWidth = 1 + peakFlash * 1.2;
+        const ringR = baseHaloR * (1.0 + peakFlash * 0.35);
         ctx.beginPath(); ctx.arc(0, 0, ringR, 0, Math.PI * 2); ctx.stroke();
       }
 
-      // Body silhouette also throbs (less dramatic so hitbox stays honest)
       ctx.scale(corePulse, corePulse);
       // Shape source of truth: bullet.shape if explicitly set (e.g. T'VAK
       // weapon hardpoints), otherwise the legacy color-prefix dispatch
