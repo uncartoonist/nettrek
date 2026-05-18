@@ -202,6 +202,7 @@ export interface ShmupEvents {
   powerUpCollected?: PowerUpType;
   bossPhaseChange?: boolean;
   bossKilled?: boolean;
+  bossSpawned?: boolean;       // boss just entered the playfield
   bombUsed?: boolean;
   coinCollected?: boolean;
   obstacleHit?: boolean;       // player bullet hit a rock / mine / asteroid
@@ -549,6 +550,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       state.bossActive = true;
       state.bossEntrance = 120;
       state.screenShake = 12;
+      events.bossSpawned = true;
       // ── Arrival shockwave ── ring of bright particles where the boss
       // breaks into the playfield, plus a sustained warm flash. Sells
       // the moment of "something heavy just dropped."

@@ -2,7 +2,7 @@
 import { createShmupState, updateShmup, startStage, applyDirectorCommand, ShmupInput } from './shmup/engine';
 import { ShmupRenderer } from './shmup/renderer';
 import { HangarScreen } from './shmup/hangar';
-import { initAudio, playExplosion, playBigExplosion, playPlayerHit, playBomb, playCoinCollect, playPowerUpWeapon, playPowerUpShield, playPowerUpSpecial, playBulletHit, playCritHit } from './audio/sfx';
+import { initAudio, playExplosion, playBigExplosion, playPlayerHit, playBomb, playCoinCollect, playPowerUpWeapon, playPowerUpShield, playPowerUpSpecial, playBulletHit, playCritHit, playBossArrival } from './audio/sfx';
 import { playStageMusic, playMainTheme, stopMusic, setAnalyzer } from './audio/music';
 import { MusicAnalyzer } from './audio/analyzer';
 import { getDirectorCommand, resetDirector } from './shmup/director';
@@ -481,6 +481,7 @@ function loop() {
     if (events.playerHit) playPlayerHit();
     if (events.bombUsed) playBomb();
     if (events.bossKilled) { playBigExplosion(); }
+    if (events.bossSpawned) { playBossArrival(); }
     if (events.coinCollected) playCoinCollect();
     // Hit-contact feedback — small tick when shots land. Critical hits on
     // boss weak points get a richer sound. Both are throttled inside sfx.ts.

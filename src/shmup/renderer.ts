@@ -2236,6 +2236,22 @@ export class ShmupRenderer {
       ctx.globalAlpha = 1;
     }
 
+    // ── Player hit-flash ── parallels enemy hit-flash. The first 6 frames
+    // after damage (invulnTimer at 84+) overlay a bright white silhouette
+    // on the ship so the player FEELS the hit instead of just seeing the
+    // blink. After that the regular invuln-blink takes over.
+    if (p.invulnTimer >= 84) {
+      const fp = (p.invulnTimer - 84) / 6;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.6 * fp;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.width * 0.7, p.height * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // ── Score multiplier indicator ──
     if (p.scoreMultTimer > 0) {
       ctx.fillStyle = '#ffff00';

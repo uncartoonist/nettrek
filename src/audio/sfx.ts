@@ -90,6 +90,20 @@ export function playBigExplosion(): void {
   osc('sine', 80, 25, 0.3, 0.08, 0.3);
 }
 
+// Boss arrival — deep ominous swell. Three descending tones layered with
+// a low rumble, building dread for the encounter that's about to drop.
+export function playBossArrival(): void {
+  // Descending power-down warble (alert vibe)
+  osc('sawtooth', 380, 60, 0.7, 0.08);
+  osc('sawtooth', 280, 50, 0.7, 0.08, 0.08);
+  // Sub rumble
+  osc('sine', 55, 35, 1.1, 0.16, 0.05);
+  osc('triangle', 110, 40, 0.9, 0.08, 0.1);
+  // Tail roar
+  noise(0.5, 0.18, 1500, 200, 0.25);
+  noise(0.8, 0.14, 400, 40, 0.4);
+}
+
 export function playPlayerHit(): void {
   noise(0.25, 0.3, 500, 40);
   osc('square', 200, 60, 0.15, 0.1);
