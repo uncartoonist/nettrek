@@ -86,6 +86,7 @@ export interface Enemy {
   moveSeed?: number;      // randomization for phase offsets, etc
   settleY?: number;       // y the enemy settles at for patrol/anchor styles
   enterTimer?: number;    // frames since spawn, used for entry curves
+  hitFlash?: number;      // frames remaining of the white hit-flash overlay
   // Boss specific
   phase?: number;
   phaseTimer?: number;

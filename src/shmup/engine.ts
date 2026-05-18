@@ -471,6 +471,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
           // Normal enemies and exposed bosses take the full per-frame damage.
           const dmg = target.type === 'boss' ? Math.max(1, Math.floor(PHASER_DAMAGE * 0.4)) : PHASER_DAMAGE;
           target.hp -= dmg;
+          target.hitFlash = Math.max(target.hitFlash ?? 0, 3); // continuous pulse-flash while beam holds
           p.phaserCharge -= DRAIN_RATE;
         }
 
@@ -828,6 +829,7 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
         bullet.pos.y = -999; // remove
         bullet.ttl = 0;
         spawnHitParticles(state, bullet.pos, FACTION_COLORS[enemy.faction]);
+        flashHit(state, enemy, bullet.pos, bullet.damage);
         events.enemyHit = true;
         if (enemy.hp <= 0) {
           killEnemy(state, enemy, events);
@@ -1105,7 +1107,9 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < zone.radius) {
           const falloff = 1 - dist / zone.radius;
-          enemy.hp -= Math.ceil(zone.damage * falloff);
+          const dmg = Math.ceil(zone.damage * falloff);
+          enemy.hp -= dmg;
+          flashHit(state, enemy, enemy.pos, dmg);
           if (enemy.hp <= 0) {
             killEnemy(state, enemy, events);
           }
@@ -2237,6 +2241,8 @@ function spawnBoss(state: ShmupState, config: any): void {
 }
 
 function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): void {
+  // Decay hit-flash regardless of type so bosses pulse-flash on phaser too.
+  if (enemy.hitFlash && enemy.hitFlash > 0) enemy.hitFlash--;
   if (enemy.type === 'boss') {
     // ── T'VAK death sequence — runs in place of normal combat ──
     if (enemy.deathSequence !== undefined && enemy.deathSequence > 0) {
@@ -2656,19 +2662,27 @@ function hitPlayer(state: ShmupState, events: ShmupEvents): void {
   events.playerHit = true;
   p.shields--;
   p.invulnTimer = INVULN_TIME;
-  state.screenShake = 5;
-  state.damageVignette = 0.6;
-  state.screenFlash = 0.3;
+  state.screenShake = 7;
+  state.damageVignette = 0.75;
+  state.screenFlash = 0.35;
   state.screenFlashColor = '#ff2200';
 
-  // Hit particles
-  for (let i = 0; i < 10; i++) {
+  // Hit particles — ringed white burst + colored sparks for impact
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 3 + Math.random() * 4;
     state.particles.push({
       pos: { ...p.pos },
-      vel: { x: (Math.random() - 0.5) * 5, y: (Math.random() - 0.5) * 5 },
-      life: 15, maxLife: 15, color: '#ffffff', size: 3,
+      vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+      life: 14 + Math.random() * 8, maxLife: 22,
+      color: i < 6 ? '#ffffff' : '#ff4422', size: 2 + Math.random() * 2,
     });
   }
+  // Outward shockwave ring at the player position
+  state.explosionZones.push({
+    pos: { ...p.pos },
+    radius: 60, life: 8, damage: 0,
+  });
 
   if (p.shields < 0) {
     p.lives--;
@@ -2820,6 +2834,26 @@ function collectPowerUp(state: ShmupState, pu: PowerUp): void {
       vel: { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4 },
       life: 15, maxLife: 15, color: '#ffff88', size: 2,
     });
+  }
+}
+
+// Mark an enemy as just hit — drives a brief white-tint overlay in the
+// renderer plus a damage-sized spark burst. Bigger damage → more sparks.
+function flashHit(state: ShmupState, enemy: Enemy, pos: Vec2, damage: number): void {
+  enemy.hitFlash = Math.min(8, 4 + Math.floor(damage / 3));
+  if (state.particles.length < 440) {
+    const n = Math.min(10, 3 + Math.floor(damage / 2));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = 1.5 + Math.random() * 3.5;
+      state.particles.push({
+        pos: { ...pos },
+        vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+        life: 6 + Math.random() * 8, maxLife: 14,
+        color: Math.random() > 0.55 ? FACTION_COLORS[enemy.faction] : '#ffffff',
+        size: 1 + Math.random() * 1.8,
+      });
+    }
   }
 }
 

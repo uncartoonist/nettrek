@@ -2603,6 +2603,21 @@ export class ShmupRenderer {
         break;
       }
     }
+
+    // ── HIT FLASH ── additive white overlay for a few frames after damage.
+    // The shape is a generous ellipse matching the ship silhouette so it
+    // reads as the WHOLE ship lighting up, not just a spot.
+    if (enemy.hitFlash && enemy.hitFlash > 0) {
+      const fpct = enemy.hitFlash / 8;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55 * fpct;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, W * 0.55, H * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   private parseColor(color: string): [number, number, number] {
