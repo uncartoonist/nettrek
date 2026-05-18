@@ -2013,10 +2013,19 @@ export class ShmupRenderer {
       ctx.restore();
     }
 
-    // Boss entrance darkening
+    // Boss entrance — cinematic edge vignette pulses then settles into a
+    // subtle dim. The center stays clear so you read the boss; the edges
+    // close in like the room just got smaller.
     if (state.bossEntrance > 0) {
-      const eAlpha = Math.min(0.3, state.bossEntrance / 120 * 0.3);
-      ctx.fillStyle = `rgba(0,0,0,${eAlpha})`;
+      const t01 = state.bossEntrance / 120;             // 1 at spawn, 0 at end
+      const pulse = Math.max(0, 1 - (1 - t01) * 4);     // strong for first 25% then fades
+      const baseDark = 0.18 * t01;
+      const pulseDark = 0.22 * pulse;
+      const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, h * 0.85);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.55, `rgba(0,0,0,${baseDark * 0.6})`);
+      grad.addColorStop(1, `rgba(0,0,0,${baseDark + pulseDark})`);
+      ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     }
 

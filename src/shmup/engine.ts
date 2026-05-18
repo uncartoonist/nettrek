@@ -548,7 +548,34 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       state.phase = 'boss';
       state.bossActive = true;
       state.bossEntrance = 120;
-      state.screenShake = 8;
+      state.screenShake = 12;
+      // ── Arrival shockwave ── ring of bright particles where the boss
+      // breaks into the playfield, plus a sustained warm flash. Sells
+      // the moment of "something heavy just dropped."
+      state.screenFlash = 0.55;
+      state.screenFlashColor = '#ffcc88';
+      const bx = state.screenW / 2;
+      const by = -stage.boss.height * 0.5;
+      for (let i = 0; i < 48; i++) {
+        const a = (Math.PI * 2 / 48) * i;
+        const spd = 5 + Math.random() * 4;
+        state.particles.push({
+          pos: { x: bx, y: by },
+          vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd + 0.5 },
+          life: 30 + Math.random() * 20, maxLife: 50,
+          color: i % 3 === 0 ? '#ffffff' : FACTION_COLORS[stage.boss.faction],
+          size: 2 + Math.random() * 3,
+        });
+      }
+      // Downward energy column — boss arrives through a vertical "wake"
+      for (let i = 0; i < 20; i++) {
+        state.particles.push({
+          pos: { x: bx + (Math.random() - 0.5) * stage.boss.width * 0.7, y: by + Math.random() * 60 },
+          vel: { x: (Math.random() - 0.5) * 0.5, y: 1.5 + Math.random() * 2 },
+          life: 35 + Math.random() * 15, maxLife: 50,
+          color: FACTION_COLORS[stage.boss.faction], size: 1.5 + Math.random() * 2,
+        });
+      }
     }
 
     // ── Floating powerups — spawn naturally throughout the level ──
