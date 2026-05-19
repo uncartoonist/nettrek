@@ -341,12 +341,37 @@ document.getElementById('menu-signup')!.addEventListener('click', async () => {
   const status = document.getElementById('menu-signup-status')!;
   const email = emailInput.value.trim();
   if (!email || !email.includes('@')) { status.textContent = 'Enter valid email'; status.style.color = '#f55'; return; }
+  // Resolve API base. Precedence:
+  //   1) VITE_API_BASE_URL — set at build time (preferred)
+  //   2) localhost dev → http://localhost:4301
+  //   3) production → same-origin /api (HTTPS-safe; the CloudFront origin
+  //      should be configured to forward /api/* to the backend)
+  // The old hard-coded http://54.224.95.1:4301 was blocked as mixed content
+  // on the HTTPS CloudFront site, so every signup silently failed and the
+  // catch path lied about "Saved locally" without saving anything.
+  const apiBase =
+    (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/$/, '') ||
+    (window.location.hostname === 'localhost' ? 'http://localhost:4301' : `${window.location.origin}/api`);
   try {
-    const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:4301' : 'http://54.224.95.1:4301';
-    const res = await fetch(`${apiUrl}/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    const res = await fetch(`${apiBase}/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
     const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Signup failed');
     status.textContent = data.message || 'Signed up!'; status.style.color = '#0a6'; emailInput.value = '';
-  } catch { status.textContent = 'Saved locally'; status.style.color = '#fa0'; }
+  } catch (err) {
+    // Actually persist locally so the user's email is recoverable. Queues
+    // pending signups in localStorage; a background sync (future) can flush.
+    try {
+      const key = 'nettrek-pending-signups';
+      const queue = JSON.parse(localStorage.getItem(key) || '[]');
+      if (Array.isArray(queue) && !queue.includes(email)) {
+        queue.push(email);
+        localStorage.setItem(key, JSON.stringify(queue.slice(-50)));
+      }
+      status.textContent = 'Saved locally — will retry later'; status.style.color = '#fa0';
+    } catch {
+      status.textContent = 'Signup failed'; status.style.color = '#f55';
+    }
+  }
 });
 
 // ── Pause state ──

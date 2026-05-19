@@ -108,7 +108,7 @@ function createPlayer(): PlayerShip {
     phaserBeamActive: false,
     phaserRechargeDelay: 0,
     stars: 0,
-    totalStars: parseInt(localStorage.getItem('nettrek-stars') || '0'),
+    totalStars: loadStars(),
     shieldBurstCooldown: 0,
     shieldBurstActive: 0,
     tractorSlowTimer: 0,
@@ -121,6 +121,16 @@ function loadUpgrades(): Record<string, number> {
   try {
     return JSON.parse(localStorage.getItem('nettrek-upgrades') || '{}');
   } catch { return {}; }
+}
+
+// Defensive parse for the persisted star total. Raw parseInt on a corrupted
+// or missing value yields NaN, which then propagates through the hangar
+// cost-affordability math and breaks every purchase.
+function loadStars(): number {
+  const raw = localStorage.getItem('nettrek-stars');
+  if (raw == null) return 0;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
 export function saveProgress(state: ShmupState): void {
@@ -1202,7 +1212,14 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   state.dominanceScore *= 0.998;
 
   // ── Victory check ──────────────────────────────────────────
-  if (state.bossActive && state.enemies.length === 0) {
+  // Counts LIVING enemies only. The filter at line ~778 keeps recently-killed
+  // enemies in state.enemies for a few frames while their final death sprite
+  // settles below the screen (e.pos.y < H + 100). Previously the check used
+  // state.enemies.length === 0, which meant if a small enemy died at the
+  // same instant the boss did, the boss-death-sequence completion couldn't
+  // trigger victory until that small enemy's corpse drifted off-screen —
+  // sometimes never, since updateEnemy skips dead enemies.
+  if (state.bossActive && !state.enemies.some(e => e.alive)) {
     state.phase = 'victory';
     state.bossActive = false;
     state.slowMotion = 90;

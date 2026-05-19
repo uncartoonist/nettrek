@@ -105,13 +105,22 @@ export class GameServer {
 
     switch (msg.type) {
       case 'spawn': {
-        const { faction, shipClass, name } = msg;
-        const stats = SHIP_CLASS_STATS[shipClass] || SHIP_CLASS_STATS.destroyer;
-        const spawnPlanet = this.planets.find(p => p.owner === faction) || this.planets[0];
+        // Validate every field before assigning to ship — previously a malformed
+        // shipClass fell back to destroyer stats but the *string* shipClass was
+        // stored as-is, then tick() did SHIP_CLASS_STATS[ship.shipClass] which
+        // returned undefined, and stats.turnRate crashed the server.
+        const validFaction = FACTIONS.includes(msg.faction) ? msg.faction : 'federation';
+        const validShipClass = (typeof msg.shipClass === 'string' && SHIP_CLASS_STATS[msg.shipClass])
+          ? msg.shipClass : 'destroyer';
+        const rawName = typeof msg.name === 'string' ? msg.name : '';
+        // Strip control chars + cap length; default to Pilot-{id} if empty
+        const safeName = rawName.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 24).trim() || `Pilot-${playerId}`;
+        const stats = SHIP_CLASS_STATS[validShipClass];
+        const spawnPlanet = this.planets.find(p => p.owner === validFaction) || this.planets[0];
         const ship = player.ship;
-        ship.name = name || `Pilot-${playerId}`;
-        ship.faction = faction || 'federation';
-        ship.shipClass = shipClass || 'destroyer';
+        ship.name = safeName;
+        ship.faction = validFaction;
+        ship.shipClass = validShipClass;
         ship.pos = { x: spawnPlanet.pos.x + (Math.random() - 0.5) * 200, y: spawnPlanet.pos.y + (Math.random() - 0.5) * 200 };
         ship.shields = stats.maxShields;
         ship.hull = stats.maxHull;

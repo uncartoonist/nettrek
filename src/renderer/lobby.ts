@@ -48,12 +48,27 @@ export class LobbyOverlay {
     const el = document.getElementById('lobby-players');
     if (!el) return;
 
-    el.innerHTML = ships.map(s => `
-      <div style="padding:6px 12px; margin:4px 0; border-left:3px solid ${FACTION_COLORS[s.faction]}; background:rgba(255,255,255,0.02);">
-        <span style="color:${FACTION_COLORS[s.faction]}">${s.name}</span>
-        <span style="color:#556; margin-left:8px;">${s.alive ? 'IN GAME' : 'SPECTATING'}</span>
-      </div>
-    `).join('');
+    // Build DOM nodes with textContent so remote player names cannot inject
+    // HTML/JS. The faction lookup is enum-bounded (TS Faction type) but
+    // names come from another client and must be treated as untrusted.
+    el.replaceChildren();
+    for (const s of ships) {
+      const color = FACTION_COLORS[s.faction] || '#888';
+      const row = document.createElement('div');
+      row.style.cssText = `padding:6px 12px; margin:4px 0; border-left:3px solid ${color}; background:rgba(255,255,255,0.02);`;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.style.color = color;
+      nameSpan.textContent = s.name;       // <-- safe: no HTML interpolation
+      row.appendChild(nameSpan);
+
+      const statusSpan = document.createElement('span');
+      statusSpan.style.cssText = 'color:#556; margin-left:8px;';
+      statusSpan.textContent = s.alive ? 'IN GAME' : 'SPECTATING';
+      row.appendChild(statusSpan);
+
+      el.appendChild(row);
+    }
 
     const status = document.getElementById('lobby-status');
     if (status) status.textContent = `${ships.length} player(s) connected`;
