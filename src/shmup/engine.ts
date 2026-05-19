@@ -251,6 +251,38 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     return events;
   }
 
+  // ── Victory phase ── runs the screen-flash decay, particle drift, and
+  // flyaway-progression. Without this block the big phase-end logic below
+  // is gated off by the next line, so screenFlash=1 (set at victory trigger)
+  // never decays → the screen stays white forever and the ship never flies
+  // off. Mirrors the respawning block above.
+  if (state.phase === 'victory') {
+    state.tick++;
+    state.victoryTimer++;
+    // Decay screen effects (matches the gameplay decay block below)
+    if (state.screenShake > 0) state.screenShake *= 0.9;
+    if (state.screenShake < 0.2) state.screenShake = 0;
+    if (state.screenFlash > 0) state.screenFlash *= 0.85;
+    if (state.screenFlash < 0.01) state.screenFlash = 0;
+    if (state.damageVignette > 0) state.damageVignette *= 0.95;
+    if (state.damageVignette < 0.01) state.damageVignette = 0;
+    if (state.slowMotion > 0) state.slowMotion--;
+    // Drift remaining particles + power-ups so the screen settles
+    for (const p2 of state.particles) {
+      p2.pos.x += p2.vel.x; p2.pos.y += p2.vel.y;
+      p2.vel.x *= 0.96; p2.vel.y *= 0.96; p2.life--;
+    }
+    state.particles = state.particles.filter(p2 => p2.life > 0);
+    for (const pu of state.powerUps) { pu.pos.x += pu.vel.x; pu.pos.y += pu.vel.y; }
+    // Ship flyaway — warp engines flare and the ship accelerates off-screen
+    if (!state.flyawayActive) state.flyawayActive = true;
+    if (state.flyawayProgress < 1) {
+      state.flyawayProgress = Math.min(1, state.flyawayProgress + 0.015);
+      state.player.pos.y -= 3 + state.flyawayProgress * 18;
+    }
+    return events;
+  }
+
   if (state.phase !== 'playing' && state.phase !== 'boss') return events;
 
   state.tick++;
@@ -1246,22 +1278,9 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   if (events.enemyHit || events.obstacleHit || events.weakPointHit) state.stageStats.shotsHit++;
   if (events.playerHit) state.stageStats.damageTaken++;
 
-  // ── Post-victory sequence: ship flyaway → stats reveal ──
-  // 1. Boss dies → state.phase = 'victory'
-  // 2. Immediately the ship's engines flare and it accelerates UP off-screen.
-  // 3. Once ship is off-screen (flyaway done), the stats card animates in.
-  // 4. ENTER on stats → transitions to 'briefing' phase (next stage intro).
-  if (state.phase === 'victory') {
-    state.victoryTimer++;
-    // Flyaway starts immediately on victory — no pre-roll
-    if (!state.flyawayActive) state.flyawayActive = true;
-    if (state.flyawayActive && state.flyawayProgress < 1) {
-      // Accelerate the ship straight up; finishes around ~130 frames
-      state.flyawayProgress = Math.min(1, state.flyawayProgress + 0.015);
-      const p = state.player;
-      p.pos.y -= 3 + state.flyawayProgress * 18;
-    }
-  }
+  // (Victory-phase progression — flyaway, decay, stats — now runs in the
+  // dedicated 'victory' block at the TOP of updateShmup, before the
+  // playing/boss early return. See note there.)
 
   return events;
 }
