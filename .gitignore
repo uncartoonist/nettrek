@@ -6,3 +6,9 @@ dist
 /backgrounds/
 /poster/
 .claude/
+# Afterburner sprint ephemeral files
+.agent-done-*
+.sprint-test-output.txt
+.sprint-timing.txt
+AGENT_BRIEF.md
+.claude-output.txt
