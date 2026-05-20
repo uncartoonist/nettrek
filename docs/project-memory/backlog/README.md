@@ -37,7 +37,7 @@ fit inside a sprint slice. IDs are stable — never reuse a number.
 | F-012 | Leaderboard client integration | Feature | P2 | M |
 | F-013 | Enemy archetype expansion | Feature | P3 | L |
 | F-014 | Victory & briefing flow polish | Feature | P3 | S |
-| F-015 | Multiplayer | Feature | P3 | XL (epic) |
+| F-015 | Multiplayer — Captain-Designed Challenges | Feature | P3 | XL (epic) |
 
 ## Suggested sprint sequencing
 
@@ -52,12 +52,13 @@ feature. A workable arc:
   F-010 (atmosphere).
 - **Sprint 4 — Polish:** F-008 (mobile), F-009 (hangar/menu), F-011
   (performance), B-001, B-003.
-- **Sprint 5+ — Flagship:** F-001 (agent directors) — see
-  `../adr/ADR-001-two-tier-agent-director.md`.
-- **Roadmap epic — Multiplayer:** F-015. Confirmed in scope. Needs its own
-  planning sprint (mode + architecture decision) before implementation
-  sprints. Shares server-infra needs with F-001 and B-002 — sequence them
-  together.
+- **Sprint 5+ — Flagship engine:** F-001 (agent-director engine + one
+  baseline director) — see `../adr/ADR-001-two-tier-agent-director.md`.
+- **Roadmap epic — Multiplayer (Captain-Designed Challenges):** F-015.
+  Builds directly on F-001 — every player's Captain becomes a director,
+  and multiplayer is asynchronous challenge-trading. See
+  `../adr/ADR-002-captain-as-director.md`. F-001 and F-015 are one
+  continuous vision; F-001 ships the engine, F-015 ships the captains.
 
 F-012/F-013/F-014 slot in opportunistically.
 

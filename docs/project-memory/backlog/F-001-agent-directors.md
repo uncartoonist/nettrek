@@ -7,13 +7,22 @@
 
 ## Goal
 
-Replace the procedural music director with a two-tier system: a per-frame
-tactical director (existing `director.ts`) executing intent set by a slower
-LLM-backed **strategic director** with personality. Multiple director
-personalities the game can feature for run-to-run variety.
+Build the two-tier director engine: a per-frame tactical director (existing
+`director.ts`) executing intent set by a slower LLM-backed **strategic
+director**. F-001 delivers the *engine* — the `Directive` seam, the proxy,
+the tactical/strategic split, and one working baseline director.
 
-Full vision: `../../agent-directors.md`. Architecture decision:
-`../adr/ADR-001-two-tier-agent-director.md`.
+Full vision: `../../agent-directors.md`. Architecture decisions:
+`../adr/ADR-001-two-tier-agent-director.md` and
+`../adr/ADR-002-captain-as-director.md`.
+
+## Reframed by ADR-002
+
+The original "ship a roster of director personalities" idea is superseded:
+per ADR-002, **the directors are the players' Captains** (see F-015 —
+Multiplayer). F-001's job is to build the engine + one baseline director;
+F-015 then makes every player's captain a persona on top of it. F-001 must
+land before F-015 can start.
 
 ## Why it's the flagship
 
