@@ -1,28 +1,28 @@
-# B-003 — Orphaned lobby module: wire up or delete
+# B-003 — Orphaned lobby module: RESOLVED (decision)
 
 - **Type:** Bug / tech debt
 - **Priority:** P3
-- **Effort:** S
-- **Status:** Backlog
+- **Status:** Resolved — decision recorded, work folded into F-015
 
-## Problem
+## Original problem
 
-`src/renderer/lobby.ts` is not imported anywhere in `src/` — it's dead code.
-It was flagged in a security audit for an `innerHTML` XSS via remote player
-names; that was hardened (commit cf98784) but the module still ships nothing
-because nothing references it. Either the multiplayer lobby is a real planned
-feature and should be wired up, or this is abandoned code that should go.
+`src/renderer/lobby.ts` (and `chat.ts`, `minimap.ts`) were not imported
+anywhere in `src/` — dead code. The open question was: wire them up, or
+delete them?
 
-## Acceptance criteria
+## Resolution
 
-- [ ] Decision recorded: is multiplayer lobby in scope?
-- [ ] If yes — wire `LobbyScreen` into the multiplayer entry flow and verify
-      the `updatePlayers` DOM path renders
-- [ ] If no — delete `src/renderer/lobby.ts` (and audit `src/renderer/*` for
-      other orphaned multiplayer-era modules: `chat.ts`, `minimap.ts`, etc.)
+**Decision (2026-05-20): wire them up.** Multiplayer is confirmed on the
+project roadmap. The lobby / chat / minimap modules and the
+`server/game-server.js` stack are not dead code — they are pre-built
+**multiplayer scaffolding**.
 
-## Notes / files
+The integration work is no longer a tech-debt cleanup; it is part of the
+multiplayer epic. See **F-015 — Multiplayer**.
 
-- `src/renderer/lobby.ts`, `src/renderer/chat.ts`, `src/renderer/minimap.ts`
-- `server/game-server.js` — the multiplayer server still exists; clarifying
-  multiplayer scope unblocks this and informs F-001 sequencing.
+## Action
+
+- No standalone work remains under this ticket.
+- `src/renderer/lobby.ts` / `chat.ts` / `minimap.ts` and `server/*` are to
+  be kept and reconciled with the current engine under F-015.
+- Do not delete these modules.

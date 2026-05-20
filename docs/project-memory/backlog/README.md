@@ -22,7 +22,7 @@ fit inside a sprint slice. IDs are stable — never reuse a number.
 |----|-------|------|----------|--------|
 | B-001 | Hashed assets lack Cache-Control immutable headers | Bug | P2 | S |
 | B-002 | CloudFront not routing /api/* to backend | Bug | P1 | S |
-| B-003 | Orphaned lobby module — wire up or delete | Bug | P3 | S |
+| B-003 | Orphaned lobby module — RESOLVED (kept as MP scaffolding) | Bug | — | Done |
 | F-001 | Agent Directors — strategic LLM layer | Feature | P2 | XL (epic) |
 | F-002 | Boss hull art overhaul — 10 remaining bosses | Feature | P1 | L |
 | F-003 | Per-boss combat choreography | Feature | P2 | L |
@@ -37,6 +37,7 @@ fit inside a sprint slice. IDs are stable — never reuse a number.
 | F-012 | Leaderboard client integration | Feature | P2 | M |
 | F-013 | Enemy archetype expansion | Feature | P3 | L |
 | F-014 | Victory & briefing flow polish | Feature | P3 | S |
+| F-015 | Multiplayer | Feature | P3 | XL (epic) |
 
 ## Suggested sprint sequencing
 
@@ -53,6 +54,10 @@ feature. A workable arc:
   (performance), B-001, B-003.
 - **Sprint 5+ — Flagship:** F-001 (agent directors) — see
   `../adr/ADR-001-two-tier-agent-director.md`.
+- **Roadmap epic — Multiplayer:** F-015. Confirmed in scope. Needs its own
+  planning sprint (mode + architecture decision) before implementation
+  sprints. Shares server-infra needs with F-001 and B-002 — sequence them
+  together.
 
 F-012/F-013/F-014 slot in opportunistically.
 
