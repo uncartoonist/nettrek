@@ -1287,8 +1287,12 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
 
 // ── Helpers ────────────────────────────────────────────────
 function getFireRate(p: PlayerShip): number {
-  const base = Math.max(3, 8 - p.mainGunLevel);
-  return p.overdriveTimer > 0 ? Math.max(2, Math.floor(base / 2)) : base;
+  // Floor raised 3→5: fire rate stops being a third DPS multiplier at the
+  // top end. L4/L5 now [5,5] instead of [4,3] — damage + shot count carry
+  // the upgrade feel, fire rate doesn't compound the cliff. Overdrive still
+  // halves it for the powerup burst.
+  const base = Math.max(5, 8 - p.mainGunLevel);
+  return p.overdriveTimer > 0 ? Math.max(3, Math.floor(base / 2)) : base;
 }
 
 function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolean): void {
@@ -1308,7 +1312,11 @@ function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolea
   };
   const cc = lvlColors[Math.min(5, Math.max(1, lvl))] || lvlColors[1];
   const mainColor = cc.core;
-  const dmg = 1 + Math.floor(lvl / 2);
+  // Smooth per-level damage. Was `1 + floor(lvl/2)` = [1,2,2,3,3] — lumpy,
+  // and combined with shot-count + fire-rate scaling it produced a 3x DPS
+  // cliff at L4. Clean ramp + capped shots + flat top-end fire rate
+  // (getFireRate) keeps the curve ~1.5-1.7x per level.
+  const dmg = [0, 2, 3, 4, 5, 6][Math.min(5, Math.max(1, lvl))];
 
   // Per-level bullet layout
   let mainShots: { dx: number; dy: number; vx: number; vy: number; r: number; tag?: string }[] = [];
@@ -1329,13 +1337,13 @@ function firePlayerWeapons(state: ShmupState, p: PlayerShip, fireSpecial: boolea
       { dx:  6, dy: 0, vx:  1.2, vy: -12, r: 4 },
     ];
   } else if (lvl === 4) {
-    // L4: triple with wider spread + lead pair offset
+    // L4: 4 bolts — inner pair + outer pair. (Was 5; the 5th shot was part
+    // of the DPS cliff. 4 keeps the wide-spread feel without the spike.)
     mainShots = [
-      { dx: 0, dy: -4, vx: 0, vy: -14, r: 5 },
-      { dx: -8, dy: 0, vx: -1.8, vy: -12, r: 4 },
-      { dx:  8, dy: 0, vx:  1.8, vy: -12, r: 4 },
-      { dx: -3, dy: -2, vx: -0.5, vy: -13, r: 3 },
-      { dx:  3, dy: -2, vx:  0.5, vy: -13, r: 3 },
+      { dx: -4, dy: -2, vx: -0.5, vy: -14, r: 5 },
+      { dx:  4, dy: -2, vx:  0.5, vy: -14, r: 5 },
+      { dx: -9, dy: 0, vx: -1.8, vy: -12, r: 4 },
+      { dx:  9, dy: 0, vx:  1.8, vy: -12, r: 4 },
     ];
   } else {
     // L5: quad — wider triple + offset twin escorts, all white-hot
