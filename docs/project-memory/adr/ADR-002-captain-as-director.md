@@ -49,8 +49,9 @@ AI-directed challenge levels.
 - The realtime server stack becomes deferred, possibly orphaned.
 
 **Open**
-- The stakes of winning/losing a challenge ("ownership" / "back-and-forth"
-  between captains) — deferred to a dedicated design session.
+- ~~The stakes of winning/losing a challenge~~ — RESOLVED in
+  `ADR-003-captain-challenge-stakes.md` (layered: captain rank + opt-in
+  coin wager + opt-in captain-recruitment bounty).
 
 ## Relationship to ADR-001
 

@@ -32,8 +32,9 @@ feature (F-001) into the multiplayer mechanic itself. Architecture decision:
 5. **Send it.** The challenge goes to another captain, asynchronously, like
    a training simulator / play-by-mail.
 6. **Beat it.** The receiving captain fights through the authored encounter.
-7. **Stakes.** Winning/losing creates "some kind of ownership" or a
-   back-and-forth between the two captains — **OPEN design question.**
+7. **Stakes.** A three-layer model (see `../adr/ADR-003-captain-challenge-stakes.md`):
+   mandatory captain-rank ladder + opt-in coin wager + opt-in
+   "recruit the defeated captain" bounty. No permanent gear is ever staked.
 
 ## Why asynchronous matters
 
@@ -53,7 +54,10 @@ director. That reuses F-001's agent-director infrastructure almost wholesale.
 - Challenge serialization + a backend datastore for captains & challenges
 - Challenge delivery / inbox — send to and receive from other captains
 - Challenge playback — recipient plays the authored encounter
-- Win/loss stakes — design + implement (after the design question resolves)
+- Stakes system (per ADR-003): captain rank/Elo ladder, opt-in coin-wager
+  escrow, opt-in captain-recruitment bounties
+- Guardrails: proof-of-beatability gate, AI difficulty rating, no
+  permanent-progression loss
 
 ## Dependencies
 
