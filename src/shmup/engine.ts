@@ -2050,12 +2050,13 @@ function spawnEnemy(
   const progress = Math.min(state.tick / duration, 1);
   const stageBonus = 1 + state.currentStage * 0.12;
   // ── HP scales with PLAYER POWER ──
-  // A maxed-out loadout sees ~2.4x HP enemies. Without this scaling, late-
-  // game weapons (level 3 phaser, missiles, drone) one-frame everything.
-  // Pawn formations pass an explicit low hp value that still scales — they
-  // remain expendable shields but not entirely free.
+  // A maxed-out loadout sees ~3.2x HP enemies (was 2.4x — too weak against
+  // the smoothed gun curve, which left maxed cruisers dying in ~0.75s).
+  // 3.2x brings maxed cruiser TTK to ~1s: the player still feels powerful,
+  // but enemies don't instantly vanish. Pawn formations pass an explicit
+  // low hp value that still scales — expendable, but not entirely free.
   const power = playerPower(state);
-  const powerMult = 1 + power * 1.4;
+  const powerMult = 1 + power * 2.2;
   const hpScale = (0.8 + progress * 0.7) * stageBonus * powerMult;
   // Fire rate: starts at 170% cooldown (very slow), drops to 70% (fast) by end
   const fireScale = Math.max(0.7, 1.7 - progress * 1.0);
