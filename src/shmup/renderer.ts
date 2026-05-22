@@ -3678,31 +3678,194 @@ export class ShmupRenderer {
   }
 
   // ── 2. IRW VALDORE — Romulan dreadnought, broad raptor wings ─────
-  private bossHullDreadnought(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    ctx.fillStyle = dk;
-    // Crescent wing
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.55, 0);
-    ctx.quadraticCurveTo(-W * 0.4, -H * 0.45, 0, -H * 0.35);
-    ctx.quadraticCurveTo(W * 0.4, -H * 0.45, W * 0.55, 0);
-    ctx.quadraticCurveTo(W * 0.3, H * 0.4, 0, H * 0.5);
-    ctx.quadraticCurveTo(-W * 0.3, H * 0.4, -W * 0.55, 0);
-    ctx.closePath(); ctx.fill();
-    // Central hull
-    ctx.fillStyle = md;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, W * 0.18, H * 0.32, 0, 0, Math.PI * 2); ctx.fill();
-    // Singularity drive (pulsing core)
-    const sPulse = 0.6 + Math.sin(tick * 0.07) * 0.3;
-    ctx.fillStyle = color; ctx.globalAlpha = sPulse;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = sPulse * 0.7;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.04, 0, Math.PI * 2); ctx.fill();
+  // ── 2. IRW VALDORE — Romulan warbird ─────────────────────────────
+  // A swept predatory raptor: beak prow facing the player, great feathered
+  // wings, an artificial-quantum-singularity core, and FOUR distinct weapon
+  // systems — twin forward disruptors, wing-root plasma turrets, wingtip
+  // beam lances, and a central torpedo launcher.
+  private bossHullDreadnought(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#10180f';
+    const hullDark    = '#1e2f1f';
+    const hullMid     = '#2f4a32';
+    const hullLight   = '#46684a';
+    const hullAccent  = '#86b58c';
+    const conduit     = '#4dff7a';
+    const conduitDim  = '#0c3a18';
+    const corePulse = 0.6 + Math.sin(tick * 0.07) * 0.35;
+    const phaseGlow = 0.45 + phase * 0.16;   // energy intensifies each phase
+
+    // ── Silhouette: swept raptor, right half mirrored to the left ──
+    const half: [number, number][] = [
+      [0.00,  0.50],  // beak tip (faces the player)
+      [0.10,  0.40],  // prow shoulder
+      [0.16,  0.20],  // inner wing root
+      [0.30,  0.04],  // leading edge
+      [0.46, -0.06],  // outer wing lobe
+      [0.54, -0.14],  // wingtip
+      [0.44, -0.20],  // trailing feather step
+      [0.48, -0.30],  // feather lobe
+      [0.30, -0.34],  // inner trailing edge
+      [0.18, -0.40],  // rear shoulder
+      [0.10, -0.50],  // tail flank
+      [0.00, -0.46],  // tail center
+    ];
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
+    // Dark armor base
     ctx.globalAlpha = 1;
-    // Wing-tip plasma collectors
-    this.bossPort(ctx, -W * 0.5, -H * 0.05, 6, color, tick, phase);
-    this.bossPort(ctx, W * 0.5, -H * 0.05, 6, color, tick, phase);
-    this.bossPort(ctx, 0, H * 0.45, 5, color, tick, phase);
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Wing armor plating — inset mid-tone panels per wing ──
+    ctx.fillStyle = hullMid;
+    for (const s of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.14, H * 0.16);
+      ctx.lineTo(s * W * 0.29, H * 0.02);
+      ctx.lineTo(s * W * 0.42, -H * 0.07);
+      ctx.lineTo(s * W * 0.40, -H * 0.20);
+      ctx.lineTo(s * W * 0.26, -H * 0.28);
+      ctx.lineTo(s * W * 0.15, -H * 0.18);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // ── Wing feather ribs — chevron detail along each leading edge ──
+    ctx.strokeStyle = hullDarkest;
+    ctx.lineWidth = 2;
+    for (const s of [1, -1]) {
+      for (let r = 0; r < 4; r++) {
+        const t = r / 4;
+        ctx.beginPath();
+        ctx.moveTo(s * W * (0.16 + t * 0.26), H * (0.14 - t * 0.30));
+        ctx.lineTo(s * W * (0.30 + t * 0.18), H * (0.04 - t * 0.22));
+        ctx.stroke();
+      }
+    }
+
+    // ── Central raised body — elongated armored spine ──
+    ctx.fillStyle = hullLight;
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.46);
+    ctx.lineTo(W * 0.09, H * 0.20);
+    ctx.lineTo(W * 0.085, -H * 0.28);
+    ctx.lineTo(0, -H * 0.44);
+    ctx.lineTo(-W * 0.085, -H * 0.28);
+    ctx.lineTo(-W * 0.09, H * 0.20);
+    ctx.closePath(); ctx.fill();
+    // body panel seam
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.40); ctx.lineTo(0, -H * 0.40); ctx.stroke();
+
+    // ── Glowing singularity conduit running the spine ──
+    ctx.strokeStyle = conduitDim; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.30); ctx.lineTo(0, -H * 0.30); ctx.stroke();
+    ctx.strokeStyle = conduit; ctx.lineWidth = 2;
+    ctx.globalAlpha = phaseGlow * (0.7 + corePulse * 0.3);
+    ctx.beginPath(); ctx.moveTo(0, H * 0.30); ctx.lineTo(0, -H * 0.30); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Artificial quantum-singularity core ──
+    const coreR = W * 0.085;
+    const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, coreR * 1.8);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.4, conduit);
+    cg.addColorStop(1, 'transparent');
+    ctx.fillStyle = cg; ctx.globalAlpha = phaseGlow * corePulse;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 1.8, 0, Math.PI * 2); ctx.fill();
+    // swirling accretion ring
+    ctx.strokeStyle = conduit; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, coreR, coreR * 0.42, tick * 0.04, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, coreR, coreR * 0.42, tick * 0.04 + Math.PI / 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Command bridge — near the tail, with lit viewports ──
+    ctx.fillStyle = hullMid;
+    ctx.beginPath();
+    ctx.moveTo(0, -H * 0.30);
+    ctx.lineTo(W * 0.07, -H * 0.36);
+    ctx.lineTo(W * 0.05, -H * 0.44);
+    ctx.lineTo(-W * 0.05, -H * 0.44);
+    ctx.lineTo(-W * 0.07, -H * 0.36);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = conduit; ctx.globalAlpha = 0.55 + Math.sin(tick * 0.11) * 0.25;
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillRect(i * W * 0.03 - W * 0.012, -H * 0.41, W * 0.024, H * 0.022);
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Twin engine glow at the tail ──
+    for (const s of [1, -1]) {
+      const eg = ctx.createRadialGradient(s * W * 0.06, -H * 0.48, 1, s * W * 0.06, -H * 0.48, W * 0.10);
+      eg.addColorStop(0, conduit);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg; ctx.globalAlpha = 0.5 + Math.sin(tick * 0.2 + s) * 0.2;
+      ctx.beginPath(); ctx.arc(s * W * 0.06, -H * 0.48, W * 0.10, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS ════
+
+    // 1. Twin forward disruptor cannons — flank the beak, aimed at player
+    for (const s of [1, -1]) {
+      const bx = s * W * 0.13, by = H * 0.34;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(bx - W * 0.035, by - H * 0.06, W * 0.07, H * 0.20);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(bx - W * 0.035, by - H * 0.06, W * 0.07, H * 0.04);
+      // muzzle glow
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(bx, by + H * 0.14, W * 0.022, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. Wing-root plasma turrets — domed turret + stubby barrel per wing
+    for (const s of [1, -1]) {
+      const tx = s * W * 0.22, ty = H * 0.04;
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath(); ctx.arc(tx, ty, W * 0.055, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = hullLight;
+      ctx.beginPath(); ctx.arc(tx, ty, W * 0.038, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(tx - W * 0.014, ty, W * 0.028, H * 0.10);
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * 0.7;
+      ctx.beginPath(); ctx.arc(tx, ty - W * 0.01, W * 0.012, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. Wingtip beam lances — slender emitter spikes
+    for (const s of [1, -1]) {
+      const lx = s * W * 0.50, ly = -H * 0.12;
+      ctx.fillStyle = hullAccent;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly + H * 0.16);
+      ctx.lineTo(lx - s * W * 0.02, ly - H * 0.02);
+      ctx.lineTo(lx + s * W * 0.02, ly - H * 0.02);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * (0.5 + corePulse * 0.5);
+      ctx.beginPath(); ctx.arc(lx, ly + H * 0.16, W * 0.018, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. Central torpedo launcher — lit aperture in the lower body
+    ctx.fillStyle = hullDarkest;
+    ctx.beginPath(); ctx.ellipse(0, H * 0.30, W * 0.05, H * 0.06, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = conduit;
+    ctx.globalAlpha = phaseGlow * (0.4 + corePulse * 0.5);
+    ctx.beginPath(); ctx.ellipse(0, H * 0.30, W * 0.03, H * 0.038, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── Bright contour outline last, so the raptor reads against nebula ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 3. ORION FLAGSHIP — bulky, multi-deck command vessel ─────────
