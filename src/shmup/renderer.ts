@@ -2795,6 +2795,30 @@ export class ShmupRenderer {
     ctx.save();
     ctx.translate(enemy.pos.x, enemy.pos.y);
 
+    // ── Cloak state ── Valdore phases out for ~2 seconds. Skip the whole
+    // detailed render and draw only a faint pulsing silhouette — reads as
+    // "she's not really there." The cloak engage/disengage particle ripple
+    // is fired engine-side (updateEnemy) so the transition itself is
+    // covered by a green spark burst.
+    if (enemy.cloakActive && enemy.cloakActive > 0) {
+      const shimmer = 0.10 + Math.sin(tick * 0.22) * 0.06;
+      ctx.strokeStyle = '#33ff66';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = shimmer;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, W * 0.52, H * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner shimmer ring — wave that pulses outward
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = shimmer * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, W * 0.36, H * 0.36, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      return;
+    }
+
     // Entrance energy field — crackling warp-in effect
     if (enemy.pos.y < enemy.height * 0.5) {
       const entrancePct = 1 - enemy.pos.y / (enemy.height * 0.5);

@@ -146,7 +146,7 @@ export const STAGES: Stage[] = [
         { type: 'fighter', faction: 'romulan', x: 0.6, path: swoopRight(0.6) },
       ]},
     ],
-    boss: { name: 'IRW Valdore', type: 'dreadnought', hp: 350, width: 160, height: 100, phases: 4, faction: 'romulan' },
+    boss: { name: 'IRW Valdore', type: 'dreadnought', hp: 700, width: 160, height: 100, phases: 4, faction: 'romulan' },
   },
 
   // ── Stage 3: Orion Syndicate ──────────────────────────────

@@ -87,6 +87,11 @@ export interface Enemy {
   settleY?: number;       // y the enemy settles at for patrol/anchor styles
   enterTimer?: number;    // frames since spawn, used for entry curves
   hitFlash?: number;      // frames remaining of the white hit-flash overlay
+  // Cloaking (Romulan signature mechanic, currently used by Valdore).
+  cloakTimer?: number;    // frames until next cloak cycle begins
+  cloakActive?: number;   // frames remaining of the current cloak (0 = uncloaked)
+  // Per-boss extras (currently Valdore uses these for escort spawn cadence).
+  escortTimer?: number;
   // Boss specific
   phase?: number;
   phaseTimer?: number;

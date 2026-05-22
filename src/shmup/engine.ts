@@ -494,6 +494,9 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
         // alive before pos.y was pushed off-screen → victory never fired.
         if (target.type === 'boss' && target.deathSequence !== undefined) {
           p.phaserCharge -= DRAIN_RATE * 0.4;
+        } else if (target.type === 'boss' && target.cloakActive && target.cloakActive > 0) {
+          // Cloaked boss — phaser drains slowly with no damage; lock-on holds.
+          p.phaserCharge -= DRAIN_RATE * 0.4;
         } else {
         // ── Subsystem shielding applies to the phaser too ──
         // Previously the phaser drained boss.hp directly, bypassing the
@@ -906,6 +909,8 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
       // meant the boss was never pushed off-screen, state.enemies.length
       // never hit 0, and victory never triggered. Game appeared to lock.
       if (enemy.type === 'boss' && enemy.deathSequence !== undefined) continue;
+      // ── Cloak invulnerability (Valdore's Romulan cloak) ──
+      if (enemy.type === 'boss' && enemy.cloakActive && enemy.cloakActive > 0) continue;
       if (hitTest(bullet.pos, bullet.radius, enemy.pos, enemy.width / 2)) {
         // ── Subsystem shielding ──
         // For bosses that carry named weapon hardpoints (T'VAK and future
@@ -1925,6 +1930,8 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
     // and therefore phase — never advances until the hull is exposed.)
     case 'dreadnought': {
       if (!boss.weakPoints) break;
+      // No firing while cloaked — Valdore is silent during her phase shift.
+      if (boss.cloakActive && boss.cloakActive > 0) break;
       const speedBoost = phase >= 3 ? 0.5 : 0;
       const rateBoost = phase >= 3 ? 0.6 : phase >= 2 ? 0.8 : 1;
       // Twin forward disruptors — hull weapon, aimed bolt pair
@@ -2417,6 +2424,11 @@ function spawnBoss(state: ShmupState, config: any): void {
     phaseCount,
     weakPoints,
     bossType: config.type,
+    // Valdore-specific: cloak cycles + escort summon cadence. Other bosses
+    // can ignore these fields (they stay undefined / 0).
+    cloakTimer: config.type === 'dreadnought' ? 540 : 0,
+    cloakActive: 0,
+    escortTimer: config.type === 'dreadnought' ? 360 : 0,
   });
   state.bossHp = config.hp;
   state.bossMaxHp = config.hp;
@@ -2507,6 +2519,61 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
       enemy.fireCooldown = Math.max(10, 18 - expectedPhase * 3);
     }
     if (enemy.phaseTimer !== undefined) enemy.phaseTimer++;
+
+    // ── Valdore (dreadnought) extras: Romulan cloak + escort summons ──
+    if (enemy.bossType === 'dreadnought') {
+      // Cloak cycle. cloakTimer counts down to the next cloak; when it
+      // expires, cloakActive ticks down through a brief invulnerability
+      // window. The hit guards (bullet + phaser + weak-point loops) and
+      // fireBossPattern check cloakActive and skip damage / firing.
+      if (enemy.cloakActive && enemy.cloakActive > 0) {
+        enemy.cloakActive--;
+        // On uncloak: brief shimmer + audio cue (cloak engage/disengage)
+        if (enemy.cloakActive === 0) {
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#33ff66';
+          for (let i = 0; i < 24; i++) {
+            const a = Math.random() * Math.PI * 2;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 3, y: Math.sin(a) * 3 },
+              life: 18, maxLife: 18, color: '#33ff66', size: 2 + Math.random() * 2,
+            });
+          }
+        }
+      } else {
+        enemy.cloakTimer = (enemy.cloakTimer ?? 540) - 1;
+        if (enemy.cloakTimer <= 0) {
+          // Engage cloak — 120 frames (2 sec) of invulnerability + no fire.
+          // Reaccelerates the cycle slightly in later phases.
+          enemy.cloakActive = 120;
+          enemy.cloakTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 60);
+          // Engage flash + particle ripple inward
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#33ff66';
+          for (let i = 0; i < 18; i++) {
+            const a = Math.random() * Math.PI * 2;
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * enemy.width * 0.5,
+                     y: enemy.pos.y + Math.sin(a) * enemy.height * 0.5 },
+              vel: { x: -Math.cos(a) * 2, y: -Math.sin(a) * 2 },
+              life: 22, maxLife: 22, color: '#33ff66', size: 2 + Math.random() * 1.5,
+            });
+          }
+        }
+      }
+      // Escort summons — periodic pairs of Romulan fighters flanking in.
+      // Slightly faster cadence in later phases. Skipped while cloaked.
+      if (!enemy.cloakActive || enemy.cloakActive <= 0) {
+        enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+        if (enemy.escortTimer <= 0) {
+          const wW = state.screenW;
+          spawnEnemy(state, 'fighter', enemy.faction, wW * 0.12);
+          spawnEnemy(state, 'fighter', enemy.faction, wW * 0.88);
+          enemy.escortTimer = Math.max(420, 720 - (enemy.phase ?? 0) * 80);
+        }
+      }
+    }
 
     state.bossHp = enemy.hp;
     return;
@@ -3131,6 +3198,8 @@ function hitTest(a: Vec2, ar: number, b: Vec2, br: number): boolean {
 function handleBossWeakPointHits(state: ShmupState, events: ShmupEvents): void {
   const boss = state.enemies.find(e => e.alive && e.type === 'boss' && e.weakPoints);
   if (!boss?.weakPoints) return;
+  // Cloak invulnerability — Valdore's hardpoints can't be hit while cloaked.
+  if (boss.cloakActive && boss.cloakActive > 0) return;
 
   for (const bullet of state.playerBullets) {
     if (bullet.ttl <= 0) continue;

@@ -12,3 +12,4 @@ dist
 .sprint-timing.txt
 AGENT_BRIEF.md
 .claude-output.txt
+.gstack/
