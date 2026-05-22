@@ -37,15 +37,41 @@ warbird:
   plasma turrets, wingtip beam lances, central torpedo launcher
 - Phase-reactive: conduit + weapon glows intensify each phase
 
+## Changes Made — boss-preview shortcut + F-003 for Valdore
+
+User approved both follow-ups. F-003 (per-boss combat) is now folded into
+each boss as it's done, rather than a separate pass.
+
+- **Boss-preview shortcut** — hidden `?boss=N` URL param (1-indexed) drops
+  straight into a stage's boss fight with a mid-high test loadout. Skips
+  the whole stage. `previewBoss()` in main.ts; not surfaced in any UI.
+- **Valdore F-003** — the 4 drawn weapon systems are now functional
+  destroyable hardpoints:
+  - `spawnBoss` — hoisted the shared `hardpoint` factory; added a
+    `dreadnought` branch with 5 named hardpoints (L/R plasma, L/R wingtip
+    lance, central torpedo). Twin forward disruptors stay the hull's own
+    non-destroyable weapon so the boss never goes toothless.
+  - `fireBossPattern` — replaced the generic dreadnought pattern with
+    per-hardpoint firing; destroying a hardpoint silences that weapon.
+  - `isTvak` flag generalised to cover hardpoint bosses (fireCooldown 1).
+  - Hull auto-shields while any weaponType hardpoint lives (existing
+    T'VAK logic — applies to Valdore for free).
+
+## Decisions Made
+
+- **No phase-gating on Valdore's hardpoint weapons.** The hull stays
+  shielded while subsystems live, so `boss.hp` (hence phase) never advances
+  during the strip. Phase-gated weapons would never fire — so all 5
+  hardpoints fire from the start; incoming fire visibly thins as you
+  destroy them.
+
 ## Open Questions
 
-- Visual review pending on dev (stage 2 boss).
-- Weapon systems are currently cosmetic hull detail — wiring them as
-  destroyable named hardpoints (the T'VAK treatment) is F-003.
-- Reviewing 10 bosses by playing to each is slow — a dev-only boss-preview
-  shortcut would speed the F-002 loop considerably.
+- Visual + combat review of Valdore pending — use `?boss=2` on dev.
+- 9 bosses remain (F-002 + F-003 folded together, ~2-3 per future pass).
 
 ## Links
 
 Backlog:
 - F-002 - Boss hull art overhaul
+- F-003 - Per-boss combat choreography (now folded into F-002 per boss)

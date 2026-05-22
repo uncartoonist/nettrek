@@ -1915,13 +1915,61 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       else { bulletWall(c, 10, 2); if (pt % 4 === 0) aimedSpread(c, 3, 0.3, 4); }
       break;
 
-    // ── 2. IRW VALDORE DREADNOUGHT (loop, romulan) ────────────
-    case 'dreadnought':
-      if (phase === 0) spiralArms(c, 3, 2.6, 0.04);
-      else if (phase === 1) { spiralArms(c, 5, 3, 0.05); if (pt % 5 === 0) aimedSpread(c, 1, 0, 4.5); }
-      else if (phase === 2) { radialBurst(c, 12, 2.5, c.t * 0.03); if (pt % 3 === 0) aimedSpread(c, 3, 0.4, 4); }
-      else { spiralArms(c, 6, 3.5, 0.08); radialBurst(c, 8, 2, -c.t * 0.04); weakPointFire(c); }
+    // ── 2. IRW VALDORE (loop, romulan) — per-hardpoint combat ──
+    // Twin forward disruptors are the hull's own weapon (always online, not
+    // destroyable). 5 destroyable hardpoints — L/R plasma turrets, L/R
+    // wingtip lances, central torpedo — ALL fire from the start, each on its
+    // own cadence. Destroying a hardpoint silences that weapon, so the
+    // incoming fire visibly thins as the player strips the boss. (No phase
+    // gating: the hull stays shielded while subsystems live, so boss.hp —
+    // and therefore phase — never advances until the hull is exposed.)
+    case 'dreadnought': {
+      if (!boss.weakPoints) break;
+      const speedBoost = phase >= 3 ? 0.5 : 0;
+      const rateBoost = phase >= 3 ? 0.6 : phase >= 2 ? 0.8 : 1;
+      // Twin forward disruptors — hull weapon, aimed bolt pair
+      if (pt % Math.floor(72 * rateBoost) === 0) {
+        for (const side of [-1, 1]) {
+          const dx2 = boss.pos.x + side * boss.width * 0.13;
+          const dy2 = boss.pos.y + boss.height * 0.46;
+          const a = Math.atan2(state.player.pos.y - dy2, state.player.pos.x - dx2);
+          bulletAt(c, dx2, dy2, Math.cos(a) * (4.4 + speedBoost), Math.sin(a) * (4.4 + speedBoost),
+            { color: c.color, r: 4.5, trail: true, ttl: 100, shape: 'bolt' });
+        }
+      }
+      // Hardpoints — each fires its own weapon on its own cadence
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        const w = wp.weaponType;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+        if (w === 'plasma') {
+          // Wing-root turret — 3-wide plasma blob fan
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.26;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.5, Math.sin(a) * 2.5,
+              { color: col, r: 6, ttl: 110, shape: 'blob' });
+          }
+        } else if (w === 'phaser') {
+          // Wingtip beam lance — fast aimed streak
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        } else if (w === 'torpedo') {
+          // Central launcher — heavy slow torpedo
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 6, Math.cos(a) * 1.7, Math.sin(a) * 1.7,
+            { color: col, r: 9, trail: true, ttl: 180, shape: 'torpedo' });
+        }
+      }
+      // Exposed-hull desperation — once stripped, the final phase adds a spiral
+      if (phase >= 3 && pt % 28 === 0) spiralArms(c, 5, 3, 0.07);
       break;
+    }
 
     // ── 3. ORION FLAGSHIP (siege, orion) ──────────────────────
     case 'flagship':
@@ -2276,6 +2324,21 @@ function spawnBoss(state: ShmupState, config: any): void {
   const weakPoints: import('./types').WeakPoint[] = [];
   const phaseCount = Math.max(1, config.phases || 3);
 
+  // Shared hardpoint factory for named-weapon bosses (T'VAK, Valdore, ...).
+  const cw = config.width;
+  const ch = config.height;
+  const hardpoint = (x: number, y: number, weapon: import('./types').WeakPoint['weaponType'], label: string, color: string, hpFrac: number, cooldown: number) => ({
+    offset: { x, y },
+    hp: Math.floor(config.hp * hpFrac),
+    maxHp: Math.floor(config.hp * hpFrac),
+    alive: true,
+    weaponType: weapon,
+    label,
+    color,
+    fireTimer: Math.floor(Math.random() * cooldown),
+    fireCooldown: cooldown,
+  });
+
   if (config.type === 'tvak') {
     // T'VAK CLASS — 6 named weapon hardpoints, each destroyable, positioned
     // to match the canonical Klingon War Bird layout from the concept art:
@@ -2285,19 +2348,6 @@ function spawnBoss(state: ShmupState, config: any): void {
     //   tractor beam        — far mid outer (purple swirls)
     //   phaser arrays       — bottom inner (green)
     //   forward torpedoes   — bottom-center cluster (red)
-    const cw = config.width;
-    const ch = config.height;
-    const hardpoint = (x: number, y: number, weapon: import('./types').WeakPoint['weaponType'], label: string, color: string, hpFrac: number, cooldown: number) => ({
-      offset: { x, y },
-      hp: Math.floor(config.hp * hpFrac),
-      maxHp: Math.floor(config.hp * hpFrac),
-      alive: true,
-      weaponType: weapon,
-      label,
-      color,
-      fireTimer: Math.floor(Math.random() * cooldown),
-      fireCooldown: cooldown,
-    });
     // Hardpoint positions tuned to match the concept art's mounting points.
     // Left side of the ship gets one of each pair; the renderer mirrors the
     // visual mounts so each subsystem reads as TWO physical cannons firing
@@ -2313,6 +2363,19 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint( cw * 0.42,  ch * 0.18, 'tractor',   'TRACTOR',   '#aa44ff', 0.16, 240),
       hardpoint(-cw * 0.32,  ch * 0.34, 'phaser',    'PHASER',    '#ff44aa', 0.14, 70),
       hardpoint( 0,           ch * 0.46, 'torpedo',   'TORPEDO',   '#ff3030', 0.16, 110),
+    );
+  } else if (config.type === 'dreadnought') {
+    // IRW VALDORE — 5 named hardpoints matching the drawn weapons:
+    // L/R wing-root plasma turrets, L/R wingtip beam lances, central
+    // torpedo launcher. The twin forward disruptors are the hull's own
+    // persistent weapon (not destroyable) so the boss never goes toothless.
+    // Offsets mirror the weapon positions in bossHullDreadnought.
+    weakPoints.push(
+      hardpoint(-cw * 0.22,  ch * 0.04, 'plasma',  'L PLASMA', '#bb44ff', 0.15, 95),
+      hardpoint( cw * 0.22,  ch * 0.04, 'plasma',  'R PLASMA', '#bb44ff', 0.15, 95),
+      hardpoint(-cw * 0.50, -ch * 0.12, 'phaser',  'L LANCE',  '#ff4499', 0.15, 125),
+      hardpoint( cw * 0.50, -ch * 0.12, 'phaser',  'R LANCE',  '#ff4499', 0.15, 125),
+      hardpoint( 0,          ch * 0.30, 'torpedo', 'TORPEDO',  '#ff3838', 0.16, 150),
     );
   } else {
     // Generic boss: ring of evenly-spaced weak points
@@ -2330,10 +2393,10 @@ function spawnBoss(state: ShmupState, config: any): void {
     }
   }
 
-  // T'VAK has per-weapon cooldowns on its weak points, so the master
-  // fireCooldown runs every frame — fireBossPattern then dispatches to
-  // each active hardpoint based on the weapon's own cadence.
-  const isTvak = config.type === 'tvak';
+  // Hardpoint bosses (T'VAK, Valdore) have per-weapon cooldowns on their
+  // weak points, so the master fireCooldown runs every frame —
+  // fireBossPattern then dispatches to each active hardpoint on its own cadence.
+  const isTvak = config.type === 'tvak' || config.type === 'dreadnought';
 
   state.enemies.push({
     id: nextEnemyId++,

@@ -316,6 +316,35 @@ const hangar = new HangarScreen(state, (stageIdx) => {
   if (pauseBtn) pauseBtn.style.display = 'block';
 });
 
+// ── Dev: boss preview ──────────────────────────────────────
+// Jumps straight into a stage's boss fight with a test loadout, skipping
+// the whole stage. Triggered by the hidden ?boss=N URL param (1-indexed).
+// Not surfaced anywhere in the UI — it's a review tool for boss art/combat.
+function previewBoss(stageIdx: number): void {
+  initAudio();
+  resetDirector();
+  startStage(state, stageIdx);
+  playStageMusic(stageIdx);
+  // Fast-forward to the boss: the engine spawns it once tick >= duration
+  // and the screen is clear (startStage already cleared all enemies).
+  const stage = state.stages[stageIdx];
+  state.tick = stage?.duration ?? 2100;
+  // Test loadout — a mid-high kit so the boss fight is real and reviewable.
+  const p = state.player;
+  p.mainGunLevel = 4;
+  p.wingGunLevel = 3;
+  p.missileLevel = 2;
+  p.laserLevel = 1;
+  p.phaserLevel = 2;
+  p.lockOnPhaserReady = true;
+  p.shields = 4;
+  p.maxShields = 4;
+  p.bombCount = 3;
+  menuOverlay.style.display = 'none';
+  const pauseBtn = document.getElementById('pause-btn');
+  if (pauseBtn) pauseBtn.style.display = 'block';
+}
+
 // ── Event bindings ─────────────────────────────────────────
 // Start theme music on first user interaction (before they hit START)
 let musicStarted = false;
@@ -604,5 +633,14 @@ window.addEventListener('message', (e) => {
   }
 });
 window.parent.postMessage({ type: 'nettrek:ready' }, '*');
+
+// ── Boss-preview URL param ── ?boss=N (1-indexed) jumps to stage N's boss
+const bossParam = new URLSearchParams(location.search).get('boss');
+if (bossParam) {
+  const n = parseInt(bossParam, 10);
+  if (Number.isFinite(n) && n >= 1 && n <= state.stages.length) {
+    previewBoss(n - 1);
+  }
+}
 
 requestAnimationFrame(loop);
