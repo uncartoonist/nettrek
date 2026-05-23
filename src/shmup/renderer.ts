@@ -2795,14 +2795,15 @@ export class ShmupRenderer {
     ctx.save();
     ctx.translate(enemy.pos.x, enemy.pos.y);
 
-    // ── Cloak state ── Valdore phases out for ~2 seconds. Skip the whole
-    // detailed render and draw only a faint pulsing silhouette — reads as
-    // "she's not really there." The cloak engage/disengage particle ripple
-    // is fired engine-side (updateEnemy) so the transition itself is
-    // covered by a green spark burst.
+    // ── Cloak / phase-shift state ── boss is briefly absent. Skip the
+    // detailed render and draw only a faint pulsing silhouette. Color
+    // varies by bossType: Romulan green for Valdore's cloak, crystal cyan
+    // for Guardian's phase shift. Engage/disengage particle bursts are
+    // emitted engine-side so transitions feel decisive.
     if (enemy.cloakActive && enemy.cloakActive > 0) {
       const shimmer = 0.10 + Math.sin(tick * 0.22) * 0.06;
-      ctx.strokeStyle = '#33ff66';
+      const cloakColor = enemy.bossType === 'guardian' ? '#aaccff' : '#33ff66';
+      ctx.strokeStyle = cloakColor;
       ctx.lineWidth = 1.5;
       ctx.globalAlpha = shimmer;
       ctx.beginPath();
@@ -4315,40 +4316,175 @@ export class ShmupRenderer {
     trace(); ctx.stroke();
   }
 
-  // ── 5. ANOMALY GUARDIAN — geometric crystal sentinel ─────────────
-  private bossHullGuardian(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Outer crystal hexagon
-    ctx.fillStyle = dk;
-    ctx.beginPath();
+  // ── 5. ANOMALY GUARDIAN — Klingon crystal sentinel ──────────────
+  // Faceted hexagonal sentinel guarding a spacetime anomaly. Crystal-grey
+  // armor with violet anomaly energy at the central lens. Seven hardpoints
+  // mounted on the hex facets. The hull slowly counter-rotates (or rather:
+  // the inner hex spins relative to the outer hull) for a "watching/
+  // alert" feel.
+  private bossHullGuardian(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#0c1418';
+    const hullDark    = '#1f2830';
+    const hullMid     = '#384452';
+    const hullLight   = '#56657a';
+    const hullAccent  = '#8aa0bb';
+    const anomaly     = '#aaccff';
+    const anomalyHot  = '#dde8ff';
+    const anomalyDeep = '#5566cc';
+    const corePulse = 0.6 + Math.sin(tick * 0.09) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.14;
+    const spin = tick * 0.004;
+
+    // ── Outer hex hull silhouette (slightly elongated vertical) ──
+    const outerHex = (): void => {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
+        const x = Math.cos(a) * W * 0.50;
+        const y = Math.sin(a) * H * 0.48;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    };
+
+    // Dark base
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = hullDark;
+    outerHex(); ctx.fill();
+
+    // ── Hex armor segments — 6 trapezoids around the rim ──
+    ctx.fillStyle = hullMid;
+    for (let i = 0; i < 6; i++) {
+      const a1 = (Math.PI * 2 / 6) * i - Math.PI / 2;
+      const a2 = (Math.PI * 2 / 6) * (i + 1) - Math.PI / 2;
+      const inner = 0.30, outer = 0.46;
+      const x1 = Math.cos(a1) * W * outer, y1 = Math.sin(a1) * H * (outer * 0.96);
+      const x2 = Math.cos(a2) * W * outer, y2 = Math.sin(a2) * H * (outer * 0.96);
+      const x3 = Math.cos(a2) * W * inner, y3 = Math.sin(a2) * H * (inner * 0.96);
+      const x4 = Math.cos(a1) * W * inner, y4 = Math.sin(a1) * H * (inner * 0.96);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.lineTo(x4, y4);
+      ctx.closePath(); ctx.fill();
+    }
+    // Segment seams
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
     for (let i = 0; i < 6; i++) {
       const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
-      const x = Math.cos(a) * W * 0.5;
-      const y = Math.sin(a) * H * 0.48;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * W * 0.28, Math.sin(a) * H * 0.27);
+      ctx.lineTo(Math.cos(a) * W * 0.48, Math.sin(a) * H * 0.46);
+      ctx.stroke();
     }
-    ctx.closePath(); ctx.fill();
-    // Inner hex (rotated)
-    ctx.fillStyle = md;
+
+    // ── Inner spinning hex (counter-rotating crystal core) ──
+    ctx.save();
+    ctx.rotate(spin);
+    ctx.fillStyle = hullLight;
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
       const a = (Math.PI * 2 / 6) * i;
-      const x = Math.cos(a) * W * 0.3;
-      const y = Math.sin(a) * H * 0.28;
+      const x = Math.cos(a) * W * 0.24;
+      const y = Math.sin(a) * H * 0.23;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath(); ctx.fill();
-    // Central core pulsing
-    const cp = 0.65 + Math.sin(tick * 0.06) * 0.25;
-    ctx.fillStyle = color; ctx.globalAlpha = cp;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.13, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = cp * 0.7;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.06, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-    // Vertex weapon ports
+    // Inner facet highlights
+    ctx.strokeStyle = hullAccent; ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.65;
     for (let i = 0; i < 6; i++) {
-      const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
-      this.bossPort(ctx, Math.cos(a) * W * 0.5, Math.sin(a) * H * 0.48, 4, color, tick, phase);
+      const a = (Math.PI * 2 / 6) * i;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * W * 0.22, Math.sin(a) * H * 0.21);
+      ctx.stroke();
     }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // ── ANOMALY LENS — central portal to the guarded anomaly ──
+    // Black core, swirling violet event horizon, pulsing white singularity.
+    const lensR = W * 0.12;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, lensR, 0, Math.PI * 2); ctx.fill();
+    // Anomaly swirl — three counter-rotating rings
+    ctx.strokeStyle = anomalyDeep; ctx.lineWidth = 3;
+    ctx.globalAlpha = phaseGlow * corePulse * 0.9;
+    ctx.beginPath();
+    ctx.arc(0, 0, lensR * 1.15, tick * 0.05, tick * 0.05 + Math.PI * 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = anomaly; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, lensR * 1.30, -tick * 0.07, -tick * 0.07 + Math.PI * 1.2);
+    ctx.stroke();
+    ctx.strokeStyle = anomalyHot; ctx.lineWidth = 1;
+    ctx.globalAlpha = phaseGlow * corePulse;
+    ctx.beginPath();
+    ctx.arc(0, 0, lensR * 1.45, tick * 0.09, tick * 0.09 + Math.PI * 0.9);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Bright lens core
+    const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, lensR);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.4, anomaly);
+    cg.addColorStop(1, 'transparent');
+    ctx.fillStyle = cg;
+    ctx.globalAlpha = phaseGlow * (0.7 + corePulse * 0.3);
+    ctx.beginPath(); ctx.arc(0, 0, lensR, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON FACETS ════
+
+    // L/R LOWER PLASMA facets — diamond mounts
+    for (const s of [1, -1]) {
+      const px = s * W * 0.26, py = H * 0.30;
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath();
+      ctx.moveTo(px, py - W * 0.04);
+      ctx.lineTo(px + W * 0.04, py);
+      ctx.lineTo(px, py + W * 0.04);
+      ctx.lineTo(px - W * 0.04, py);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#8844ff';
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(px, py, W * 0.018, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // L/R UPPER PHASER facets — narrow rectangular emitters
+    for (const s of [1, -1]) {
+      const ex = s * W * 0.30, ey = -H * 0.10;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ex - W * 0.025, ey - H * 0.04, W * 0.05, H * 0.08);
+      ctx.fillStyle = anomaly;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      ctx.fillRect(ex - W * 0.014, ey - H * 0.025, W * 0.028, H * 0.05);
+      ctx.globalAlpha = 1;
+    }
+
+    // L/R OUTER MISSILE facets — boxy launchers on the outer hex points
+    for (const s of [1, -1]) {
+      const mx = s * W * 0.40, my = -H * 0.30;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.05, my - H * 0.04, W * 0.10, H * 0.08);
+      // Two tube ports
+      ctx.fillStyle = '#3344aa';
+      for (let t = -1; t <= 1; t += 2) {
+        ctx.fillRect(mx + t * W * 0.022 - W * 0.012, my - H * 0.02, W * 0.024, H * 0.05);
+      }
+      ctx.fillStyle = anomaly;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let t = -1; t <= 1; t += 2) {
+        ctx.beginPath();
+        ctx.arc(mx + t * W * 0.022, my - H * 0.005, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    outerHex(); ctx.stroke();
   }
 
   // ── 6. RIFT SOVEREIGN — Romulan elite, slender raptor ────────────

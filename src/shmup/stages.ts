@@ -276,7 +276,7 @@ export const STAGES: Stage[] = [
         { type: 'cruiser', faction: 'klingon', x: 0.5, path: straight(0.5), dropType: 'bomb' },
       ]},
     ],
-    boss: { name: 'Anomaly Guardian', type: 'guardian', hp: 600, width: 160, height: 100, phases: 4, faction: 'klingon' },
+    boss: { name: 'Anomaly Guardian', type: 'guardian', hp: 1500, width: 160, height: 100, phases: 4, faction: 'klingon' },
   },
 
   // ── Stage 6: Wormhole Transit ─────────────────────────────

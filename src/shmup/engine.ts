@@ -2091,13 +2091,60 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 5. ANOMALY GUARDIAN (pulse_walls, klingon) ────────────
-    case 'guardian':
-      if (phase === 0) wingShots(c, 5, 2.6);
-      else if (phase === 1) { aimedSpread(c, 5, 0.5, 3.5); if (pt % 4 === 0) spiralArms(c, 3, 3); }
-      else if (phase === 2) { bulletWall(c, 9, 2); if (pt % 3 === 0) aimedSpread(c, 3, 0.4, 4); }
-      else { wingShots(c, 9, 3.2); spiralArms(c, 4, 3); weakPointFire(c); }
+    // ── 5. ANOMALY GUARDIAN (klingon) — per-hardpoint, crystal sentinel ──
+    // 7 destroyable hardpoints around a central Anomaly Lens that fires
+    // a radial-burst (sun-flare). Phase-shift teleport + crystal shard
+    // drops handled in updateEnemy. No always-on hull weapon.
+    case 'guardian': {
+      if (!boss.weakPoints) break;
+      // No firing while phase-shifted (cloakActive reused as invuln window)
+      if (boss.cloakActive && boss.cloakActive > 0) break;
+      const speedBoost = phase >= 3 ? 0.4 : 0;
+      const rateBoost = phase >= 3 ? 0.6 : phase >= 2 ? 0.8 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'ANOMALY LENS') {
+          // ── Signature: radial-burst sun-flare ──
+          // Emits a ring of bolts in all directions from the lens. Slow,
+          // dramatic, and forces the player to break their pattern.
+          const N = 14;
+          const offset = ((boss.phaseTimer ?? 0) * 0.05) % (Math.PI * 2);
+          for (let i = 0; i < N; i++) {
+            const a = (Math.PI * 2 / N) * i + offset;
+            bulletAt(c, wx, wy, Math.cos(a) * (2.4 + speedBoost), Math.sin(a) * (2.4 + speedBoost),
+              { color: col, r: 5, trail: true, ttl: 130, shape: 'phaserlance' });
+          }
+          state.screenShake = Math.max(state.screenShake, 4);
+        } else if (wp.weaponType === 'plasma') {
+          // Lower-facet plasma — wide 3-blob fan
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.28;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.4, Math.sin(a) * 2.4,
+              { color: col, r: 6, ttl: 120, shape: 'blob' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Upper-facet phaser — aimed lance
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        } else if (wp.weaponType === 'missile') {
+          // Outer-facet missile — paired homing
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.20;
+            bulletAt(c, wx + side * 4, wy + 4, Math.cos(a) * 2.0, Math.sin(a) * 2.6,
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
+          }
+        }
+      }
       break;
+    }
 
     // ── 6. RIFT SOVEREIGN (swarm, romulan) ────────────────────
     case 'sovereign':
@@ -2513,6 +2560,24 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.30, -ch * 0.32, 'phaser',    'L AFT PHASER','#44ffaa', 0.11, 130),
       hardpoint( cw * 0.30, -ch * 0.32, 'phaser',    'R AFT PHASER','#44ffaa', 0.11, 130),
     );
+  } else if (config.type === 'guardian') {
+    // ANOMALY GUARDIAN — Klingon hex crystal sentinel guarding an anomaly.
+    // 7 facet-mounted hardpoints around a central Anomaly Lens:
+    //   central ANOMALY LENS (signature radial-burst weapon)
+    //   L/R LOWER plasma facets (player-facing)
+    //   L/R UPPER phaser facets
+    //   L/R OUTER missile facets (hex shoulders)
+    // No always-on hull weapon. The unique mechanic is the Phase Shift
+    // teleport (cloakActive reused) — boss vanishes, reappears elsewhere.
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.12, 'torpedo',   'ANOMALY LENS','#ccddff', 0.16, 180),
+      hardpoint(-cw * 0.26,  ch * 0.30, 'plasma',    'L PLASMA',    '#8844ff', 0.12, 100),
+      hardpoint( cw * 0.26,  ch * 0.30, 'plasma',    'R PLASMA',    '#8844ff', 0.12, 100),
+      hardpoint(-cw * 0.30, -ch * 0.10, 'phaser',    'L PHASER',    '#aaccff', 0.11,  90),
+      hardpoint( cw * 0.30, -ch * 0.10, 'phaser',    'R PHASER',    '#aaccff', 0.11,  90),
+      hardpoint(-cw * 0.40, -ch * 0.30, 'missile',   'L MISSILE',   '#6688ff', 0.11, 140),
+      hardpoint( cw * 0.40, -ch * 0.30, 'missile',   'R MISSILE',   '#6688ff', 0.11, 140),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2534,7 +2599,8 @@ function spawnBoss(state: ShmupState, config: any): void {
   // frame — fireBossPattern dispatches to each active hardpoint on its cadence.
   const isTvak =
     config.type === 'tvak' || config.type === 'dreadnought' ||
-    config.type === 'flagship' || config.type === 'gravitymarauder';
+    config.type === 'flagship' || config.type === 'gravitymarauder' ||
+    config.type === 'guardian';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2555,16 +2621,19 @@ function spawnBoss(state: ShmupState, config: any): void {
     phaseCount,
     weakPoints,
     bossType: config.type,
-    // Valdore-specific: cloak cycles + escort summon cadence. Other bosses
-    // can ignore these fields (they stay undefined / 0). Flagship reuses
-    // escortTimer for its periodic mine drops; Marauder for vortex drops
-    // and adds pullTimer/pullActive for its gravity-pull cycle.
-    cloakTimer: config.type === 'dreadnought' ? 540 : 0,
+    // Per-boss extras. The cloak fields are reused by Guardian for its
+    // phase-shift teleport cycle (same invulnerability semantics, different
+    // visual treatment in the renderer). escortTimer = periodic spawn
+    // cadence per boss (escorts / mines / vortexes / crystal shards).
+    cloakTimer:
+      config.type === 'dreadnought' ? 540 :
+      config.type === 'guardian'    ? 600 : 0,
     cloakActive: 0,
     escortTimer:
       config.type === 'dreadnought' ? 360 :
       config.type === 'flagship'    ? 480 :
-      config.type === 'gravitymarauder' ? 540 : 0,
+      config.type === 'gravitymarauder' ? 540 :
+      config.type === 'guardian'    ? 480 : 0,
     pullTimer: config.type === 'gravitymarauder' ? 480 : 0,
     pullActive: 0,
   });
@@ -2824,6 +2893,67 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           pullStrength: 0.18 + (enemy.phase ?? 0) * 0.04,
         });
         enemy.escortTimer = Math.max(420, 660 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Anomaly Guardian extras: Phase-Shift Teleport + Crystal Shards ──
+    if (enemy.bossType === 'guardian') {
+      // Phase Shift — reuses cloakActive/cloakTimer for invulnerability
+      // semantics, but on uncloak we TELEPORT the boss to a new on-screen
+      // position. The crystal-cyan ghost render is handled in drawBoss by
+      // switching on bossType.
+      if (enemy.cloakActive && enemy.cloakActive > 0) {
+        enemy.cloakActive--;
+        // Mid-blink: snap to a new random position once we're deep in the
+        // phase-shift (frame 90 of 90 going down — i.e. when first half done)
+        if (enemy.cloakActive === 60) {
+          const margin = enemy.width * 0.6;
+          enemy.pos.x = margin + Math.random() * (state.screenW - margin * 2);
+          enemy.pos.y = enemy.height * 0.6 + Math.random() * (state.screenH * 0.25);
+          // Arrival particle burst at the new position
+          for (let i = 0; i < 22; i++) {
+            const a = (Math.PI * 2 / 22) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 3.5, y: Math.sin(a) * 3.5 },
+              life: 24, maxLife: 24, color: '#ccddff', size: 2 + Math.random(),
+            });
+          }
+        }
+      } else {
+        enemy.cloakTimer = (enemy.cloakTimer ?? 600) - 1;
+        if (enemy.cloakTimer <= 0) {
+          enemy.cloakActive = 90;
+          enemy.cloakTimer = Math.max(420, 600 - (enemy.phase ?? 0) * 50);
+          // Departure burst at the OLD position before the teleport
+          state.screenShake = Math.max(state.screenShake, 5);
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#88aaff';
+          for (let i = 0; i < 22; i++) {
+            const a = (Math.PI * 2 / 22) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 4, y: Math.sin(a) * 4 },
+              life: 20, maxLife: 20, color: '#88aaff', size: 2 + Math.random(),
+            });
+          }
+        }
+      }
+      // Periodic crystal-shard splitter drops — geometric hazards
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        const sx = enemy.pos.x + (Math.random() - 0.5) * state.screenW * 0.4;
+        const sy = enemy.pos.y + enemy.height * 0.5;
+        state.obstacles.push({
+          pos: { x: sx, y: sy },
+          vel: { x: (Math.random() - 0.5) * 0.5, y: 0.8 + Math.random() * 0.4 },
+          radius: 14,
+          hp: 3,
+          type: 'splitter',
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: 0.06,
+        });
+        enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
       }
     }
 
