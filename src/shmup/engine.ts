@@ -1137,8 +1137,14 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
   if (p.alive && p.invulnTimer <= 0) {
     for (const enemy of state.enemies) {
       if (!enemy.alive) continue;
+      // A boss mid-deathSequence still has a hitbox visually, but ramming
+      // into it shouldn't damage the boss again (which would zero alive
+      // outside the sequence and freeze the victory transition). The
+      // player still takes hit damage from the collision, fairly.
       if (hitTest(p.pos, p.width / 3, enemy.pos, enemy.width / 3)) {
         hitPlayer(state, events);
+        if (enemy.type === 'boss' && enemy.deathSequence !== undefined) break;
+        if (enemy.type === 'boss' && enemy.cloakActive && enemy.cloakActive > 0) break;
         enemy.hp -= 5;
         if (enemy.hp <= 0) killEnemy(state, enemy, events);
         break;
@@ -1224,6 +1230,12 @@ export function updateShmup(state: ShmupState, input: ShmupInput): ShmupEvents {
     if (zone.life === 7) { // only apply damage on first active frame
       for (const enemy of state.enemies) {
         if (!enemy.alive) continue;
+        // Bosses in their scripted death sequence or while cloaked are
+        // immune to explosion chain damage too — otherwise a chain blast
+        // can kill the boss mid-sequence on the standard path and the
+        // corpse never gets pushed off-screen.
+        if (enemy.type === 'boss' && enemy.deathSequence !== undefined) continue;
+        if (enemy.type === 'boss' && enemy.cloakActive && enemy.cloakActive > 0) continue;
         const dx = enemy.pos.x - zone.pos.x;
         const dy = enemy.pos.y - zone.pos.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3089,6 +3101,19 @@ function killEnemy(state: ShmupState, enemy: Enemy, events: ShmupEvents): void {
 
   enemy.alive = false;
   events.enemyKilled = { ...enemy.pos };
+
+  // ── Bulletproof boss removal ──
+  // For ANY boss, push pos.y off-screen on the standard kill path so the
+  // enemy-array filter removes it next frame. Without this, a dead boss
+  // (alive=false, pos.y still mid-screen) sat in state.enemies forever,
+  // which used to break the old length-based victory check. The new
+  // some(alive) check tolerates it, but particle FX + the victory flow
+  // still feel cleaner when the corpse is gone immediately. Also: T'VAK
+  // killed prematurely (collision/explosion during sequence) needs this
+  // explicit push since runTvakDeathSequence won't reach its own push.
+  if (enemy.type === 'boss') {
+    enemy.pos.y = state.screenH + 200;
+  }
 
   // Score — with multiplier support
   const baseScore = { fighter: 100, bomber: 200, cruiser: 500, elite: 800, turret: 300, boss: 5000 }[enemy.type] || 100;
