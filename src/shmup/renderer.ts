@@ -4097,36 +4097,222 @@ export class ShmupRenderer {
   }
 
   // ── 4. SINGULARITY MARAUDER — dish + gravity core ────────────────
-  private bossHullGravityMarauder(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Outer dish ring (parabolic gravity collector)
-    ctx.strokeStyle = dk; ctx.lineWidth = W * 0.05;
-    ctx.beginPath(); ctx.ellipse(0, 0, W * 0.45, H * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
-    // Inner dish fill
-    ctx.fillStyle = md;
-    ctx.beginPath(); ctx.ellipse(0, 0, W * 0.42, H * 0.38, 0, 0, Math.PI * 2); ctx.fill();
-    // Radial support struts
-    ctx.strokeStyle = dk; ctx.lineWidth = 2;
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI * 2 / 6) * i + tick * 0.005;
+  // ── 4. SINGULARITY MARAUDER — Romulan gravity-warfare vessel ─────
+  // Heavy industrial Romulan hull, distinct from Valdore's sleek raptor.
+  // Hexagonal command body, forward-extending grappler claws, a massive
+  // ventral SINGULARITY DISH with a black-hole core. Seven hardpoints:
+  // central singularity cannon, L/R claw-tip disruptors, L/R mid-flank
+  // plasma conduits, L/R aft phaser banks on the upper shoulders.
+  private bossHullGravityMarauder(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#0c1f12';
+    const hullDark    = '#1c3525';
+    const hullMid     = '#2c4a36';
+    const hullLight   = '#446852';
+    const hullAccent  = '#7da689';
+    const conduit     = '#33ff88';
+    const conduitHot  = '#88ffbb';
+    const conduitDim  = '#0c3a22';
+    const corePulse = 0.65 + Math.sin(tick * 0.09) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.15;
+
+    // ── Silhouette: hex command body + forward claws ──
+    const half: [number, number][] = [
+      [0.00, -0.50],  // top center (rear)
+      [0.22, -0.42],  // upper shoulder (aft phaser mount)
+      [0.40, -0.30],  // angled upper flank
+      [0.50, -0.10],
+      [0.50,  0.10],  // mid flank (plasma conduit)
+      [0.42,  0.24],  // upper claw arm
+      [0.50,  0.34],  // claw outer
+      [0.42,  0.46],  // claw tip (grappler disruptor)
+      [0.26,  0.40],  // claw inner
+      [0.18,  0.30],  // inner notch (between claws + dish)
+      [0.12,  0.34],  // dish flank
+      [0.00,  0.44],  // dish bottom
+    ];
+    const trace = () => {
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * W * 0.15, Math.sin(a) * H * 0.13);
-      ctx.lineTo(Math.cos(a) * W * 0.42, Math.sin(a) * H * 0.38);
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
+    // Dark hull base
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Hex command body inset — raised central armor ──
+    ctx.fillStyle = hullMid;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
+      const x = Math.cos(a) * W * 0.26;
+      const y = Math.sin(a) * H * 0.24;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    // hex panel seams
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
+      const x = Math.cos(a) * W * 0.26;
+      const y = Math.sin(a) * H * 0.24;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+
+    // ── Grappler claw armor plating (per side) ──
+    ctx.fillStyle = hullLight;
+    for (const s of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.40, H * 0.24);
+      ctx.lineTo(s * W * 0.46, H * 0.34);
+      ctx.lineTo(s * W * 0.40, H * 0.44);
+      ctx.lineTo(s * W * 0.30, H * 0.40);
+      ctx.lineTo(s * W * 0.26, H * 0.30);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // ── Hull greebles / panel seams ──
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    for (const s of [1, -1]) {
+      // diagonal seam from shoulder to flank
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.22, -H * 0.40);
+      ctx.lineTo(s * W * 0.48, -H * 0.10);
+      ctx.stroke();
+      // mid-body horizontal panel line
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.18, 0);
+      ctx.lineTo(s * W * 0.45, 0);
       ctx.stroke();
     }
-    // Singularity core — spinning accretion ring
-    const corePulse = 0.7 + Math.sin(tick * 0.08) * 0.25;
-    ctx.fillStyle = '#000000';
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.13, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.globalAlpha = corePulse;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, tick * 0.04, tick * 0.04 + Math.PI * 1.6); ctx.stroke();
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.globalAlpha = corePulse * 0.6;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.19, -tick * 0.05, -tick * 0.05 + Math.PI * 1.2); ctx.stroke();
+
+    // ── Heavy aft engine bank (top edge — boss rear) ──
+    for (let i = -1; i <= 1; i++) {
+      const ex = i * W * 0.16;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ex - W * 0.05, -H * 0.50, W * 0.10, H * 0.08);
+      const eg = ctx.createRadialGradient(ex, -H * 0.50, 1, ex, -H * 0.50, W * 0.10);
+      eg.addColorStop(0, conduit);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg; ctx.globalAlpha = 0.55 + Math.sin(tick * 0.18 + i) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, -H * 0.50, W * 0.10, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.globalAlpha = 1;
-    // Rim ports
-    this.bossPort(ctx, 0, -H * 0.4, 5, color, tick, phase);
-    this.bossPort(ctx, 0, H * 0.4, 5, color, tick, phase);
-    this.bossPort(ctx, -W * 0.42, 0, 5, color, tick, phase);
-    this.bossPort(ctx, W * 0.42, 0, 5, color, tick, phase);
+
+    // ════ VENTRAL SINGULARITY DISH ════
+    // The signature visual — a massive concave dish on the underside
+    // (facing the player) with a black-hole core and swirling event horizon.
+    {
+      const dx = 0, dy = H * 0.30;
+      // Dish rim — heavy bracket
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath();
+      ctx.ellipse(dx, dy, W * 0.22, H * 0.13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner dish surface — concentric rings
+      ctx.strokeStyle = hullAccent;
+      ctx.lineWidth = 1;
+      for (let r = 1; r <= 3; r++) {
+        ctx.globalAlpha = 0.4 + r * 0.1;
+        ctx.beginPath();
+        ctx.ellipse(dx, dy, W * 0.20 * (r / 3), H * 0.115 * (r / 3), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // Radial support spokes
+      ctx.strokeStyle = hullMid; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 / 8) * i + tick * 0.006;
+        ctx.beginPath();
+        ctx.moveTo(dx + Math.cos(a) * W * 0.05, dy + Math.sin(a) * H * 0.03);
+        ctx.lineTo(dx + Math.cos(a) * W * 0.20, dy + Math.sin(a) * H * 0.115);
+        ctx.stroke();
+      }
+      // Black-hole core
+      ctx.fillStyle = '#000000';
+      ctx.beginPath(); ctx.arc(dx, dy, W * 0.06, 0, Math.PI * 2); ctx.fill();
+      // Accretion ring (swirling)
+      ctx.strokeStyle = conduit;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = phaseGlow * corePulse;
+      ctx.beginPath();
+      ctx.arc(dx, dy, W * 0.075, tick * 0.05, tick * 0.05 + Math.PI * 1.7); ctx.stroke();
+      ctx.strokeStyle = conduitHot; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(dx, dy, W * 0.095, -tick * 0.06, -tick * 0.06 + Math.PI * 1.3); ctx.stroke();
+      ctx.globalAlpha = 1;
+      // Bright singularity core dot
+      const cg = ctx.createRadialGradient(dx, dy, 1, dx, dy, W * 0.05);
+      cg.addColorStop(0, '#ffffff');
+      cg.addColorStop(0.4, conduit);
+      cg.addColorStop(1, 'transparent');
+      ctx.fillStyle = cg; ctx.globalAlpha = phaseGlow * (0.7 + corePulse * 0.3);
+      ctx.beginPath(); ctx.arc(dx, dy, W * 0.05, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // ════ WEAPON SYSTEMS ════
+
+    // 1. CENTRAL SINGULARITY CANNON — emerges from the dish core (already drawn).
+    //    The dish + core visually IS the cannon. Just add a forward muzzle.
+    ctx.fillStyle = hullDarkest;
+    ctx.fillRect(-W * 0.04, H * 0.30, W * 0.08, H * 0.18);
+    ctx.fillStyle = conduit;
+    ctx.globalAlpha = phaseGlow * (0.5 + corePulse * 0.4);
+    ctx.beginPath(); ctx.arc(0, H * 0.46, W * 0.025, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // 2. L/R GRAPPLER CLAW DISRUPTORS — at the claw tips
+    for (const s of [1, -1]) {
+      const cx = s * W * 0.42, cy = H * 0.42;
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath(); ctx.arc(cx, cy, W * 0.045, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = hullLight;
+      ctx.beginPath(); ctx.arc(cx, cy, W * 0.030, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.35);
+      ctx.beginPath(); ctx.arc(cx, cy, W * 0.012, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R PLASMA CONDUITS — mid-flank, glowing energy ports
+    for (const s of [1, -1]) {
+      const px = s * W * 0.45, py = 0;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(px - W * 0.025, py - H * 0.05, W * 0.05, H * 0.10);
+      // Pulsing inner glow
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.fillRect(px - W * 0.015, py - H * 0.035, W * 0.030, H * 0.070);
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R AFT PHASER BANKS — upper shoulders, aimed forward/down
+    for (const s of [1, -1]) {
+      const ax = s * W * 0.30, ay = -H * 0.32;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ax - W * 0.045, ay - H * 0.02, W * 0.09, H * 0.05);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(ax - W * 0.045, ay - H * 0.02, W * 0.09, H * 0.015);
+      // Three small emitter dots
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * 0.7;
+      for (let t = -1; t <= 1; t++) {
+        ctx.beginPath();
+        ctx.arc(ax + t * W * 0.025, ay + H * 0.013, W * 0.008, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline last ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 5. ANOMALY GUARDIAN — geometric crystal sentinel ─────────────

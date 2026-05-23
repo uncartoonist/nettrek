@@ -2039,13 +2039,57 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 4. SINGULARITY MARAUDER (vortex_storm, romulan) ───────
-    case 'gravitymarauder':
-      if (phase === 0) { spiralArms(c, 4, 1.8, 0.025); if (pt % 6 === 0) aimedSpread(c, 1, 0, 3.5); }
-      else if (phase === 1) { spiralArms(c, 6, 2.2, 0.035); if (pt % 4 === 0) aimedSpread(c, 3, 0.5, 3.5); }
-      else if (phase === 2) { radialBurst(c, 14, 2, c.t * 0.02); if (pt % 5 === 0) weakPointFire(c); }
-      else { spiralArms(c, 5, 2.6, -0.04); radialBurst(c, 10, 2.4, c.t * 0.03); weakPointFire(c); }
+    // ── 4. SINGULARITY MARAUDER (vortex_storm, romulan) — per-hardpoint ──
+    // 7 destroyable hardpoints: central Singularity Cannon (heavy slow
+    // gravity orb), L/R Grappler disruptors, L/R Plasma Conduits, L/R Aft
+    // Phasers. Gravity-pull + vortex drops happen in updateEnemy. No
+    // always-on hull weapon — stripped Marauder is fully exposed.
+    case 'gravitymarauder': {
+      if (!boss.weakPoints) break;
+      // While the gravity pull is active, weapons go quiet — the boss is
+      // committed to the pull and you can focus on resisting/repositioning.
+      if (boss.pullActive && boss.pullActive > 0) break;
+      const speedBoost = phase >= 3 ? 0.4 : 0;
+      const rateBoost = phase >= 3 ? 0.65 : phase >= 2 ? 0.8 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'SINGULARITY') {
+          // ── Signature: heavy gravity orb ──
+          // Slow, big, dark — fired in a 3-shot spread so the player must
+          // pick a lane. Long-lived; punishes standing still.
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.18;
+            bulletAt(c, wx + i * 8, wy + 6, Math.cos(a) * 1.4, Math.sin(a) * 1.4 + 0.3,
+              { color: col, r: 11, ttl: 220, shape: 'blob' });
+          }
+        } else if (wp.weaponType === 'disruptor') {
+          // Grappler claw disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.4 + speedBoost), Math.sin(a) * (4.4 + speedBoost),
+            { color: col, r: 4.5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'plasma') {
+          // Plasma conduit — 3-wide plasma blob fan
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.28;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.3, Math.sin(a) * 2.3,
+              { color: col, r: 6, ttl: 120, shape: 'blob' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Aft phaser bank — thin aimed lance
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        }
+      }
       break;
+    }
 
     // ── 5. ANOMALY GUARDIAN (pulse_walls, klingon) ────────────
     case 'guardian':
@@ -2452,6 +2496,23 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.46,  ch * 0.04, 'phaser',    'L GATLING',   '#ffcc66', 0.11,  60),
       hardpoint( cw * 0.46,  ch * 0.04, 'phaser',    'R GATLING',   '#ffcc66', 0.11,  60),
     );
+  } else if (config.type === 'gravitymarauder') {
+    // SINGULARITY MARAUDER — heavy Romulan industrial vessel with a ventral
+    // gravity dish + forward grappler claws. 7 hardpoints:
+    //   central SINGULARITY CANNON (heavy gravity-warped projectile)
+    //   L/R GRAPPLER disruptors at the claw tips
+    //   L/R PLASMA CONDUITS on the mid-flanks
+    //   L/R AFT PHASERS on the upper shoulders
+    // No always-on hull weapon — when stripped, fully exposed.
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.30, 'torpedo',   'SINGULARITY', '#33ff88', 0.16, 240),
+      hardpoint(-cw * 0.42,  ch * 0.42, 'disruptor', 'L GRAPPLER',  '#88ffbb', 0.11, 100),
+      hardpoint( cw * 0.42,  ch * 0.42, 'disruptor', 'R GRAPPLER',  '#88ffbb', 0.11, 100),
+      hardpoint(-cw * 0.45,  0,          'plasma',    'L CONDUIT',   '#33ff88', 0.12, 110),
+      hardpoint( cw * 0.45,  0,          'plasma',    'R CONDUIT',   '#33ff88', 0.12, 110),
+      hardpoint(-cw * 0.30, -ch * 0.32, 'phaser',    'L AFT PHASER','#44ffaa', 0.11, 130),
+      hardpoint( cw * 0.30, -ch * 0.32, 'phaser',    'R AFT PHASER','#44ffaa', 0.11, 130),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2468,10 +2529,12 @@ function spawnBoss(state: ShmupState, config: any): void {
     }
   }
 
-  // Hardpoint bosses (T'VAK, Valdore, Flagship) have per-weapon cooldowns
-  // on their weak points, so the master fireCooldown runs every frame —
-  // fireBossPattern then dispatches to each active hardpoint on its own cadence.
-  const isTvak = config.type === 'tvak' || config.type === 'dreadnought' || config.type === 'flagship';
+  // Hardpoint bosses (T'VAK, Valdore, Flagship, Marauder) have per-weapon
+  // cooldowns on their weak points, so the master fireCooldown runs every
+  // frame — fireBossPattern dispatches to each active hardpoint on its cadence.
+  const isTvak =
+    config.type === 'tvak' || config.type === 'dreadnought' ||
+    config.type === 'flagship' || config.type === 'gravitymarauder';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2494,10 +2557,16 @@ function spawnBoss(state: ShmupState, config: any): void {
     bossType: config.type,
     // Valdore-specific: cloak cycles + escort summon cadence. Other bosses
     // can ignore these fields (they stay undefined / 0). Flagship reuses
-    // escortTimer for its periodic mine drops.
+    // escortTimer for its periodic mine drops; Marauder for vortex drops
+    // and adds pullTimer/pullActive for its gravity-pull cycle.
     cloakTimer: config.type === 'dreadnought' ? 540 : 0,
     cloakActive: 0,
-    escortTimer: config.type === 'dreadnought' ? 360 : config.type === 'flagship' ? 480 : 0,
+    escortTimer:
+      config.type === 'dreadnought' ? 360 :
+      config.type === 'flagship'    ? 480 :
+      config.type === 'gravitymarauder' ? 540 : 0,
+    pullTimer: config.type === 'gravitymarauder' ? 480 : 0,
+    pullActive: 0,
   });
   state.bossHp = config.hp;
   state.bossMaxHp = config.hp;
@@ -2686,6 +2755,75 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           rotSpeed: 0.04,
         });
         enemy.escortTimer = Math.max(300, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Marauder (gravitymarauder) extras: Player Pull + Vortex drops ──
+    if (enemy.bossType === 'gravitymarauder') {
+      const p = state.player;
+      // Gravity-pull cycle. While pullActive, drag the player toward the
+      // boss every frame (capped so close-in doesn't become an instant
+      // grab). Emit inward-rushing particles for visual feedback.
+      if (enemy.pullActive && enemy.pullActive > 0) {
+        enemy.pullActive--;
+        if (p.alive) {
+          const dx = enemy.pos.x - p.pos.x;
+          const dy = enemy.pos.y - p.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 40) {
+            const pull = 0.7 + (enemy.phase ?? 0) * 0.18;
+            p.pos.x += (dx / dist) * pull;
+            p.pos.y += (dy / dist) * pull;
+          }
+        }
+        // Inward gravity-ring particles
+        if (state.tick % 3 === 0 && state.particles.length < 440) {
+          for (let i = 0; i < 4; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 90 + Math.sin(state.tick * 0.12 + i) * 26;
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * r, y: enemy.pos.y + Math.sin(a) * r },
+              vel: { x: -Math.cos(a) * 2.0, y: -Math.sin(a) * 2.0 },
+              life: 18, maxLife: 18, color: '#33ff88', size: 1.8 + Math.random() * 1.2,
+            });
+          }
+        }
+      } else {
+        enemy.pullTimer = (enemy.pullTimer ?? 480) - 1;
+        if (enemy.pullTimer <= 0) {
+          enemy.pullActive = 120; // 2-second pull window
+          enemy.pullTimer = Math.max(360, 480 - (enemy.phase ?? 0) * 40);
+          state.screenShake = Math.max(state.screenShake, 5);
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#33ff88';
+          // Outward warning burst at pull engage
+          for (let i = 0; i < 18; i++) {
+            const a = (Math.PI * 2 / 18) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 4, y: Math.sin(a) * 4 },
+              life: 24, maxLife: 24, color: '#88ffbb', size: 2 + Math.random(),
+            });
+          }
+        }
+      }
+      // Vortex obstacle drops — adds environmental gravity wells the
+      // player must navigate around. Indestructible (hp=999).
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        const vx = enemy.pos.x + (Math.random() - 0.5) * state.screenW * 0.5;
+        const vy = enemy.pos.y + enemy.height * 0.5 + 30;
+        state.obstacles.push({
+          pos: { x: vx, y: vy },
+          vel: { x: 0, y: 0.35 },
+          radius: 22,
+          hp: 999, // indestructible — endure / dodge around them
+          type: 'vortex',
+          rotation: 0,
+          rotSpeed: 0.05,
+          pullStrength: 0.18 + (enemy.phase ?? 0) * 0.04,
+        });
+        enemy.escortTimer = Math.max(420, 660 - (enemy.phase ?? 0) * 50);
       }
     }
 

@@ -217,7 +217,7 @@ export const STAGES: Stage[] = [
         { type: 'elite', faction: 'romulan', x: 0.7, path: zigzag(0.7), dropType: 'weapon' },
       ]},
     ],
-    boss: { name: 'Singularity Marauder', type: 'gravitymarauder', hp: 650, width: 170, height: 110, phases: 4, faction: 'romulan' },
+    boss: { name: 'Singularity Marauder', type: 'gravitymarauder', hp: 1300, width: 170, height: 110, phases: 4, faction: 'romulan' },
   },
 
   // ── Stage 5: Deep Space Anomaly ───────────────────────────

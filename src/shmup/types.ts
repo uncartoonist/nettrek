@@ -90,8 +90,12 @@ export interface Enemy {
   // Cloaking (Romulan signature mechanic, currently used by Valdore).
   cloakTimer?: number;    // frames until next cloak cycle begins
   cloakActive?: number;   // frames remaining of the current cloak (0 = uncloaked)
-  // Per-boss extras (currently Valdore uses these for escort spawn cadence).
+  // Per-boss extras (Valdore: escort spawns; Flagship: mine drops;
+  // Marauder: vortex obstacle drops). Multi-purpose timer for periodic spawns.
   escortTimer?: number;
+  // Singularity Marauder — gravity pull cycle (pulls the player toward the boss).
+  pullTimer?: number;     // frames until next pull pulse begins
+  pullActive?: number;    // frames remaining of the current pull (0 = inactive)
   // Boss specific
   phase?: number;
   phaseTimer?: number;
