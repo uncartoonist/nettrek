@@ -196,7 +196,7 @@ export const STAGES: Stage[] = [
         { type: 'turret', faction: 'orion', x: 0.6, path: straight(0.6) },
       ]},
     ],
-    boss: { name: 'Orion Flagship', type: 'flagship', hp: 500, width: 180, height: 110, phases: 5, faction: 'orion' },
+    boss: { name: 'Orion Flagship', type: 'flagship', hp: 1100, width: 180, height: 110, phases: 5, faction: 'orion' },
   },
 
   // ── Stage 4: Gravity Well ─────────────────────────────────

@@ -3893,34 +3893,207 @@ export class ShmupRenderer {
   }
 
   // ── 3. ORION FLAGSHIP — bulky, multi-deck command vessel ─────────
-  private bossHullFlagship(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Forward armor
-    ctx.fillStyle = dk;
-    ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    ctx.lineTo(-W * 0.2, -H * 0.42); ctx.lineTo(-W * 0.4, -H * 0.2);
-    ctx.lineTo(-W * 0.5, H * 0.1); ctx.lineTo(-W * 0.4, H * 0.4);
-    ctx.lineTo(-W * 0.2, H * 0.5); ctx.lineTo(W * 0.2, H * 0.5);
-    ctx.lineTo(W * 0.4, H * 0.4); ctx.lineTo(W * 0.5, H * 0.1);
-    ctx.lineTo(W * 0.4, -H * 0.2); ctx.lineTo(W * 0.2, -H * 0.42);
-    ctx.closePath(); ctx.fill();
-    // Deck plates
-    ctx.fillStyle = md;
-    ctx.fillRect(-W * 0.32, -H * 0.1, W * 0.64, H * 0.08);
-    ctx.fillRect(-W * 0.36, H * 0.1, W * 0.72, H * 0.06);
-    ctx.fillRect(-W * 0.28, H * 0.22, W * 0.56, H * 0.06);
-    // Bridge tower
-    ctx.fillStyle = '#0a0a14';
-    ctx.fillRect(-W * 0.08, -H * 0.35, W * 0.16, H * 0.18);
-    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.05) * 0.2;
-    ctx.fillRect(-W * 0.05, -H * 0.32, W * 0.1, H * 0.04);
-    ctx.fillRect(-W * 0.05, -H * 0.25, W * 0.1, H * 0.03);
+  // ── 3. ORION FLAGSHIP — bulky pirate command vessel ─────────────
+  // A heavily-modified industrial hull bristling with mismatched mercenary
+  // weapons. Wide chevron silhouette, multi-deck plating, asymmetric
+  // pirate aesthetic — and SEVEN distinct mounts: central Mass Driver
+  // (signature charging beam), L/R disruptor cannons forward, L/R missile
+  // racks on the upper shoulders, L/R Gatling turrets mid-flanks.
+  private bossHullFlagship(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#1a1108';
+    const hullDark    = '#3a2818';
+    const hullMid     = '#5a4028';
+    const hullLight   = '#7a5a3a';
+    const hullAccent  = '#c8a672';
+    const conduit     = '#ffaa44';
+    const conduitHot  = '#ffd060';
+    const conduitDim  = '#4a2a0a';
+    const corePulse = 0.6 + Math.sin(tick * 0.07) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.13;
+
+    // ── Silhouette: bulky industrial chevron, right half mirrored ──
+    const half: [number, number][] = [
+      [0.00,  0.50],  // bottom prow tip (faces player)
+      [0.14,  0.44],
+      [0.30,  0.40],  // gatling shoulder
+      [0.44,  0.30],
+      [0.52,  0.10],  // mid flank (broadest)
+      [0.50, -0.10],
+      [0.46, -0.26],  // upper shoulder (missile rack mount)
+      [0.34, -0.36],
+      [0.22, -0.42],
+      [0.12, -0.46],
+      [0.00, -0.50],  // tail center
+    ];
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
+    // Dark hull base
     ctx.globalAlpha = 1;
-    // Multi-cannon battery
-    this.bossPort(ctx, -W * 0.32, H * 0.42, 5, color, tick, phase);
-    this.bossPort(ctx, -W * 0.1, H * 0.45, 5, color, tick, phase);
-    this.bossPort(ctx, W * 0.1, H * 0.45, 5, color, tick, phase);
-    this.bossPort(ctx, W * 0.32, H * 0.42, 5, color, tick, phase);
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Layered horizontal deck plates (industrial / heavy-armor read) ──
+    ctx.fillStyle = hullMid;
+    for (let i = 0; i < 5; i++) {
+      const yy = -H * 0.30 + i * H * 0.14;
+      const xWidth = W * (0.46 - Math.abs(i - 2) * 0.04);
+      ctx.fillRect(-xWidth, yy, xWidth * 2, H * 0.04);
+    }
+    // Panel seam vertical lines
+    ctx.strokeStyle = hullDarkest;
+    ctx.lineWidth = 1.5;
+    for (const x of [-0.32, -0.16, 0, 0.16, 0.32]) {
+      ctx.beginPath();
+      ctx.moveTo(x * W, -H * 0.38);
+      ctx.lineTo(x * W, H * 0.36);
+      ctx.stroke();
+    }
+
+    // ── Asymmetric command bridge tower (offset left for pirate feel) ──
+    ctx.fillStyle = hullLight;
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.14, -H * 0.18);
+    ctx.lineTo(-W * 0.10, -H * 0.38);
+    ctx.lineTo(W * 0.08, -H * 0.38);
+    ctx.lineTo(W * 0.12, -H * 0.18);
+    ctx.closePath(); ctx.fill();
+    // Bridge viewports — pirate amber
+    ctx.fillStyle = conduit;
+    ctx.globalAlpha = 0.6 + Math.sin(tick * 0.09) * 0.25;
+    for (let i = 0; i < 4; i++) {
+      const wx = -W * 0.10 + i * W * 0.05;
+      ctx.fillRect(wx, -H * 0.34, W * 0.025, H * 0.018);
+    }
+    ctx.globalAlpha = 1;
+    // Bridge tower outline
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-W * 0.14, -H * 0.18);
+    ctx.lineTo(-W * 0.10, -H * 0.38);
+    ctx.lineTo(W * 0.08, -H * 0.38);
+    ctx.lineTo(W * 0.12, -H * 0.18);
+    ctx.stroke();
+
+    // ── Heavy rear engine bank (top edge = boss rear) ──
+    for (let i = -2; i <= 2; i++) {
+      const ex = i * W * 0.12;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ex - W * 0.04, -H * 0.50, W * 0.08, H * 0.08);
+      // Engine glow
+      const eg = ctx.createRadialGradient(ex, -H * 0.50, 1, ex, -H * 0.50, W * 0.07);
+      eg.addColorStop(0, conduitHot);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg; ctx.globalAlpha = 0.55 + Math.sin(tick * 0.18 + i) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, -H * 0.50, W * 0.07, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Mismatched hull rivets / scavenged-armor detail ──
+    ctx.fillStyle = hullAccent;
+    ctx.globalAlpha = 0.5;
+    for (let i = 0; i < 14; i++) {
+      const rx = (((i * 7919) % 100) / 100 - 0.5) * W * 0.85;
+      const ry = (((i * 6131) % 100) / 100 - 0.5) * H * 0.85;
+      // Only inside hull-ish area (rough cull)
+      if (Math.abs(rx) > W * 0.4 || Math.abs(ry) > H * 0.45) continue;
+      ctx.fillRect(rx - 1, ry - 1, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS — bristling mismatched arsenal ════
+
+    // 1. CENTRAL MASS DRIVER — signature charged-beam cannon (prominent)
+    //    Wide bracket housing + long cooling-finned barrel pointing at player.
+    {
+      const mx = 0, my = H * 0.10;
+      // Mounting bracket
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.10, my - H * 0.05, W * 0.20, H * 0.10);
+      ctx.fillStyle = hullAccent;
+      ctx.fillRect(mx - W * 0.10, my - H * 0.05, W * 0.20, H * 0.02);
+      // Barrel — long, cooling-finned, pointing down at player
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.05, my, W * 0.10, H * 0.35);
+      ctx.fillStyle = hullLight;
+      // cooling fins on the barrel
+      for (let i = 0; i < 5; i++) {
+        const fy = my + H * 0.06 + i * H * 0.06;
+        ctx.fillRect(mx - W * 0.07, fy, W * 0.14, H * 0.018);
+      }
+      // Muzzle glow (always lit; intensifies during charge in updateEnemy)
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(mx, my + H * 0.36, W * 0.04, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. TWIN FORWARD DISRUPTOR CANNONS — flank the mass driver
+    for (const s of [1, -1]) {
+      const bx = s * W * 0.22, by = H * 0.20;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(bx - W * 0.025, by - H * 0.04, W * 0.05, H * 0.22);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(bx - W * 0.025, by - H * 0.04, W * 0.05, H * 0.03);
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.45);
+      ctx.beginPath(); ctx.arc(bx, by + H * 0.20, W * 0.020, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. UPPER MISSILE RACKS — boxy launchers on the shoulders, top edge
+    for (const s of [1, -1]) {
+      const mrx = s * W * 0.34, mry = -H * 0.28;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mrx - W * 0.07, mry - H * 0.04, W * 0.14, H * 0.10);
+      // 3 missile tubes per rack
+      ctx.fillStyle = conduitDim;
+      for (let t = -1; t <= 1; t++) {
+        ctx.fillRect(mrx + t * W * 0.04 - W * 0.012, mry - H * 0.02, W * 0.024, H * 0.06);
+      }
+      // Loaded missile glow
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * 0.7;
+      for (let t = -1; t <= 1; t++) {
+        ctx.beginPath();
+        ctx.arc(mrx + t * W * 0.04, mry - H * 0.005, W * 0.006, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. MID-FLANK GATLING TURRETS — domed turret + multi-barrel
+    for (const s of [1, -1]) {
+      const gx = s * W * 0.46, gy = H * 0.04;
+      // Turret base — wider dome
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath();
+      ctx.arc(gx, gy, W * 0.06, Math.PI, Math.PI * 2);
+      ctx.lineTo(gx + W * 0.06, gy);
+      ctx.lineTo(gx - W * 0.06, gy);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = hullLight;
+      ctx.beginPath();
+      ctx.arc(gx, gy, W * 0.042, Math.PI, Math.PI * 2);
+      ctx.closePath(); ctx.fill();
+      // Multi-barrel cluster (3 short barrels)
+      ctx.fillStyle = hullDarkest;
+      for (let b = -1; b <= 1; b++) {
+        ctx.fillRect(gx + b * W * 0.018 - W * 0.005, gy, W * 0.010, H * 0.10);
+      }
+      // Hot barrel tip
+      ctx.fillStyle = conduit; ctx.globalAlpha = phaseGlow * (0.5 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(gx, gy - W * 0.015, W * 0.012, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline (last, so the silhouette reads against nebula) ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 4. SINGULARITY MARAUDER — dish + gravity core ────────────────

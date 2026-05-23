@@ -1978,14 +1978,66 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 3. ORION FLAGSHIP (siege, orion) ──────────────────────
-    case 'flagship':
-      if (phase === 0) aimedSpread(c, 3, 0.4, 3);
-      else if (phase === 1) { wingShots(c, 7, 3); if (pt % 3 === 0) aimedSpread(c, 5, 0.5, 3.5); }
-      else if (phase === 2) { radialBurst(c, 8, 2.8); if (pt % 4 === 0) aimedSpread(c, 5, 0.6, 4); }
-      else if (phase === 3) { bulletWall(c, 9, 2); if (pt % 3 === 0) aimedSpread(c, 3, 0.3, 5); }
-      else { spiralArms(c, 4, 3.5); aimedSpread(c, 5, 0.5, 4.5); weakPointFire(c); }
+    // ── 3. ORION FLAGSHIP (siege, orion) — per-hardpoint combat ──
+    // 7 destroyable hardpoints, no always-on hull weapon. The signature
+    // is the central MASS DRIVER — a slow charging beam telegraphed by
+    // a yellow particle ramp, then a giant slow phaserlance the player
+    // must dodge laterally. Disruptors fire fast aimed bolts; missile
+    // racks launch homing missile pairs; gatling turrets spray short
+    // bursts. Mine drops happen on the boss-update side, not here.
+    case 'flagship': {
+      if (!boss.weakPoints) break;
+      const speedBoost = phase >= 4 ? 0.6 : phase >= 3 ? 0.3 : 0;
+      const rateBoost = phase >= 4 ? 0.55 : phase >= 3 ? 0.7 : phase >= 2 ? 0.85 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'MASS DRIVER') {
+          // ── Signature: Mass Driver charged beam ──
+          // A giant slow phaserlance heading straight down, flanked by two
+          // smaller leading bolts. Player must move laterally to dodge.
+          const muzzleY = wy + boss.height * 0.36;
+          bulletAt(c, wx, muzzleY, 0, 1.7 + speedBoost,
+            { color: col, r: 22, trail: true, ttl: 150, shape: 'phaserlance' });
+          // Leading escort bolts (clear which lane the beam came from)
+          bulletAt(c, wx - 14, muzzleY, 0, 3.0 + speedBoost,
+            { color: col, r: 5, trail: true, ttl: 110, shape: 'bolt' });
+          bulletAt(c, wx + 14, muzzleY, 0, 3.0 + speedBoost,
+            { color: col, r: 5, trail: true, ttl: 110, shape: 'bolt' });
+          // Recoil punch — small camera shake + warm flash
+          state.screenShake = Math.max(state.screenShake, 6);
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#ffcc55';
+        } else if (wp.weaponType === 'disruptor') {
+          // Forward disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4.5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'missile') {
+          // Missile rack — pair of homing missiles
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.20;
+            bulletAt(c, wx + side * 4, wy + 4, Math.cos(a) * 2.0, Math.sin(a) * 2.6,
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Gatling turret — short rapid 3-shot burst aimed at player
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          for (let i = -1; i <= 1; i++) {
+            const aa = a + i * 0.06 + (Math.random() - 0.5) * 0.04;
+            bulletAt(c, wx, wy + 2, Math.cos(aa) * (4.2 + speedBoost), Math.sin(aa) * (4.2 + speedBoost),
+              { color: col, r: 3, trail: true, ttl: 75, shape: 'phaserlance' });
+          }
+        }
+      }
       break;
+    }
 
     // ── 4. SINGULARITY MARAUDER (vortex_storm, romulan) ───────
     case 'gravitymarauder':
@@ -2384,6 +2436,22 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint( cw * 0.50, -ch * 0.12, 'phaser',  'R LANCE',  '#ff4499', 0.15, 125),
       hardpoint( 0,          ch * 0.30, 'torpedo', 'TORPEDO',  '#ff3838', 0.16, 150),
     );
+  } else if (config.type === 'flagship') {
+    // ORION FLAGSHIP — 7 named hardpoints matching bossHullFlagship's mounts:
+    //   central MASS DRIVER (signature charging beam, long cooldown)
+    //   L/R DISRUPTORS forward
+    //   L/R MISSILE racks on the upper shoulders
+    //   L/R GATLING turrets mid-flank
+    // No always-on hull weapon — when stripped, the Flagship is exposed.
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.10, 'torpedo',   'MASS DRIVER', '#ffd060', 0.16, 540),
+      hardpoint(-cw * 0.22,  ch * 0.20, 'disruptor', 'L DISRUPTOR', '#ffaa44', 0.11,  85),
+      hardpoint( cw * 0.22,  ch * 0.20, 'disruptor', 'R DISRUPTOR', '#ffaa44', 0.11,  85),
+      hardpoint(-cw * 0.34, -ch * 0.28, 'missile',   'L MISSILES',  '#ff8844', 0.12, 130),
+      hardpoint( cw * 0.34, -ch * 0.28, 'missile',   'R MISSILES',  '#ff8844', 0.12, 130),
+      hardpoint(-cw * 0.46,  ch * 0.04, 'phaser',    'L GATLING',   '#ffcc66', 0.11,  60),
+      hardpoint( cw * 0.46,  ch * 0.04, 'phaser',    'R GATLING',   '#ffcc66', 0.11,  60),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2400,10 +2468,10 @@ function spawnBoss(state: ShmupState, config: any): void {
     }
   }
 
-  // Hardpoint bosses (T'VAK, Valdore) have per-weapon cooldowns on their
-  // weak points, so the master fireCooldown runs every frame —
+  // Hardpoint bosses (T'VAK, Valdore, Flagship) have per-weapon cooldowns
+  // on their weak points, so the master fireCooldown runs every frame —
   // fireBossPattern then dispatches to each active hardpoint on its own cadence.
-  const isTvak = config.type === 'tvak' || config.type === 'dreadnought';
+  const isTvak = config.type === 'tvak' || config.type === 'dreadnought' || config.type === 'flagship';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2425,10 +2493,11 @@ function spawnBoss(state: ShmupState, config: any): void {
     weakPoints,
     bossType: config.type,
     // Valdore-specific: cloak cycles + escort summon cadence. Other bosses
-    // can ignore these fields (they stay undefined / 0).
+    // can ignore these fields (they stay undefined / 0). Flagship reuses
+    // escortTimer for its periodic mine drops.
     cloakTimer: config.type === 'dreadnought' ? 540 : 0,
     cloakActive: 0,
-    escortTimer: config.type === 'dreadnought' ? 360 : 0,
+    escortTimer: config.type === 'dreadnought' ? 360 : config.type === 'flagship' ? 480 : 0,
   });
   state.bossHp = config.hp;
   state.bossMaxHp = config.hp;
@@ -2572,6 +2641,51 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           spawnEnemy(state, 'fighter', enemy.faction, wW * 0.88);
           enemy.escortTimer = Math.max(420, 720 - (enemy.phase ?? 0) * 80);
         }
+      }
+    }
+
+    // ── Flagship (Orion) extras: Mass Driver charge + mine drops ──
+    if (enemy.bossType === 'flagship') {
+      // Mass-driver charge telegraph: when its hardpoint is alive and within
+      // 90 frames of firing, emit yellow charging particles at the muzzle
+      // so the player has clear warning to dodge laterally.
+      if (enemy.weakPoints) {
+        for (const wp of enemy.weakPoints) {
+          if (!wp.alive || wp.label !== 'MASS DRIVER') continue;
+          const ft = wp.fireTimer ?? 999;
+          if (ft > 0 && ft <= 90) {
+            const wx = enemy.pos.x + wp.offset.x;
+            const wy = enemy.pos.y + wp.offset.y + enemy.height * 0.36;
+            const chargePct = 1 - ft / 90;
+            if (state.tick % 2 === 0 && state.particles.length < 440) {
+              const a = Math.random() * Math.PI * 2;
+              const r = 14 + chargePct * 18;
+              state.particles.push({
+                pos: { x: wx + Math.cos(a) * r, y: wy + Math.sin(a) * r },
+                vel: { x: -Math.cos(a) * 1.2, y: -Math.sin(a) * 1.2 },
+                life: 8 + Math.random() * 8, maxLife: 16,
+                color: chargePct > 0.7 ? '#ffeeaa' : '#ffcc44',
+                size: 1.5 + chargePct * 2.2,
+              });
+            }
+          }
+        }
+      }
+      // Periodic mine drops — drift down from the boss into the playfield
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        const mx = enemy.pos.x + (Math.random() - 0.5) * enemy.width * 0.5;
+        const my = enemy.pos.y + enemy.height * 0.35;
+        state.obstacles.push({
+          pos: { x: mx, y: my },
+          vel: { x: (Math.random() - 0.5) * 0.4, y: 0.7 + Math.random() * 0.4 },
+          radius: 16,
+          hp: 4,
+          type: 'mine',
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: 0.04,
+        });
+        enemy.escortTimer = Math.max(300, 540 - (enemy.phase ?? 0) * 50);
       }
     }
 
