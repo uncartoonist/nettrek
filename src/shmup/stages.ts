@@ -324,7 +324,7 @@ export const STAGES: Stage[] = [
         { type: 'elite', faction: 'klingon', x: 0.65, path: zigzag(0.65), dropType: 'star' },
       ]},
     ],
-    boss: { name: 'Rift Sovereign', type: 'sovereign', hp: 700, width: 170, height: 110, phases: 4, faction: 'romulan' },
+    boss: { name: 'Rift Sovereign', type: 'sovereign', hp: 1700, width: 180, height: 120, phases: 4, faction: 'romulan' },
   },
 
   // ── Stage 7: Final Fortress ───────────────────────────────

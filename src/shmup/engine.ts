@@ -2158,13 +2158,57 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 6. RIFT SOVEREIGN (swarm, romulan) ────────────────────
-    case 'sovereign':
-      if (phase === 0) aimedSpread(c, 5, 0.6, 3);
-      else if (phase === 1) { aimedSpread(c, 7, 0.8, 3.5); if (pt % 3 === 0) radialBurst(c, 6, 2.2); }
-      else if (phase === 2) { spiralArms(c, 6, 3, 0.07); aimedSpread(c, 3, 0.4, 4); }
-      else { aimedSpread(c, 9, 0.9, 4); radialBurst(c, 10, 2.8, c.t * 0.05); weakPointFire(c); }
+    // ── 6. RIFT SOVEREIGN (romulan) — per-hardpoint, D'deridex elite ──
+    // 7 destroyable hardpoints: central Imperial Lance, L/R upper wing
+    // disruptors, L/R lower wing plasma, L/R tail phasers. Subspace push
+    // pulses + rift comets handled in updateEnemy. No always-on hull weapon.
+    // Weapons go quiet during push to keep the beat distinct.
+    case 'sovereign': {
+      if (!boss.weakPoints) break;
+      if (boss.pullActive && boss.pullActive > 0) break;
+      const speedBoost = phase >= 3 ? 0.5 : 0;
+      const rateBoost = phase >= 3 ? 0.6 : phase >= 2 ? 0.8 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'IMPERIAL LANCE') {
+          // ── Signature: 5-bolt aimed kill-grid fan ──
+          // Tight cone converging on the player — dodging requires moving
+          // perpendicular to the boss-to-player vector, not just sideways.
+          const a0 = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          for (let i = -2; i <= 2; i++) {
+            const a = a0 + i * 0.07;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * (4.2 + speedBoost), Math.sin(a) * (4.2 + speedBoost),
+              { color: col, r: 4, trail: true, ttl: 95, shape: 'phaserlance' });
+          }
+        } else if (wp.weaponType === 'disruptor') {
+          // Upper-wing disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4.5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'plasma') {
+          // Lower-wing plasma turret — 3-blob fan
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.28;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.4, Math.sin(a) * 2.4,
+              { color: col, r: 6, ttl: 120, shape: 'blob' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Tail phaser battery — thin streak (these are on the rear, so
+          // their angle is broader from above)
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.4 + speedBoost), Math.sin(a) * (4.4 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        }
+      }
       break;
+    }
 
     // ── 7. FORTRESS COMMAND (siege, orion) ────────────────────
     case 'fortress':
@@ -2590,6 +2634,23 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.40, -ch * 0.30, 'missile',   'L MISSILE',   '#6688ff', 0.11, 140),
       hardpoint( cw * 0.40, -ch * 0.30, 'missile',   'R MISSILE',   '#6688ff', 0.11, 140),
     );
+  } else if (config.type === 'sovereign') {
+    // RIFT SOVEREIGN — D'deridex-style Romulan elite. Twin curved pincer
+    // wings around a central command pod. 7 hardpoints:
+    //   central IMPERIAL LANCE (signature 5-bolt aimed fan)
+    //   L/R UPPER WING disruptors (the inner-edge cannons)
+    //   L/R LOWER WING plasma turrets (mid wing)
+    //   L/R TAIL PHASER batteries
+    // Unique mechanic: Subspace Push (opposite of Marauder's pull).
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.18, 'torpedo',   'IMPERIAL LANCE','#aaffcc', 0.16, 150),
+      hardpoint(-cw * 0.18, -ch * 0.16, 'disruptor', 'L UPPER WING',  '#44ff88', 0.12, 100),
+      hardpoint( cw * 0.18, -ch * 0.16, 'disruptor', 'R UPPER WING',  '#44ff88', 0.12, 100),
+      hardpoint(-cw * 0.40,  ch * 0.06, 'plasma',    'L LOWER WING',  '#44ddaa', 0.12, 110),
+      hardpoint( cw * 0.40,  ch * 0.06, 'plasma',    'R LOWER WING',  '#44ddaa', 0.12, 110),
+      hardpoint(-cw * 0.28, -ch * 0.42, 'phaser',    'L TAIL PHASER', '#88ffbb', 0.11,  90),
+      hardpoint( cw * 0.28, -ch * 0.42, 'phaser',    'R TAIL PHASER', '#88ffbb', 0.11,  90),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2612,7 +2673,7 @@ function spawnBoss(state: ShmupState, config: any): void {
   const isTvak =
     config.type === 'tvak' || config.type === 'dreadnought' ||
     config.type === 'flagship' || config.type === 'gravitymarauder' ||
-    config.type === 'guardian';
+    config.type === 'guardian' || config.type === 'sovereign';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2645,8 +2706,12 @@ function spawnBoss(state: ShmupState, config: any): void {
       config.type === 'dreadnought' ? 360 :
       config.type === 'flagship'    ? 480 :
       config.type === 'gravitymarauder' ? 540 :
-      config.type === 'guardian'    ? 480 : 0,
-    pullTimer: config.type === 'gravitymarauder' ? 480 : 0,
+      config.type === 'guardian'    ? 480 :
+      config.type === 'sovereign'   ? 540 : 0,
+    // Sovereign reuses pullTimer for its Subspace Push cycle (inverse pull).
+    pullTimer:
+      config.type === 'gravitymarauder' ? 480 :
+      config.type === 'sovereign'       ? 420 : 0,
     pullActive: 0,
   });
   state.bossHp = config.hp;
@@ -2965,6 +3030,70 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           rotation: Math.random() * Math.PI * 2,
           rotSpeed: 0.06,
         });
+        enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Rift Sovereign extras: Subspace Push + Rift Comets ──
+    if (enemy.bossType === 'sovereign') {
+      const p = state.player;
+      // Subspace push — every ~7s, expanding shockwave that PUSHES the
+      // player away (inverse of Marauder's gravity pull). Reuses
+      // pullActive/pullTimer with negative force.
+      if (enemy.pullActive && enemy.pullActive > 0) {
+        enemy.pullActive--;
+        if (p.alive) {
+          const dx = p.pos.x - enemy.pos.x;  // note: AWAY-from-boss vector
+          const dy = p.pos.y - enemy.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 5 && dist < 360) {
+            const falloff = 1 - dist / 360;
+            const push = (0.9 + (enemy.phase ?? 0) * 0.2) * falloff;
+            p.pos.x += (dx / dist) * push;
+            p.pos.y += (dy / dist) * push;
+          }
+        }
+        // Expanding shockwave rings — outward visualization
+        if (state.tick % 3 === 0 && state.particles.length < 440) {
+          const ringFrame = 120 - enemy.pullActive; // 0 -> 120 outward
+          const r = 60 + ringFrame * 2.2;
+          for (let i = 0; i < 6; i++) {
+            const a = (Math.PI * 2 / 6) * i + ringFrame * 0.04;
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * r, y: enemy.pos.y + Math.sin(a) * r },
+              vel: { x: Math.cos(a) * 1.5, y: Math.sin(a) * 1.5 },
+              life: 14, maxLife: 14, color: '#88ffbb', size: 2 + Math.random(),
+            });
+          }
+        }
+      } else {
+        enemy.pullTimer = (enemy.pullTimer ?? 420) - 1;
+        if (enemy.pullTimer <= 0) {
+          enemy.pullActive = 120;
+          enemy.pullTimer = Math.max(300, 420 - (enemy.phase ?? 0) * 40);
+          state.screenShake = Math.max(state.screenShake, 5);
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#88ffbb';
+        }
+      }
+      // Periodic rift comets — fast streaks across the playfield
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        // Spawn 2 comets per cycle, from random sides crossing diagonally
+        for (let i = 0; i < 2; i++) {
+          const fromLeft = Math.random() < 0.5;
+          const cx = fromLeft ? -20 : state.screenW + 20;
+          const cy = enemy.pos.y + 60 + Math.random() * (state.screenH * 0.4);
+          state.obstacles.push({
+            pos: { x: cx, y: cy },
+            vel: { x: (fromLeft ? 1 : -1) * (3 + Math.random() * 2), y: 1.5 + Math.random() * 1 },
+            radius: 12,
+            hp: 2,
+            type: 'comet',
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: 0.15,
+          });
+        }
         enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
       }
     }

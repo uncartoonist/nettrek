@@ -4488,38 +4488,195 @@ export class ShmupRenderer {
   }
 
   // ── 6. RIFT SOVEREIGN — Romulan elite, slender raptor ────────────
-  private bossHullSovereign(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Forward beak
-    ctx.fillStyle = dk;
-    ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    ctx.quadraticCurveTo(-W * 0.1, -H * 0.3, -W * 0.45, H * 0.05);
-    ctx.lineTo(-W * 0.5, H * 0.2);
-    ctx.lineTo(-W * 0.2, H * 0.45);
-    ctx.lineTo(0, H * 0.35);
-    ctx.lineTo(W * 0.2, H * 0.45);
-    ctx.lineTo(W * 0.5, H * 0.2);
-    ctx.lineTo(W * 0.45, H * 0.05);
-    ctx.quadraticCurveTo(W * 0.1, -H * 0.3, 0, -H * 0.5);
-    ctx.closePath(); ctx.fill();
-    // Wing accent
-    ctx.fillStyle = md;
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.1, -H * 0.15); ctx.lineTo(-W * 0.4, H * 0.05);
-    ctx.lineTo(-W * 0.2, H * 0.3); ctx.lineTo(-W * 0.05, H * 0.05);
-    ctx.closePath(); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(W * 0.1, -H * 0.15); ctx.lineTo(W * 0.4, H * 0.05);
-    ctx.lineTo(W * 0.2, H * 0.3); ctx.lineTo(W * 0.05, H * 0.05);
-    ctx.closePath(); ctx.fill();
-    // Bridge eye
-    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.07) * 0.2;
-    ctx.beginPath(); ctx.ellipse(0, -H * 0.15, W * 0.06, H * 0.025, 0, 0, Math.PI * 2); ctx.fill();
+  // ── 6. RIFT SOVEREIGN — D'deridex-style Romulan elite ───────────
+  // Twin curved pincer wings sweeping forward with a central command pod
+  // nestled between them. The iconic D'deridex silhouette. Mint-emerald
+  // Romulan palette, slightly cooler than Marauder's warmer green, with
+  // imperial filigree (chevron ribs running down the wings).
+  private bossHullSovereign(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#0a1a14';
+    const hullDark    = '#1a2e26';
+    const hullMid     = '#2a4a3c';
+    const hullLight   = '#446e58';
+    const hullAccent  = '#8ab5a0';
+    const conduit     = '#44ff88';
+    const conduitHot  = '#aaffcc';
+    const conduitDim  = '#0c3a22';
+    const corePulse = 0.6 + Math.sin(tick * 0.08) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.14;
+
+    // ── Pincer wing silhouette: right wing + central pod, mirrored ──
+    // Each wing is a curved arc reaching forward (downward toward player)
+    // with a feathered trailing edge.
+    const half: [number, number][] = [
+      [0.02, -0.50],  // tail-center (boss rear)
+      [0.10, -0.46],
+      [0.18, -0.42],  // upper wing root
+      [0.28, -0.36],  // shoulder
+      [0.42, -0.26],  // upper wing peak
+      [0.48, -0.08],
+      [0.50,  0.08],  // outermost wing edge
+      [0.48,  0.20],  // lower wing curve
+      [0.42,  0.32],
+      [0.32,  0.40],  // forward wing tip
+      [0.22,  0.42],  // inner-wing inward curve
+      [0.14,  0.34],  // gap edge (between wing and pod)
+      [0.10,  0.20],  // inner wing root
+      [0.07,  0.06],  // pod shoulder
+      [0.10,  0.30],  // pod base flank
+      [0.06,  0.46],  // pod tip (faces player)
+      [0.00,  0.50],  // pod prow tip
+    ];
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
     ctx.globalAlpha = 1;
-    // Wing tip + nose ports
-    this.bossPort(ctx, 0, -H * 0.45, 4, color, tick, phase);
-    this.bossPort(ctx, -W * 0.5, H * 0.15, 5, color, tick, phase);
-    this.bossPort(ctx, W * 0.5, H * 0.15, 5, color, tick, phase);
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Wing armor plating — inset mid-tone panels per wing ──
+    ctx.fillStyle = hullMid;
+    for (const s of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.18, -H * 0.36);
+      ctx.lineTo(s * W * 0.40, -H * 0.20);
+      ctx.lineTo(s * W * 0.42,  H * 0.04);
+      ctx.lineTo(s * W * 0.36,  H * 0.24);
+      ctx.lineTo(s * W * 0.24,  H * 0.32);
+      ctx.lineTo(s * W * 0.16,  H * 0.18);
+      ctx.lineTo(s * W * 0.14, -H * 0.10);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // ── Imperial chevron ribs down each wing's leading edge ──
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 2;
+    for (const s of [1, -1]) {
+      for (let r = 0; r < 5; r++) {
+        const t = r / 5;
+        ctx.beginPath();
+        ctx.moveTo(s * W * (0.18 + t * 0.24), -H * (0.34 - t * 0.40));
+        ctx.lineTo(s * W * (0.30 + t * 0.20), -H * (0.20 - t * 0.32));
+        ctx.stroke();
+      }
+    }
+
+    // ── Central command pod — vertical elongated shape ──
+    ctx.fillStyle = hullLight;
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.50);          // prow tip (player side)
+    ctx.lineTo(W * 0.06, H * 0.42);
+    ctx.lineTo(W * 0.08, H * 0.05);
+    ctx.lineTo(W * 0.07, -H * 0.30);
+    ctx.lineTo(0, -H * 0.46);
+    ctx.lineTo(-W * 0.07, -H * 0.30);
+    ctx.lineTo(-W * 0.08, H * 0.05);
+    ctx.lineTo(-W * 0.06, H * 0.42);
+    ctx.closePath(); ctx.fill();
+
+    // ── Bridge eye (iconic D'deridex amber/green oval) ──
+    const eyeGrad = ctx.createRadialGradient(0, -H * 0.08, 1, 0, -H * 0.08, W * 0.05);
+    eyeGrad.addColorStop(0, conduitHot);
+    eyeGrad.addColorStop(0.5, conduit);
+    eyeGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = eyeGrad;
+    ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+    ctx.beginPath();
+    ctx.ellipse(0, -H * 0.08, W * 0.05, H * 0.025, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── Spine conduit running the pod ──
+    ctx.strokeStyle = conduitDim; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.36); ctx.lineTo(0, -H * 0.36); ctx.stroke();
+    ctx.strokeStyle = conduit; ctx.lineWidth = 2;
+    ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+    ctx.beginPath(); ctx.moveTo(0, H * 0.36); ctx.lineTo(0, -H * 0.36); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Tail engines (top edge) ──
+    for (const s of [1, -1]) {
+      const ex = s * W * 0.05, ey = -H * 0.46;
+      const eg = ctx.createRadialGradient(ex, ey, 1, ex, ey, W * 0.08);
+      eg.addColorStop(0, conduit);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg; ctx.globalAlpha = 0.55 + Math.sin(tick * 0.18 + s) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, ey, W * 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS ════
+
+    // 1. IMPERIAL LANCE — central pod forward, prominent barrel
+    {
+      const lx = 0, ly = H * 0.18;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(lx - W * 0.04, ly, W * 0.08, H * 0.26);
+      // Cooling fins
+      ctx.fillStyle = hullLight;
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(lx - W * 0.055, ly + H * 0.06 + i * H * 0.08, W * 0.11, H * 0.015);
+      }
+      // Muzzle glow
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(lx, ly + H * 0.26, W * 0.03, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. L/R UPPER WING DISRUPTORS — at the inner upper edge
+    for (const s of [1, -1]) {
+      const ux = s * W * 0.18, uy = -H * 0.16;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ux - W * 0.025, uy - H * 0.03, W * 0.05, H * 0.14);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(ux - W * 0.025, uy - H * 0.03, W * 0.05, H * 0.025);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(ux, uy + H * 0.10, W * 0.014, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R LOWER WING PLASMA TURRETS — at the outer mid-wing
+    for (const s of [1, -1]) {
+      const px = s * W * 0.40, py = H * 0.06;
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath();
+      ctx.arc(px, py, W * 0.050, Math.PI, Math.PI * 2);
+      ctx.lineTo(px + W * 0.050, py);
+      ctx.lineTo(px - W * 0.050, py);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = hullLight;
+      ctx.beginPath(); ctx.arc(px, py, W * 0.034, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(px, py - W * 0.008, W * 0.012, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R TAIL PHASER BATTERIES — at the rear shoulder
+    for (const s of [1, -1]) {
+      const tx = s * W * 0.28, ty = -H * 0.42;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(tx - W * 0.05, ty - H * 0.02, W * 0.10, H * 0.06);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(tx + i * W * 0.025, ty + H * 0.015, W * 0.008, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 7. FORTRESS COMMAND — Orion brutalist station ────────────────
