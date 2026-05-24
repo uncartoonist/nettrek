@@ -4680,38 +4680,220 @@ export class ShmupRenderer {
   }
 
   // ── 7. FORTRESS COMMAND — Orion brutalist station ────────────────
-  private bossHullFortress(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Big armored rectangle with crenellations
-    ctx.fillStyle = dk;
-    ctx.fillRect(-W * 0.5, -H * 0.45, W, H * 0.9);
-    // Top crenellations
-    ctx.fillStyle = md;
-    for (let i = -4; i <= 4; i++) {
-      ctx.fillRect(i * W * 0.1 - W * 0.04, -H * 0.5, W * 0.06, H * 0.08);
-    }
-    // Bottom turret bays
-    for (let i = -3; i <= 3; i++) {
-      ctx.fillRect(i * W * 0.13 - W * 0.04, H * 0.4, W * 0.08, H * 0.1);
-    }
-    // Central command spire
-    ctx.fillStyle = '#0a0a14';
-    ctx.fillRect(-W * 0.12, -H * 0.4, W * 0.24, H * 0.3);
-    // Eye slit
-    ctx.fillStyle = color; ctx.globalAlpha = 0.7 + Math.sin(tick * 0.04) * 0.2;
-    ctx.fillRect(-W * 0.09, -H * 0.2, W * 0.18, H * 0.04);
-    ctx.globalAlpha = 1;
-    // Armor seams
-    ctx.strokeStyle = '#1a1a22'; ctx.lineWidth = 1.5;
-    for (let i = -3; i <= 3; i++) {
+  // ── 7. FORTRESS COMMAND — Orion brutalist mobile citadel ─────────
+  // Massive blocky armored fortress. Regimented, military, distinct from
+  // Flagship's mismatched pirate aesthetic. Tiered armor decks, central
+  // command bunker, prominent bombardment barrel.
+  private bossHullFortress(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#1a1410';
+    const hullDark    = '#36281c';
+    const hullMid     = '#54402c';
+    const hullLight   = '#74583c';
+    const hullAccent  = '#bc9858';
+    const conduit     = '#ffaa22';
+    const conduitHot  = '#ffd060';
+    const conduitDim  = '#4a2a08';
+    const corePulse = 0.6 + Math.sin(tick * 0.07) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.13;
+
+    // ── Silhouette: tiered brutalist citadel — wide stepped shoulders ──
+    const half: [number, number][] = [
+      [0.00,  0.50],  // bottom prow (player-facing)
+      [0.16,  0.46],
+      [0.30,  0.40],  // bottom step (turret bays)
+      [0.42,  0.36],
+      [0.50,  0.24],  // mid flank (broadest)
+      [0.52,  0.08],
+      [0.50, -0.10],
+      [0.48, -0.24],
+      [0.46, -0.40],  // upper shoulder (AA mount)
+      [0.36, -0.46],
+      [0.22, -0.50],
+      [0.10, -0.50],
+      [0.00, -0.46],
+    ];
+    const trace = () => {
       ctx.beginPath();
-      ctx.moveTo(i * W * 0.14, -H * 0.42);
-      ctx.lineTo(i * W * 0.14, H * 0.42);
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Layered horizontal deck plates — regimented tiers ──
+    ctx.fillStyle = hullMid;
+    const deckYs = [-0.30, -0.10, 0.10, 0.30];
+    for (const dy of deckYs) {
+      const widthPct = 0.48 - Math.abs(dy) * 0.10;
+      ctx.fillRect(-W * widthPct, dy * H - H * 0.025, W * widthPct * 2, H * 0.05);
+    }
+    // Panel seam vertical lines (military grid)
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    for (const x of [-0.36, -0.20, -0.06, 0.06, 0.20, 0.36]) {
+      ctx.beginPath();
+      ctx.moveTo(x * W, -H * 0.44);
+      ctx.lineTo(x * W,  H * 0.40);
       ctx.stroke();
     }
-    // Turret ports
-    for (let i = -3; i <= 3; i++) {
-      this.bossPort(ctx, i * W * 0.13, H * 0.45, 4, color, tick, phase);
+    // Horizontal armor seams
+    for (const y of [-0.18, 0.02, 0.22]) {
+      ctx.beginPath();
+      ctx.moveTo(-W * 0.46, y * H);
+      ctx.lineTo( W * 0.46, y * H);
+      ctx.stroke();
     }
+
+    // ── Crenellation crown on the upper hull (the "fortress" silhouette) ──
+    ctx.fillStyle = hullLight;
+    for (let i = -3; i <= 3; i++) {
+      ctx.fillRect(i * W * 0.11 - W * 0.038, -H * 0.50, W * 0.076, H * 0.06);
+    }
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    for (let i = -3; i <= 3; i++) {
+      ctx.strokeRect(i * W * 0.11 - W * 0.038, -H * 0.50, W * 0.076, H * 0.06);
+    }
+
+    // ── Central command bunker — fortified rectangular core ──
+    ctx.fillStyle = hullLight;
+    ctx.fillRect(-W * 0.13, -H * 0.40, W * 0.26, H * 0.30);
+    // Bunker viewports (slit windows)
+    ctx.fillStyle = conduit;
+    ctx.globalAlpha = 0.6 + Math.sin(tick * 0.08) * 0.25;
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillRect(i * W * 0.06 - W * 0.025, -H * 0.30, W * 0.05, H * 0.018);
+      ctx.fillRect(i * W * 0.06 - W * 0.025, -H * 0.20, W * 0.05, H * 0.018);
+    }
+    ctx.globalAlpha = 1;
+    // Bunker outline
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 2;
+    ctx.strokeRect(-W * 0.13, -H * 0.40, W * 0.26, H * 0.30);
+
+    // ── Heavy rear engines ──
+    for (let i = -1; i <= 1; i++) {
+      const ex = i * W * 0.18, ey = -H * 0.50;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ex - W * 0.05, ey, W * 0.10, H * 0.08);
+      const eg = ctx.createRadialGradient(ex, ey, 1, ex, ey, W * 0.08);
+      eg.addColorStop(0, conduit);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg;
+      ctx.globalAlpha = 0.55 + Math.sin(tick * 0.18 + i) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, ey, W * 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Rivets / armor studs along the seams ──
+    ctx.fillStyle = hullAccent;
+    ctx.globalAlpha = 0.6;
+    for (let r = -3; r <= 3; r++) {
+      for (let c = -1; c <= 1; c++) {
+        const rx = r * W * 0.11;
+        const ry = c * H * 0.20;
+        ctx.fillRect(rx - 1.2, ry - 1.2, 2.4, 2.4);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS ════
+
+    // 1. CENTRAL BOMBARDMENT CANNON — huge prominent barrel
+    {
+      const mx = 0, my = H * 0.20;
+      // Mounting bracket
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.12, my - H * 0.06, W * 0.24, H * 0.12);
+      ctx.fillStyle = hullAccent;
+      ctx.fillRect(mx - W * 0.12, my - H * 0.06, W * 0.24, H * 0.025);
+      // Massive barrel
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.06, my, W * 0.12, H * 0.30);
+      // Cooling fins
+      ctx.fillStyle = hullLight;
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(mx - W * 0.08, my + H * 0.05 + i * H * 0.07, W * 0.16, H * 0.015);
+      }
+      // Muzzle glow
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(mx, my + H * 0.32, W * 0.045, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. L/R HEAVY DISRUPTORS — forward-mounted twin barrels
+    for (const s of [1, -1]) {
+      const dx = s * W * 0.22, dy = H * 0.32;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(dx - W * 0.04, dy - H * 0.04, W * 0.08, H * 0.16);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(dx - W * 0.04, dy - H * 0.04, W * 0.08, H * 0.025);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.45);
+      ctx.beginPath(); ctx.arc(dx, dy + H * 0.12, W * 0.02, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R MISSILE BAYS — large boxy launchers (4-tube each)
+    for (const s of [1, -1]) {
+      const mrx = s * W * 0.40, mry = H * 0.10;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mrx - W * 0.08, mry - H * 0.06, W * 0.16, H * 0.14);
+      // 4 tubes (2x2 grid)
+      ctx.fillStyle = conduitDim;
+      for (let row = 0; row < 2; row++) {
+        for (let col = -1; col <= 1; col += 2) {
+          ctx.fillRect(
+            mrx + col * W * 0.03 - W * 0.014,
+            mry - H * 0.04 + row * H * 0.06,
+            W * 0.028, H * 0.05
+          );
+        }
+      }
+      // Loaded glow
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let row = 0; row < 2; row++) {
+        for (let col = -1; col <= 1; col += 2) {
+          ctx.beginPath();
+          ctx.arc(
+            mrx + col * W * 0.03,
+            mry - H * 0.025 + row * H * 0.06,
+            W * 0.006, 0, Math.PI * 2
+          );
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R AA PHASER BATTERIES — rear shoulder mounts
+    for (const s of [1, -1]) {
+      const ax = s * W * 0.34, ay = -H * 0.34;
+      // Turret base
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath();
+      ctx.arc(ax, ay, W * 0.045, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = hullLight;
+      ctx.beginPath();
+      ctx.arc(ax, ay, W * 0.030, 0, Math.PI * 2); ctx.fill();
+      // Twin barrels pointing forward
+      ctx.fillStyle = hullDarkest;
+      for (const off of [-W * 0.012, W * 0.012]) {
+        ctx.fillRect(ax + off - W * 0.005, ay, W * 0.010, H * 0.08);
+      }
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(ax, ay - W * 0.008, W * 0.010, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 8. SINGULARITY DREADNOUGHT — Klingon late-game, jagged ───────

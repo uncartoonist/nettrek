@@ -394,7 +394,7 @@ export const STAGES: Stage[] = [
         { type: 'elite', faction: 'klingon', x: 0.6, path: zigzag(0.6) },
       ]},
     ],
-    boss: { name: 'Fortress Command', type: 'fortress', hp: 1000, width: 200, height: 130, phases: 5, faction: 'orion' },
+    boss: { name: 'Fortress Command', type: 'fortress', hp: 1900, width: 220, height: 140, phases: 5, faction: 'orion' },
   },
 
   // ── Stage 8: Black Hole Perimeter ─────────────────────────

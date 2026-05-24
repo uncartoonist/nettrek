@@ -2210,14 +2210,67 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 7. FORTRESS COMMAND (siege, orion) ────────────────────
-    case 'fortress':
-      if (phase === 0) bulletWall(c, 8, 3);
-      else if (phase === 1) { bulletWall(c, 10, 2); if (pt % 4 === 0) aimedSpread(c, 3, 0.3, 4); }
-      else if (phase === 2) { wingShots(c, 7, 3); bulletWall(c, 9, 2); }
-      else if (phase === 3) { radialBurst(c, 12, 2.8); aimedSpread(c, 3, 0.4, 4.5); }
-      else { bulletWall(c, 12, 1); spiralArms(c, 5, 3.2); weakPointFire(c); }
+    // ── 7. FORTRESS COMMAND (orion) — per-hardpoint, brutalist citadel ──
+    // 7 destroyable hardpoints: central Bombardment Cannon (signature
+    // artillery salvo), L/R heavy disruptors, L/R missile bays, L/R AA
+    // phaser batteries. Barrier drops handled in updateEnemy. No always-on
+    // hull weapon.
+    case 'fortress': {
+      if (!boss.weakPoints) break;
+      const speedBoost = phase >= 4 ? 0.6 : phase >= 3 ? 0.3 : 0;
+      const rateBoost = phase >= 4 ? 0.55 : phase >= 3 ? 0.7 : phase >= 2 ? 0.85 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'BOMBARDMENT') {
+          // ── Signature: artillery salvo ──
+          // Fires 7 slow heavy shells in a wide spread across the lower
+          // half of the screen. Each shell drifts down — player navigates
+          // gaps between them. Combined with barriers, becomes a maze.
+          const W = state.screenW;
+          for (let i = 0; i < 7; i++) {
+            const sx = W * 0.10 + (i / 6) * W * 0.80 + (Math.random() - 0.5) * 30;
+            // Aim from the cannon position toward the spread x at mid-screen height
+            const tx = sx;
+            const ty = state.screenH * 0.55 + Math.random() * 80;
+            const dx = tx - wx, dy = ty - wy;
+            const dd = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+            bulletAt(c, wx, wy + 8, (dx / dd) * (2.0 + speedBoost), (dy / dd) * (2.0 + speedBoost),
+              { color: col, r: 8, trail: true, ttl: 200, shape: 'torpedo' });
+          }
+          state.screenShake = Math.max(state.screenShake, 7);
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#ffaa33';
+        } else if (wp.weaponType === 'disruptor') {
+          // Heavy disruptor — slightly slower but bigger aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.2 + speedBoost), Math.sin(a) * (4.2 + speedBoost),
+            { color: col, r: 5.5, trail: true, ttl: 100, shape: 'bolt' });
+        } else if (wp.weaponType === 'missile') {
+          // Missile bay — pair of homing missiles
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.20;
+            bulletAt(c, wx + side * 4, wy + 4, Math.cos(a) * 2.0, Math.sin(a) * 2.6,
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // AA phaser battery — short rapid 3-shot burst aimed at player
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          for (let i = -1; i <= 1; i++) {
+            const aa = a + i * 0.08 + (Math.random() - 0.5) * 0.04;
+            bulletAt(c, wx, wy + 2, Math.cos(aa) * (4.4 + speedBoost), Math.sin(aa) * (4.4 + speedBoost),
+              { color: col, r: 3.5, trail: true, ttl: 80, shape: 'phaserlance' });
+          }
+        }
+      }
       break;
+    }
 
     // ── 8. SINGULARITY DREADNOUGHT (curtain, klingon) ─────────
     case 'singularity':
@@ -2651,6 +2704,24 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.28, -ch * 0.42, 'phaser',    'L TAIL PHASER', '#88ffbb', 0.11,  90),
       hardpoint( cw * 0.28, -ch * 0.42, 'phaser',    'R TAIL PHASER', '#88ffbb', 0.11,  90),
     );
+  } else if (config.type === 'fortress') {
+    // FORTRESS COMMAND — Orion brutalist mobile citadel. Massive blocky
+    // hull, regimented (vs Flagship's mismatched-mercenary look). 7 hardpoints:
+    //   central BOMBARDMENT CANNON (signature artillery salvo)
+    //   L/R HEAVY DISRUPTOR turrets forward
+    //   L/R MISSILE BAYS mid-flank
+    //   L/R AA PHASER batteries rear
+    // Unique mechanic: periodic BARRIER DROPS that compartmentalize the
+    // playfield (player must navigate corridors while the bombardment rains).
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.20, 'torpedo',   'BOMBARDMENT', '#ffaa22', 0.16, 280),
+      hardpoint(-cw * 0.22,  ch * 0.32, 'disruptor', 'L HEAVY DSR', '#ffcc44', 0.12,  90),
+      hardpoint( cw * 0.22,  ch * 0.32, 'disruptor', 'R HEAVY DSR', '#ffcc44', 0.12,  90),
+      hardpoint(-cw * 0.40,  ch * 0.10, 'missile',   'L MSL BAY',   '#ff8833', 0.12, 130),
+      hardpoint( cw * 0.40,  ch * 0.10, 'missile',   'R MSL BAY',   '#ff8833', 0.12, 130),
+      hardpoint(-cw * 0.34, -ch * 0.34, 'phaser',    'L AA PHASER', '#ffdd66', 0.11,  85),
+      hardpoint( cw * 0.34, -ch * 0.34, 'phaser',    'R AA PHASER', '#ffdd66', 0.11,  85),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2673,7 +2744,8 @@ function spawnBoss(state: ShmupState, config: any): void {
   const isTvak =
     config.type === 'tvak' || config.type === 'dreadnought' ||
     config.type === 'flagship' || config.type === 'gravitymarauder' ||
-    config.type === 'guardian' || config.type === 'sovereign';
+    config.type === 'guardian' || config.type === 'sovereign' ||
+    config.type === 'fortress';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2707,7 +2779,8 @@ function spawnBoss(state: ShmupState, config: any): void {
       config.type === 'flagship'    ? 480 :
       config.type === 'gravitymarauder' ? 540 :
       config.type === 'guardian'    ? 480 :
-      config.type === 'sovereign'   ? 540 : 0,
+      config.type === 'sovereign'   ? 540 :
+      config.type === 'fortress'    ? 660 : 0,
     // Sovereign reuses pullTimer for its Subspace Push cycle (inverse pull).
     pullTimer:
       config.type === 'gravitymarauder' ? 480 :
@@ -3095,6 +3168,33 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           });
         }
         enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Fortress extras: periodic Barrier Drops ──
+    // The Fortress drops solid barrier walls that compartmentalize the
+    // playfield. Combined with the Bombardment Salvo (per-hardpoint fire),
+    // the player must navigate corridors while artillery rains down.
+    if (enemy.bossType === 'fortress') {
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        // Spawn 2 barriers spaced apart horizontally — they descend into
+        // the playfield and block movement until destroyed/passed.
+        for (let i = 0; i < 2; i++) {
+          const side = i === 0 ? -1 : 1;
+          const bx = state.screenW / 2 + side * state.screenW * (0.18 + Math.random() * 0.10);
+          const by = enemy.pos.y + enemy.height * 0.5 + 30;
+          state.obstacles.push({
+            pos: { x: bx, y: by },
+            vel: { x: 0, y: 0.6 + Math.random() * 0.2 },
+            radius: 26,
+            hp: 8,
+            type: 'barrier',
+            rotation: 0,
+            rotSpeed: 0,
+          });
+        }
+        enemy.escortTimer = Math.max(420, 660 - (enemy.phase ?? 0) * 50);
       }
     }
 
