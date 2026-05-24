@@ -2383,15 +2383,57 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 10. PHASE WRAITH (drone, romulan) ─────────────────────
-    case 'wraith':
-      // Wraith fires sustained sparse but heavy patterns
-      if (phase === 0) { aimedSpread(c, 1, 0, 5); if (pt % 8 === 0) radialBurst(c, 8, 2.4); }
-      else if (phase === 1) { aimedSpread(c, 3, 0.4, 4.5); if (pt % 5 === 0) spiralArms(c, 4, 3); }
-      else if (phase === 2) { spiralArms(c, 5, 3, 0.07); aimedSpread(c, 5, 0.5, 4); }
-      else if (phase === 3) { radialBurst(c, 14, 2.6, c.t * 0.04); aimedSpread(c, 3, 0.3, 5); }
-      else { spiralArms(c, 7, 3.5, 0.09); radialBurst(c, 10, 2.8, -c.t * 0.06); weakPointFire(c); }
+    // ── 10. PHASE WRAITH (romulan) — per-hardpoint, KEEPS FIRING WHILE INTANGIBLE ──
+    // The Wraith's defining trait: unlike Valdore's silent cloak, Wraith
+    // continues firing while in Spectral Phase. No cloakActive early-break.
+    // 7 hardpoints. Signature: TWIN PHASE BEAMS — two simultaneous aimed
+    // bolts forming a V (player dodges perpendicular).
+    case 'wraith': {
+      if (!boss.weakPoints) break;
+      const speedBoost = phase >= 4 ? 0.6 : phase >= 3 ? 0.3 : 0;
+      const rateBoost = phase >= 4 ? 0.55 : phase >= 3 ? 0.7 : phase >= 2 ? 0.85 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'PHASE LANCE') {
+          // ── Signature: Twin Phase Beams ──
+          // Two simultaneous aimed bolts from offsets to either side,
+          // each aimed at the player. They converge on the player from
+          // two different angles — single-direction dodge fails.
+          const px = state.player.pos.x, py = state.player.pos.y;
+          for (const side of [-1, 1]) {
+            const ox = side * 22;
+            const a = Math.atan2(py - wy, px - (wx + ox));
+            bulletAt(c, wx + ox, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+              { color: col, r: 4.5, trail: true, ttl: 100, shape: 'phaserlance' });
+          }
+        } else if (wp.weaponType === 'disruptor') {
+          // Spectral disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4.5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'plasma') {
+          // Spectral plasma — 3-blob fan
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.28;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.3, Math.sin(a) * 2.3,
+              { color: col, r: 6, ttl: 120, shape: 'blob' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Spectral phaser — thin aimed lance
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        }
+      }
       break;
+    }
 
     // ── 11. OMEGA SUPREME (finale, orion) ─────────────────────
     case 'omega':
@@ -2850,6 +2892,20 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.30, -ch * 0.38, 'phaser',    'L PHASER',     '#dd66ff', 0.11,  90),
       hardpoint( cw * 0.30, -ch * 0.38, 'phaser',    'R PHASER',     '#dd66ff', 0.11,  90),
     );
+  } else if (config.type === 'wraith') {
+    // PHASE WRAITH — final Romulan: a spectral, skeletal vessel that
+    // periodically becomes intangible while continuing to fire. 7
+    // hardpoints. Signature: TWIN PHASE BEAMS (two simultaneous aimed
+    // bolts forming a V the player must dodge perpendicular to).
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.18, 'torpedo',   'PHASE LANCE', '#e0c8ff', 0.16, 130),
+      hardpoint(-cw * 0.20,  ch * 0.30, 'disruptor', 'L DISRUPTOR', '#c8a8ff', 0.12,  85),
+      hardpoint( cw * 0.20,  ch * 0.30, 'disruptor', 'R DISRUPTOR', '#c8a8ff', 0.12,  85),
+      hardpoint(-cw * 0.38,  0,          'plasma',    'L PLASMA',    '#a888ff', 0.12, 105),
+      hardpoint( cw * 0.38,  0,          'plasma',    'R PLASMA',    '#a888ff', 0.12, 105),
+      hardpoint(-cw * 0.28, -ch * 0.36, 'phaser',    'L PHASER',    '#d8c0ff', 0.11,  90),
+      hardpoint( cw * 0.28, -ch * 0.36, 'phaser',    'R PHASER',    '#d8c0ff', 0.11,  90),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2874,7 +2930,7 @@ function spawnBoss(state: ShmupState, config: any): void {
     config.type === 'flagship' || config.type === 'gravitymarauder' ||
     config.type === 'guardian' || config.type === 'sovereign' ||
     config.type === 'fortress' || config.type === 'singularity' ||
-    config.type === 'voidtyrant';
+    config.type === 'voidtyrant' || config.type === 'wraith';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2901,7 +2957,8 @@ function spawnBoss(state: ShmupState, config: any): void {
     // cadence per boss (escorts / mines / vortexes / crystal shards).
     cloakTimer:
       config.type === 'dreadnought' ? 540 :
-      config.type === 'guardian'    ? 600 : 0,
+      config.type === 'guardian'    ? 600 :
+      config.type === 'wraith'      ? 480 : 0,
     cloakActive: 0,
     escortTimer:
       config.type === 'dreadnought' ? 360 :
@@ -2911,7 +2968,8 @@ function spawnBoss(state: ShmupState, config: any): void {
       config.type === 'sovereign'   ? 540 :
       config.type === 'fortress'    ? 660 :
       config.type === 'singularity' ? 540 :
-      config.type === 'voidtyrant'  ? 660 : 0,
+      config.type === 'voidtyrant'  ? 660 :
+      config.type === 'wraith'      ? 420 : 0,
     // pullTimer reused by multiple bosses for periodic player-affecting
     // pulses (Marauder: pull, Sovereign: push, Singularity: slow, Voidtyrant: gravity ring).
     pullTimer:
@@ -3364,6 +3422,88 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           });
         }
         enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Phase Wraith extras: Spectral Phase + ambient spectral bullets ──
+    if (enemy.bossType === 'wraith') {
+      // Spectral Phase — cycles via cloakActive/cloakTimer but with a
+      // CRUCIAL difference from Valdore: the Wraith KEEPS FIRING while
+      // intangible (its fireBossPattern doesn't early-break on cloak).
+      // Hit guards still skip damage, so the boss is invulnerable but
+      // aggressive — player can't just wait it out.
+      if (enemy.cloakActive && enemy.cloakActive > 0) {
+        enemy.cloakActive--;
+        // Continuous wisp emission tells the player "you can't hit me"
+        if (state.tick % 2 === 0 && state.particles.length < 440) {
+          for (let i = 0; i < 3; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = enemy.width * 0.4 * Math.random();
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * r, y: enemy.pos.y + Math.sin(a) * r },
+              vel: { x: Math.cos(a) * 1.5, y: Math.sin(a) * 1.5 },
+              life: 22, maxLife: 22, color: '#c8a8ff', size: 1.5 + Math.random() * 1.5,
+            });
+          }
+        }
+      } else {
+        enemy.cloakTimer = (enemy.cloakTimer ?? 480) - 1;
+        if (enemy.cloakTimer <= 0) {
+          enemy.cloakActive = 150; // 2.5 second spectral window
+          enemy.cloakTimer = Math.max(360, 480 - (enemy.phase ?? 0) * 30);
+          // Phase engage burst — pale-violet shimmer
+          state.screenFlash = Math.max(state.screenFlash, 0.16);
+          state.screenFlashColor = '#c8a8ff';
+          for (let i = 0; i < 30; i++) {
+            const a = (Math.PI * 2 / 30) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 3.5, y: Math.sin(a) * 3.5 },
+              life: 26, maxLife: 26, color: '#c8a8ff', size: 1.8 + Math.random(),
+            });
+          }
+        }
+      }
+      // Ambient SPECTRAL BULLETS — every ~7s a few bullets emerge from
+      // random spawn points (NOT the boss) and drift toward the player.
+      // Each is announced by a small purple portal burst at its origin
+      // so the player can read the threat direction.
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        const p = state.player;
+        const W = state.screenW;
+        const H = state.screenH;
+        const N = 4 + (enemy.phase ?? 0);
+        for (let i = 0; i < N; i++) {
+          // Spawn somewhere away from the boss and the player (random)
+          const sx = 60 + Math.random() * (W - 120);
+          const sy = enemy.pos.y + enemy.height * 0.4 + Math.random() * (H * 0.35);
+          // Origin telegraph burst
+          for (let j = 0; j < 8; j++) {
+            const a = (Math.PI * 2 / 8) * j;
+            state.particles.push({
+              pos: { x: sx, y: sy },
+              vel: { x: Math.cos(a) * 2.5, y: Math.sin(a) * 2.5 },
+              life: 18, maxLife: 18, color: '#c8a8ff', size: 1.5 + Math.random(),
+            });
+          }
+          // Bullet aimed at player
+          const dx = p.pos.x - sx;
+          const dy = p.pos.y - sy;
+          const dd = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+          const speed = 3 + Math.random() * 0.6;
+          state.enemyBullets.push({
+            pos: { x: sx, y: sy },
+            vel: { x: (dx / dd) * speed, y: (dy / dd) * speed },
+            damage: 1, radius: 4,
+            isPlayer: false,
+            color: '#c8a8ff',
+            trail: true,
+            ttl: 110, maxTtl: 110,
+            shape: 'phaserlance',
+          });
+        }
+        enemy.escortTimer = Math.max(300, 420 - (enemy.phase ?? 0) * 40);
       }
     }
 

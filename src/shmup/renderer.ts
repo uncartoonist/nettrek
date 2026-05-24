@@ -2800,7 +2800,10 @@ export class ShmupRenderer {
     // varies by bossType: Romulan green for Valdore's cloak, crystal cyan
     // for Guardian's phase shift. Engage/disengage particle bursts are
     // emitted engine-side so transitions feel decisive.
-    if (enemy.cloakActive && enemy.cloakActive > 0) {
+    // EXCEPTION: Wraith's Spectral Phase keeps the boss visible and
+    // firing — the wisp particles emitted engine-side carry the visual
+    // signal that hits don't connect. Don't ghost-render for wraith.
+    if (enemy.cloakActive && enemy.cloakActive > 0 && enemy.bossType !== 'wraith') {
       const shimmer = 0.10 + Math.sin(tick * 0.22) * 0.06;
       const cloakColor = enemy.bossType === 'guardian' ? '#aaccff' : '#33ff66';
       ctx.strokeStyle = cloakColor;
@@ -5255,42 +5258,196 @@ export class ShmupRenderer {
     trace(); ctx.stroke();
   }
 
-  // ── 10. PHASE WRAITH — Romulan, ethereal/cloaked ─────────────────
-  private bossHullWraith(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Ghostly outer halo (shifts in and out of phase)
-    const cloak = 0.5 + Math.sin(tick * 0.04) * 0.3;
-    ctx.globalAlpha = cloak;
-    // Outer spectral wings
-    ctx.fillStyle = dk;
-    ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    ctx.quadraticCurveTo(-W * 0.25, -H * 0.45, -W * 0.55, -H * 0.1);
-    ctx.quadraticCurveTo(-W * 0.5, H * 0.1, -W * 0.4, H * 0.4);
-    ctx.quadraticCurveTo(-W * 0.2, H * 0.5, 0, H * 0.42);
-    ctx.quadraticCurveTo(W * 0.2, H * 0.5, W * 0.4, H * 0.4);
-    ctx.quadraticCurveTo(W * 0.5, H * 0.1, W * 0.55, -H * 0.1);
-    ctx.quadraticCurveTo(W * 0.25, -H * 0.45, 0, -H * 0.5);
-    ctx.closePath(); ctx.fill();
-    // Inner body
-    ctx.fillStyle = md;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, W * 0.18, H * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  // ── 10. PHASE WRAITH — final Romulan, spectral skeletal vessel ───
+  // A pale, almost-translucent Romulan hull with the inner frame showing
+  // through. Bone-white skeletal spine, pale-violet ghost armor, faint
+  // outline. Distinct from the prior three Romulan bosses' palettes
+  // (Valdore sage, Marauder emerald, Sovereign mint) — this is corpse-
+  // bone with violet wisps. The Spectral Phase mechanic keeps it visible
+  // even while intangible; the engine-side wisp particles signal it.
+  private bossHullWraith(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#1a1830';
+    const hullDark    = '#2e2a44';
+    const hullMid     = '#48405c';
+    const hullLight   = '#6c5e7c';
+    const hullAccent  = '#a89cc4';
+    const conduit     = '#c8a8ff';
+    const conduitHot  = '#e8d4ff';
+    const conduitDim  = '#2a1850';
+    const corePulse = 0.5 + Math.sin(tick * 0.10) * 0.35;
+    const phaseGlow = 0.45 + phase * 0.13;
+
+    // ── Faint outer halo — always emanating (this boss is always partly
+    // phased; spectral phase is just MORE of it) ──
+    const haloG = ctx.createRadialGradient(0, 0, W * 0.20, 0, 0, W * 0.55);
+    haloG.addColorStop(0, 'rgba(200,170,255,0.20)');
+    haloG.addColorStop(1, 'transparent');
+    ctx.fillStyle = haloG;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.55, 0, Math.PI * 2); ctx.fill();
+
+    // ── Silhouette: elongated wraith, narrow waist + flared wings ──
+    const half: [number, number][] = [
+      [0.00,  0.50],  // beak (player-facing)
+      [0.08,  0.42],
+      [0.12,  0.24],
+      [0.26,  0.10],  // forward wing curve
+      [0.42, -0.04],  // outer wing peak
+      [0.48, -0.18],
+      [0.40, -0.30],  // trailing feather step
+      [0.46, -0.42],
+      [0.30, -0.48],
+      [0.14, -0.50],
+      [0.06, -0.46],
+    ];
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
+    // Spectral hull base (low-saturation pale armor)
     ctx.globalAlpha = 1;
-    // Phasing core — never fully visible
-    const cpulse = 0.5 + Math.sin(tick * 0.11) * 0.3;
-    ctx.fillStyle = color; ctx.globalAlpha = cpulse;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.1, 0, Math.PI * 2); ctx.fill();
-    // Spectral wisps trailing behind
-    ctx.fillStyle = color; ctx.globalAlpha = 0.25;
-    for (let i = 0; i < 5; i++) {
-      const wy = H * 0.5 + i * 6;
-      const wx = Math.sin(tick * 0.05 + i) * W * 0.2;
-      ctx.beginPath(); ctx.ellipse(wx, wy, W * 0.05 - i * 1.5, H * 0.04 - i * 1, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Wing armor plating — inset mid-tone ──
+    ctx.fillStyle = hullMid;
+    for (const s of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.10, H * 0.24);
+      ctx.lineTo(s * W * 0.24, H * 0.10);
+      ctx.lineTo(s * W * 0.38, -H * 0.04);
+      ctx.lineTo(s * W * 0.36, -H * 0.20);
+      ctx.lineTo(s * W * 0.22, -H * 0.32);
+      ctx.lineTo(s * W * 0.10, -H * 0.18);
+      ctx.lineTo(s * W * 0.10,  H * 0.08);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // ── Skeletal frame ribs — bone-white lines through the spectral hull ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.55;
+    for (const s of [1, -1]) {
+      for (let r = 0; r < 4; r++) {
+        const t = r / 4;
+        ctx.beginPath();
+        ctx.moveTo(s * W * (0.10 + t * 0.20), H * (0.22 - t * 0.40));
+        ctx.lineTo(s * W * (0.26 + t * 0.16), H * (0.10 - t * 0.30));
+        ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
-    this.bossPort(ctx, -W * 0.5, 0, 4, color, tick, phase);
-    this.bossPort(ctx, W * 0.5, 0, 4, color, tick, phase);
-    this.bossPort(ctx, 0, -H * 0.4, 5, color, tick, phase);
+
+    // ── Central spine (raised, paler) ──
+    ctx.fillStyle = hullLight;
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.46);
+    ctx.lineTo(W * 0.07, H * 0.18);
+    ctx.lineTo(W * 0.07, -H * 0.28);
+    ctx.lineTo(0, -H * 0.44);
+    ctx.lineTo(-W * 0.07, -H * 0.28);
+    ctx.lineTo(-W * 0.07, H * 0.18);
+    ctx.closePath(); ctx.fill();
+
+    // ── Spectral spine conduit ──
+    ctx.strokeStyle = conduitDim; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.36); ctx.lineTo(0, -H * 0.36); ctx.stroke();
+    ctx.strokeStyle = conduit; ctx.lineWidth = 2;
+    ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+    ctx.beginPath(); ctx.moveTo(0, H * 0.36); ctx.lineTo(0, -H * 0.36); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Central phase core ──
+    const coreR = W * 0.07;
+    const cg = ctx.createRadialGradient(0, -H * 0.04, 1, 0, -H * 0.04, coreR * 1.8);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.4, conduit);
+    cg.addColorStop(1, 'transparent');
+    ctx.fillStyle = cg;
+    ctx.globalAlpha = phaseGlow * corePulse;
+    ctx.beginPath(); ctx.arc(0, -H * 0.04, coreR * 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── Tail wisps trailing back — always present (ambient phasing) ──
+    ctx.fillStyle = conduit;
+    ctx.globalAlpha = 0.25;
+    for (let i = 0; i < 4; i++) {
+      const wy = -H * 0.50 - i * 8;
+      const wx = Math.sin(tick * 0.06 + i) * W * 0.10;
+      ctx.beginPath();
+      ctx.ellipse(wx, wy, W * 0.04 - i * 1, H * 0.025 - i * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS ════
+
+    // 1. CENTRAL PHASE LANCE — twin-emitter cannon (matches the twin-beam signature)
+    {
+      const lx = 0, ly = H * 0.16;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(lx - W * 0.06, ly, W * 0.12, H * 0.22);
+      // Twin barrels visible
+      ctx.fillStyle = hullDarkest;
+      for (const off of [-W * 0.025, W * 0.025]) {
+        ctx.fillRect(lx + off - W * 0.012, ly + H * 0.04, W * 0.024, H * 0.22);
+      }
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+      for (const off of [-W * 0.025, W * 0.025]) {
+        ctx.beginPath();
+        ctx.arc(lx + off, ly + H * 0.24, W * 0.018, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. L/R DISRUPTORS — lower wing mounts
+    for (const s of [1, -1]) {
+      const dx = s * W * 0.20, dy = H * 0.30;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(dx - W * 0.026, dy - H * 0.03, W * 0.052, H * 0.14);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(dx - W * 0.026, dy - H * 0.03, W * 0.052, H * 0.02);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(dx, dy + H * 0.10, W * 0.013, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R PLASMA conduits — outer mid-flank
+    for (const s of [1, -1]) {
+      const px = s * W * 0.38, py = 0;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(px - W * 0.022, py - H * 0.05, W * 0.044, H * 0.10);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.fillRect(px - W * 0.013, py - H * 0.035, W * 0.026, H * 0.070);
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R PHASERS — upper shoulders
+    for (const s of [1, -1]) {
+      const ax = s * W * 0.28, ay = -H * 0.36;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ax - W * 0.042, ay - H * 0.02, W * 0.084, H * 0.05);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(ax + i * W * 0.023, ay + H * 0.012, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 11. OMEGA SUPREME — final boss, layered fortress + halo ──────

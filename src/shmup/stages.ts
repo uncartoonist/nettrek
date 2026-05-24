@@ -536,7 +536,7 @@ export const STAGES: Stage[] = [
         { type: 'elite', faction: 'orion', x: 0.6, path: swoopRight(0.6), dropType: 'star' },
       ]},
     ],
-    boss: { name: 'Phase Wraith', type: 'wraith', hp: 1400, width: 200, height: 120, phases: 5, faction: 'romulan' },
+    boss: { name: 'Phase Wraith', type: 'wraith', hp: 2500, width: 210, height: 140, phases: 5, faction: 'romulan' },
   },
 
   // ── Stage 11: Omega Citadel ───────────────────────────────
