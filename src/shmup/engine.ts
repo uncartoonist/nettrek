@@ -2329,14 +2329,59 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 9. EVENT HORIZON TYRANT (vortex_storm, klingon) ───────
-    case 'voidtyrant':
-      if (phase === 0) { spiralArms(c, 6, 2.5, 0.04); if (pt % 5 === 0) aimedSpread(c, 3, 0.4, 3.5); }
-      else if (phase === 1) { spiralArms(c, 8, 2.8, 0.05); radialBurst(c, 6, 2, c.t * 0.04); }
-      else if (phase === 2) { spiralArms(c, 6, 3.2, -0.06); aimedSpread(c, 5, 0.6, 4); }
-      else if (phase === 3) { radialBurst(c, 16, 2.5, c.t * 0.04); if (pt % 4 === 0) aimedSpread(c, 3, 0.3, 5); }
-      else { spiralArms(c, 8, 3.5, 0.08); radialBurst(c, 12, 3, -c.t * 0.05); weakPointFire(c); }
+    // ── 9. EVENT HORIZON TYRANT (klingon late-game) — per-hardpoint ──
+    // 7 destroyable hardpoints. Signature is the central EVENT HORIZON
+    // firing a 24-bullet 360° radial burst — fills the screen with a
+    // ring you must dodge between. Gravity Ring + energyribbon weaves in
+    // updateEnemy. Weapons quiet during the Gravity Ring.
+    case 'voidtyrant': {
+      if (!boss.weakPoints) break;
+      if (boss.pullActive && boss.pullActive > 0) break;
+      const speedBoost = phase >= 4 ? 0.6 : phase >= 3 ? 0.3 : 0;
+      const rateBoost = phase >= 4 ? 0.55 : phase >= 3 ? 0.7 : phase >= 2 ? 0.85 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'EVENT HORIZON') {
+          // ── Signature: 24-bullet radial burst ──
+          // Fills a 360° ring around the boss. Player must already be
+          // close-in or far enough out, OR weave between the gaps as
+          // they spread.
+          const N = 24;
+          const offset = ((boss.phaseTimer ?? 0) * 0.04) % (Math.PI * 2);
+          for (let i = 0; i < N; i++) {
+            const a = (Math.PI * 2 / N) * i + offset;
+            bulletAt(c, wx, wy, Math.cos(a) * (2.8 + speedBoost), Math.sin(a) * (2.8 + speedBoost),
+              { color: col, r: 5, trail: true, ttl: 140, shape: 'phaserlance' });
+          }
+          state.screenShake = Math.max(state.screenShake, 5);
+        } else if (wp.weaponType === 'disruptor') {
+          // Forward disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'missile') {
+          // Missile rack — paired homing
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.20;
+            bulletAt(c, wx + side * 4, wy + 4, Math.cos(a) * 2.0, Math.sin(a) * 2.6,
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Rear phaser lance
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        }
+      }
       break;
+    }
 
     // ── 10. PHASE WRAITH (drone, romulan) ─────────────────────
     case 'wraith':
@@ -2787,6 +2832,24 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.32, -ch * 0.38, 'phaser',    'L AFT PHASER','#ff4477', 0.11,  90),
       hardpoint( cw * 0.32, -ch * 0.38, 'phaser',    'R AFT PHASER','#ff4477', 0.11,  90),
     );
+  } else if (config.type === 'voidtyrant') {
+    // EVENT HORIZON TYRANT — black-hole-shrouded Klingon warship. 7
+    // hardpoints orbit the central event horizon:
+    //   central EVENT HORIZON (signature 24-bullet radial burst)
+    //   L/R DISRUPTOR cannons (forward flank)
+    //   L/R MISSILE racks (mid-flank)
+    //   L/R PHASER lances (rear shoulders)
+    // Unique mechanic: GRAVITY RING — periodic damaging annulus the player
+    // must be inside or outside (not in the band).
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.08, 'torpedo',   'EVENT HORIZON','#cc44ff', 0.16, 260),
+      hardpoint(-cw * 0.24,  ch * 0.30, 'disruptor', 'L DISRUPTOR',  '#ff66cc', 0.12,  85),
+      hardpoint( cw * 0.24,  ch * 0.30, 'disruptor', 'R DISRUPTOR',  '#ff66cc', 0.12,  85),
+      hardpoint(-cw * 0.42, -ch * 0.04, 'missile',   'L MISSILE',    '#bb44ff', 0.12, 130),
+      hardpoint( cw * 0.42, -ch * 0.04, 'missile',   'R MISSILE',    '#bb44ff', 0.12, 130),
+      hardpoint(-cw * 0.30, -ch * 0.38, 'phaser',    'L PHASER',     '#dd66ff', 0.11,  90),
+      hardpoint( cw * 0.30, -ch * 0.38, 'phaser',    'R PHASER',     '#dd66ff', 0.11,  90),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2810,7 +2873,8 @@ function spawnBoss(state: ShmupState, config: any): void {
     config.type === 'tvak' || config.type === 'dreadnought' ||
     config.type === 'flagship' || config.type === 'gravitymarauder' ||
     config.type === 'guardian' || config.type === 'sovereign' ||
-    config.type === 'fortress' || config.type === 'singularity';
+    config.type === 'fortress' || config.type === 'singularity' ||
+    config.type === 'voidtyrant';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2846,13 +2910,15 @@ function spawnBoss(state: ShmupState, config: any): void {
       config.type === 'guardian'    ? 480 :
       config.type === 'sovereign'   ? 540 :
       config.type === 'fortress'    ? 660 :
-      config.type === 'singularity' ? 540 : 0,
+      config.type === 'singularity' ? 540 :
+      config.type === 'voidtyrant'  ? 660 : 0,
     // pullTimer reused by multiple bosses for periodic player-affecting
-    // pulses (Marauder: pull, Sovereign: push, Singularity: tractor slow).
+    // pulses (Marauder: pull, Sovereign: push, Singularity: slow, Voidtyrant: gravity ring).
     pullTimer:
       config.type === 'gravitymarauder' ? 480 :
       config.type === 'sovereign'       ? 420 :
-      config.type === 'singularity'     ? 510 : 0,
+      config.type === 'singularity'     ? 510 :
+      config.type === 'voidtyrant'      ? 540 : 0,
     pullActive: 0,
   });
   state.bossHp = config.hp;
@@ -3298,6 +3364,76 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           });
         }
         enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Event Horizon Tyrant extras: Gravity Ring + Energyribbon weave ──
+    if (enemy.bossType === 'voidtyrant') {
+      const p = state.player;
+      // Gravity Ring — every ~9s a damaging annulus forms around the boss
+      // for 2 seconds at radius ~150-200px. Player must be either CLOSE
+      // (inside, dangerous) or FAR (outside) — not in the band.
+      if (enemy.pullActive && enemy.pullActive > 0) {
+        enemy.pullActive--;
+        // Damage check: while ring is hot, hit player if in the band
+        if (p.alive && p.invulnTimer <= 0) {
+          const dx = p.pos.x - enemy.pos.x;
+          const dy = p.pos.y - enemy.pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 150 && dist < 205) {
+            // Inline a damage application so we don't need to thread events
+            hitPlayer(state, { });
+          }
+        }
+        // Visual: dense purple ring of inward/outward particles
+        if (state.tick % 2 === 0 && state.particles.length < 440) {
+          for (let i = 0; i < 6; i++) {
+            const a = (Math.PI * 2 / 6) * i + state.tick * 0.04;
+            const r = 175;
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * r, y: enemy.pos.y + Math.sin(a) * r },
+              vel: { x: Math.cos(a) * 0.4, y: Math.sin(a) * 0.4 },
+              life: 16, maxLife: 16, color: '#cc44ff', size: 2.5 + Math.random(),
+            });
+          }
+        }
+      } else {
+        enemy.pullTimer = (enemy.pullTimer ?? 540) - 1;
+        if (enemy.pullTimer <= 0) {
+          enemy.pullActive = 120;
+          enemy.pullTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 40);
+          state.screenShake = Math.max(state.screenShake, 7);
+          state.screenFlash = Math.max(state.screenFlash, 0.22);
+          state.screenFlashColor = '#cc44ff';
+          // Warning burst — outward telegraph at engage
+          for (let i = 0; i < 32; i++) {
+            const a = (Math.PI * 2 / 32) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 6, y: Math.sin(a) * 6 },
+              life: 28, maxLife: 28, color: '#cc44ff', size: 2 + Math.random(),
+            });
+          }
+        }
+      }
+      // Periodic energyribbon weave — flowing aurora obstacle (unique
+      // hazard not used by other bosses)
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        const fromLeft = Math.random() < 0.5;
+        const rx = fromLeft ? 20 : state.screenW - 20;
+        const ry = enemy.pos.y + enemy.height * 0.6;
+        state.obstacles.push({
+          pos: { x: rx, y: ry },
+          vel: { x: (fromLeft ? 1 : -1) * (1.5 + Math.random() * 0.5), y: 0.8 + Math.random() * 0.4 },
+          radius: 10,
+          hp: 999, // indestructible — endure
+          type: 'energyribbon',
+          rotation: 0,
+          rotSpeed: 0,
+          ribbonPoints: [],
+        });
+        enemy.escortTimer = Math.max(540, 720 - (enemy.phase ?? 0) * 50);
       }
     }
 

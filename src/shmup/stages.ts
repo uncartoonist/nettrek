@@ -475,7 +475,7 @@ export const STAGES: Stage[] = [
         { type: 'cruiser', faction: 'klingon', x: 0.5, path: straight(0.5), dropType: 'life' },
       ]},
     ],
-    boss: { name: 'Event Horizon Tyrant', type: 'voidtyrant', hp: 1500, width: 220, height: 135, phases: 5, faction: 'klingon' },
+    boss: { name: 'Event Horizon Tyrant', type: 'voidtyrant', hp: 2300, width: 230, height: 145, phases: 5, faction: 'klingon' },
   },
 
   // ── Stage 10: Subspace Rift ───────────────────────────────

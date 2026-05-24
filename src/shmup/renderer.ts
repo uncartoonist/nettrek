@@ -5093,44 +5093,166 @@ export class ShmupRenderer {
   }
 
   // ── 9. EVENT HORIZON TYRANT — black-hole shrouded warship ────────
-  private bossHullVoidTyrant(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Event horizon halo (drawn first behind everything)
-    const haloG = ctx.createRadialGradient(0, 0, W * 0.25, 0, 0, W * 0.65);
-    haloG.addColorStop(0, 'rgba(160,40,255,0.45)');
-    haloG.addColorStop(0.5, 'rgba(60,10,80,0.25)');
+  // ── 9. EVENT HORIZON TYRANT — black-hole-shrouded Klingon warship ──
+  // Lobed hull with weapon mounts orbiting a massive central event
+  // horizon. Deep violet/magenta palette (distinct from Singularity's
+  // blood-red and T'VAK's grey). The black-hole halo extends well
+  // beyond the hull, projecting a damaging Gravity Ring at intervals.
+  private bossHullVoidTyrant(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#100818';
+    const hullDark    = '#241430';
+    const hullMid     = '#3a2050';
+    const hullLight   = '#56307a';
+    const hullAccent  = '#9a6ec4';
+    const conduit     = '#cc44ff';
+    const conduitHot  = '#ee99ff';
+    const corePulse = 0.6 + Math.sin(tick * 0.10) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.14;
+
+    // ── Event-horizon halo behind everything (huge radial gradient) ──
+    const haloG = ctx.createRadialGradient(0, 0, W * 0.20, 0, 0, W * 0.70);
+    haloG.addColorStop(0, 'rgba(160,60,255,0.55)');
+    haloG.addColorStop(0.5, 'rgba(80,30,140,0.30)');
     haloG.addColorStop(1, 'transparent');
     ctx.fillStyle = haloG;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.65, 0, Math.PI * 2); ctx.fill();
-    // Outer dark armor (lobed)
-    ctx.fillStyle = dk;
-    ctx.beginPath();
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.70, 0, Math.PI * 2); ctx.fill();
+
+    // ── Lobed silhouette: 8-pointed star with weapon mounts at tips ──
     const lobes = 8;
-    for (let i = 0; i < lobes * 2; i++) {
-      const a = (Math.PI * 2 / (lobes * 2)) * i - Math.PI / 2;
-      const r = (i % 2 === 0 ? 0.5 : 0.38) * Math.min(W, H);
-      const x = Math.cos(a) * r;
-      const y = Math.sin(a) * r * (H / W);
+    const trace = () => {
+      ctx.beginPath();
+      for (let i = 0; i < lobes * 2; i++) {
+        const a = (Math.PI * 2 / (lobes * 2)) * i - Math.PI / 2;
+        const r = (i % 2 === 0 ? 0.50 : 0.30) * Math.min(W, H);
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r * (H / W);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    };
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Inner armor ring (a slightly smaller octagon) ──
+    ctx.fillStyle = hullMid;
+    ctx.beginPath();
+    for (let i = 0; i < lobes; i++) {
+      const a = (Math.PI * 2 / lobes) * i - Math.PI / 2;
+      const x = Math.cos(a) * W * 0.32;
+      const y = Math.sin(a) * H * 0.30;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath(); ctx.fill();
-    // Mid ring
-    ctx.fillStyle = md;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.28, 0, Math.PI * 2); ctx.fill();
-    // Pure black core (the event horizon)
-    ctx.fillStyle = '#000000';
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, 0, Math.PI * 2); ctx.fill();
-    // Accretion ring around the black core
-    const ap = 0.7 + Math.sin(tick * 0.1) * 0.25;
-    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.globalAlpha = ap;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.19, tick * 0.06, tick * 0.06 + Math.PI * 1.7); ctx.stroke();
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.globalAlpha = ap * 0.6;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.22, -tick * 0.04, -tick * 0.04 + Math.PI * 1.3); ctx.stroke();
-    ctx.globalAlpha = 1;
-    // Lobe-tip cannons
+
+    // ── Radial spokes connecting the lobes to the core ──
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 2;
     for (let i = 0; i < lobes; i++) {
       const a = (Math.PI * 2 / lobes) * i - Math.PI / 2;
-      this.bossPort(ctx, Math.cos(a) * W * 0.5, Math.sin(a) * H * 0.48, 4, color, tick, phase);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * W * 0.16, Math.sin(a) * H * 0.15);
+      ctx.lineTo(Math.cos(a) * W * 0.48, Math.sin(a) * H * 0.46);
+      ctx.stroke();
     }
+
+    // ── Mid ring detail (thin highlight) ──
+    ctx.strokeStyle = hullAccent; ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.30, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Pure black event horizon core ──
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.18, 0, Math.PI * 2); ctx.fill();
+    // Inner accretion ring
+    ctx.strokeStyle = conduit; ctx.lineWidth = 3;
+    ctx.globalAlpha = phaseGlow * corePulse;
+    ctx.beginPath();
+    ctx.arc(0, 0, W * 0.21, tick * 0.06, tick * 0.06 + Math.PI * 1.7);
+    ctx.stroke();
+    ctx.strokeStyle = conduitHot; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, W * 0.25, -tick * 0.04, -tick * 0.04 + Math.PI * 1.3);
+    ctx.stroke();
+    // Bright lensed core glow
+    const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, W * 0.16);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.35, conduitHot);
+    cg.addColorStop(1, 'transparent');
+    ctx.fillStyle = cg;
+    ctx.globalAlpha = phaseGlow * (0.5 + corePulse * 0.4);
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON MOUNTS at hardpoint locations ════
+
+    // 1. EVENT HORIZON cannon — small barrel pointing at player
+    {
+      const mx = 0, my = H * 0.08;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.035, my, W * 0.070, H * 0.22);
+      ctx.fillStyle = hullLight;
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(mx - W * 0.045, my + H * 0.04 + i * H * 0.06, W * 0.09, H * 0.012);
+      }
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(mx, my + H * 0.24, W * 0.028, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. L/R DISRUPTOR cannons — lower flanks
+    for (const s of [1, -1]) {
+      const dx = s * W * 0.24, dy = H * 0.30;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(dx - W * 0.028, dy - H * 0.03, W * 0.056, H * 0.15);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(dx - W * 0.028, dy - H * 0.03, W * 0.056, H * 0.025);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(dx, dy + H * 0.11, W * 0.014, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R MISSILE racks — mid-flank, 3-tube
+    for (const s of [1, -1]) {
+      const mrx = s * W * 0.42, mry = -H * 0.04;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mrx - W * 0.06, mry - H * 0.04, W * 0.12, H * 0.08);
+      ctx.fillStyle = '#3a1a4a';
+      for (let t = -1; t <= 1; t++) {
+        ctx.fillRect(mrx + t * W * 0.035 - W * 0.012, mry - H * 0.02, W * 0.024, H * 0.06);
+      }
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let t = -1; t <= 1; t++) {
+        ctx.beginPath();
+        ctx.arc(mrx + t * W * 0.035, mry - H * 0.005, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R PHASER lances — upper shoulders
+    for (const s of [1, -1]) {
+      const ax = s * W * 0.30, ay = -H * 0.38;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ax - W * 0.040, ay - H * 0.02, W * 0.080, H * 0.05);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(ax + i * W * 0.022, ay + H * 0.012, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 10. PHASE WRAITH — Romulan, ethereal/cloaked ─────────────────
