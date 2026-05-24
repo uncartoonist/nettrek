@@ -4897,42 +4897,199 @@ export class ShmupRenderer {
   }
 
   // ── 8. SINGULARITY DREADNOUGHT — Klingon late-game, jagged ───────
-  private bossHullSingularityDread(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Jagged predatory silhouette
-    ctx.fillStyle = dk;
-    ctx.beginPath();
-    ctx.moveTo(0, -H * 0.5);
-    ctx.lineTo(-W * 0.18, -H * 0.35);
-    ctx.lineTo(-W * 0.55, -H * 0.05);
-    ctx.lineTo(-W * 0.42, H * 0.12);
-    ctx.lineTo(-W * 0.6, H * 0.25);
-    ctx.lineTo(-W * 0.3, H * 0.42);
-    ctx.lineTo(-W * 0.1, H * 0.3);
-    ctx.lineTo(0, H * 0.5);
-    ctx.lineTo(W * 0.1, H * 0.3);
-    ctx.lineTo(W * 0.3, H * 0.42);
-    ctx.lineTo(W * 0.6, H * 0.25);
-    ctx.lineTo(W * 0.42, H * 0.12);
-    ctx.lineTo(W * 0.55, -H * 0.05);
-    ctx.lineTo(W * 0.18, -H * 0.35);
-    ctx.closePath(); ctx.fill();
-    // Core spine
-    ctx.fillStyle = md;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, W * 0.12, H * 0.35, 0, 0, Math.PI * 2); ctx.fill();
-    // Singularity reactor (mid)
-    const sp = 0.65 + Math.sin(tick * 0.09) * 0.25;
-    ctx.fillStyle = color; ctx.globalAlpha = sp;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = sp * 0.8;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.04, 0, Math.PI * 2); ctx.fill();
+  // ── 8. SINGULARITY DREADNOUGHT — Klingon late-game brutal predator ──
+  // Jagged predatory silhouette with multiple armor lobes and a
+  // weaponized black-hole core. Deep blood-red Klingon palette (vs
+  // T'VAK's grey-purple), much more aggressive feel. Central singularity
+  // cannon visible as a recessed dark core ringed by hot energy.
+  private bossHullSingularityDread(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#160a0a';
+    const hullDark    = '#2e1418';
+    const hullMid     = '#4a2028';
+    const hullLight   = '#6e3038';
+    const hullAccent  = '#bc6a78';
+    const conduit     = '#ff4488';
+    const conduitHot  = '#ffaaaa';
+    const conduitDim  = '#3a0a18';
+    const corePulse = 0.6 + Math.sin(tick * 0.09) * 0.3;
+    const phaseGlow = 0.5 + phase * 0.14;
+
+    // ── Silhouette: jagged multi-lobed predatory hull ──
+    const half: [number, number][] = [
+      [0.00,  0.50],  // prow tip (player-facing)
+      [0.12,  0.42],
+      [0.22,  0.36],
+      [0.34,  0.40],  // claw lobe 1
+      [0.42,  0.30],
+      [0.50,  0.20],  // wide flank
+      [0.46,  0.04],
+      [0.52, -0.12],  // outer jagged spur
+      [0.42, -0.22],
+      [0.50, -0.32],  // upper aft spur
+      [0.36, -0.40],
+      [0.20, -0.48],
+      [0.06, -0.50],
+      [0.00, -0.44],
+    ];
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(half[0][0] * W, half[0][1] * H);
+      for (let i = 1; i < half.length; i++) ctx.lineTo(half[i][0] * W, half[i][1] * H);
+      for (let i = half.length - 2; i >= 1; i--) ctx.lineTo(-half[i][0] * W, half[i][1] * H);
+      ctx.closePath();
+    };
+
     ctx.globalAlpha = 1;
-    // Wing-tip + nose ports
-    this.bossPort(ctx, -W * 0.55, -H * 0.05, 5, color, tick, phase);
-    this.bossPort(ctx, W * 0.55, -H * 0.05, 5, color, tick, phase);
-    this.bossPort(ctx, -W * 0.6, H * 0.25, 4, color, tick, phase);
-    this.bossPort(ctx, W * 0.6, H * 0.25, 4, color, tick, phase);
-    this.bossPort(ctx, 0, H * 0.48, 6, color, tick, phase);
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Wing armor plating — angular inset panels per side ──
+    ctx.fillStyle = hullMid;
+    for (const s of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * W * 0.16, H * 0.32);
+      ctx.lineTo(s * W * 0.38, H * 0.18);
+      ctx.lineTo(s * W * 0.42, -H * 0.04);
+      ctx.lineTo(s * W * 0.36, -H * 0.22);
+      ctx.lineTo(s * W * 0.20, -H * 0.34);
+      ctx.lineTo(s * W * 0.12, -H * 0.16);
+      ctx.lineTo(s * W * 0.14,  H * 0.10);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // ── Angular blade ribs along leading edges ──
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 2;
+    for (const s of [1, -1]) {
+      for (let r = 0; r < 4; r++) {
+        const t = r / 4;
+        ctx.beginPath();
+        ctx.moveTo(s * W * (0.16 + t * 0.20), H * (0.32 - t * 0.50));
+        ctx.lineTo(s * W * (0.30 + t * 0.18), H * (0.20 - t * 0.40));
+        ctx.stroke();
+      }
+    }
+
+    // ── Central raised spine ──
+    ctx.fillStyle = hullLight;
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.46);
+    ctx.lineTo(W * 0.10, H * 0.20);
+    ctx.lineTo(W * 0.09, -H * 0.24);
+    ctx.lineTo(0, -H * 0.42);
+    ctx.lineTo(-W * 0.09, -H * 0.24);
+    ctx.lineTo(-W * 0.10, H * 0.20);
+    ctx.closePath(); ctx.fill();
+    // spine seam
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.40); ctx.lineTo(0, -H * 0.36); ctx.stroke();
+
+    // ── Singularity core — recessed black sink with hot ring ──
+    const coreR = W * 0.075;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(0, -H * 0.04, coreR, 0, Math.PI * 2); ctx.fill();
+    // Accretion ring
+    ctx.strokeStyle = conduit; ctx.lineWidth = 2.5;
+    ctx.globalAlpha = phaseGlow * corePulse;
+    ctx.beginPath();
+    ctx.arc(0, -H * 0.04, coreR * 1.4, tick * 0.05, tick * 0.05 + Math.PI * 1.6);
+    ctx.stroke();
+    ctx.strokeStyle = conduitHot; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, -H * 0.04, coreR * 1.6, -tick * 0.07, -tick * 0.07 + Math.PI * 1.2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Aft engine bank ──
+    for (let i = -1; i <= 1; i++) {
+      const ex = i * W * 0.12, ey = -H * 0.48;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ex - W * 0.04, ey, W * 0.08, H * 0.06);
+      const eg = ctx.createRadialGradient(ex, ey, 1, ex, ey, W * 0.08);
+      eg.addColorStop(0, conduit);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg;
+      ctx.globalAlpha = 0.55 + Math.sin(tick * 0.18 + i) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, ey, W * 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS ════
+
+    // 1. CENTRAL SINGULARITY CANNON — heavy barrel below the core
+    {
+      const mx = 0, my = H * 0.18;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.06, my - H * 0.05, W * 0.12, H * 0.10);
+      ctx.fillStyle = hullAccent;
+      ctx.fillRect(mx - W * 0.06, my - H * 0.05, W * 0.12, H * 0.02);
+      // Barrel
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.045, my, W * 0.090, H * 0.26);
+      // Cooling fins
+      ctx.fillStyle = hullLight;
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(mx - W * 0.06, my + H * 0.04 + i * H * 0.06, W * 0.12, H * 0.014);
+      }
+      // Muzzle glow
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.6 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(mx, my + H * 0.28, W * 0.035, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. L/R FORWARD DISRUPTORS — angled cannon mounts on the lower flanks
+    for (const s of [1, -1]) {
+      const dx = s * W * 0.22, dy = H * 0.30;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(dx - W * 0.030, dy - H * 0.03, W * 0.060, H * 0.16);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(dx - W * 0.030, dy - H * 0.03, W * 0.060, H * 0.025);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(dx, dy + H * 0.12, W * 0.014, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R MISSILE RACKS — mid-flank, 3-tube clusters
+    for (const s of [1, -1]) {
+      const mrx = s * W * 0.40, mry = -H * 0.04;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mrx - W * 0.06, mry - H * 0.04, W * 0.12, H * 0.08);
+      ctx.fillStyle = conduitDim;
+      for (let t = -1; t <= 1; t++) {
+        ctx.fillRect(mrx + t * W * 0.035 - W * 0.012, mry - H * 0.02, W * 0.024, H * 0.06);
+      }
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let t = -1; t <= 1; t++) {
+        ctx.beginPath();
+        ctx.arc(mrx + t * W * 0.035, mry - H * 0.005, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R AFT PHASER LANCE ARRAYS — narrow emitters on upper shoulders
+    for (const s of [1, -1]) {
+      const ax = s * W * 0.32, ay = -H * 0.38;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ax - W * 0.045, ay - H * 0.02, W * 0.090, H * 0.05);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(ax - W * 0.045, ay - H * 0.02, W * 0.090, H * 0.015);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(ax + i * W * 0.024, ay + H * 0.012, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 2.5;
+    trace(); ctx.stroke();
   }
 
   // ── 9. EVENT HORIZON TYRANT — black-hole shrouded warship ────────

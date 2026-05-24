@@ -454,7 +454,7 @@ export const STAGES: Stage[] = [
         { type: 'cruiser', faction: 'klingon', x: 0.5, path: straight(0.5), dropType: 'life' },
       ]},
     ],
-    boss: { name: 'Singularity Dreadnought', type: 'singularity', hp: 1200, width: 220, height: 140, phases: 5, faction: 'klingon' },
+    boss: { name: 'Singularity Dreadnought', type: 'singularity', hp: 2100, width: 230, height: 145, phases: 5, faction: 'klingon' },
   },
 
   // ── Stage 9: Singularity Core ─────────────────────────────

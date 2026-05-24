@@ -2272,14 +2272,62 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 8. SINGULARITY DREADNOUGHT (curtain, klingon) ─────────
-    case 'singularity':
-      if (phase === 0) { wingShots(c, 5, 2.6); if (pt % 4 === 0) aimedSpread(c, 1, 0, 4); }
-      else if (phase === 1) { bulletWall(c, 10, 2); if (pt % 3 === 0) aimedSpread(c, 3, 0.3, 4); }
-      else if (phase === 2) { bulletWall(c, 12, 2); spiralArms(c, 3, 3); }
-      else if (phase === 3) { bulletWall(c, 12, 1); aimedSpread(c, 5, 0.5, 4); }
-      else { bulletWall(c, 14, 1); spiralArms(c, 5, 3.5); weakPointFire(c); }
+    // ── 8. SINGULARITY DREADNOUGHT (klingon late-game) — per-hardpoint ──
+    // 7 destroyable hardpoints. Signature is the central SINGULARITY
+    // CANNON firing a rapid 5-shell vertical cascade — a wall of heavy
+    // shells in a single lane. Tractor Slow + mine spreads in updateEnemy.
+    // Weapons go quiet during the tractor pulse (one beat at a time).
+    case 'singularity': {
+      if (!boss.weakPoints) break;
+      if (boss.pullActive && boss.pullActive > 0) break;
+      const speedBoost = phase >= 4 ? 0.6 : phase >= 3 ? 0.3 : 0;
+      const rateBoost = phase >= 4 ? 0.55 : phase >= 3 ? 0.7 : phase >= 2 ? 0.85 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'SINGULARITY') {
+          // ── Signature: vertical 5-shell cascade ──
+          // Fires 5 heavy shells in rapid time-offset succession, all
+          // straight down from the cannon. Forms a moving column — you
+          // must slide out of the lane and stay out. Different problem
+          // than Flagship's single beam or Fortress's wide salvo.
+          const muzzleY = wy + boss.height * 0.30;
+          for (let i = 0; i < 5; i++) {
+            // Slight horizontal jitter per shell for visual life
+            const xJ = (Math.random() - 0.5) * 6;
+            bulletAt(c, wx + xJ, muzzleY + i * 18, 0, 2.2 + speedBoost + i * 0.15,
+              { color: col, r: 8, trail: true, ttl: 170, shape: 'torpedo' });
+          }
+          state.screenShake = Math.max(state.screenShake, 6);
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+          state.screenFlashColor = '#ff4488';
+        } else if (wp.weaponType === 'disruptor') {
+          // Forward disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'missile') {
+          // Missile rack — paired homing
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.20;
+            bulletAt(c, wx + side * 4, wy + 4, Math.cos(a) * 2.0, Math.sin(a) * 2.6,
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Aft phaser lance
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        }
+      }
       break;
+    }
 
     // ── 9. EVENT HORIZON TYRANT (vortex_storm, klingon) ───────
     case 'voidtyrant':
@@ -2722,6 +2770,23 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.34, -ch * 0.34, 'phaser',    'L AA PHASER', '#ffdd66', 0.11,  85),
       hardpoint( cw * 0.34, -ch * 0.34, 'phaser',    'R AA PHASER', '#ffdd66', 0.11,  85),
     );
+  } else if (config.type === 'singularity') {
+    // SINGULARITY DREADNOUGHT — Klingon late-game brutal predator with a
+    // weaponized black-hole core. 7 hardpoints:
+    //   central SINGULARITY CANNON (signature: 5-shell vertical cascade)
+    //   L/R FORWARD disruptor batteries
+    //   L/R MISSILE racks (mid-flank)
+    //   L/R AFT PHASER lance arrays
+    // Unique mechanic: TRACTOR SLOW FIELD pulses (slows player movement).
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.18, 'torpedo',   'SINGULARITY', '#ff2244', 0.16, 240),
+      hardpoint(-cw * 0.22,  ch * 0.30, 'disruptor', 'L DISRUPTOR', '#ff6688', 0.12,  90),
+      hardpoint( cw * 0.22,  ch * 0.30, 'disruptor', 'R DISRUPTOR', '#ff6688', 0.12,  90),
+      hardpoint(-cw * 0.40, -ch * 0.04, 'missile',   'L MISSILE',   '#ff8844', 0.12, 130),
+      hardpoint( cw * 0.40, -ch * 0.04, 'missile',   'R MISSILE',   '#ff8844', 0.12, 130),
+      hardpoint(-cw * 0.32, -ch * 0.38, 'phaser',    'L AFT PHASER','#ff4477', 0.11,  90),
+      hardpoint( cw * 0.32, -ch * 0.38, 'phaser',    'R AFT PHASER','#ff4477', 0.11,  90),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2745,7 +2810,7 @@ function spawnBoss(state: ShmupState, config: any): void {
     config.type === 'tvak' || config.type === 'dreadnought' ||
     config.type === 'flagship' || config.type === 'gravitymarauder' ||
     config.type === 'guardian' || config.type === 'sovereign' ||
-    config.type === 'fortress';
+    config.type === 'fortress' || config.type === 'singularity';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2780,11 +2845,14 @@ function spawnBoss(state: ShmupState, config: any): void {
       config.type === 'gravitymarauder' ? 540 :
       config.type === 'guardian'    ? 480 :
       config.type === 'sovereign'   ? 540 :
-      config.type === 'fortress'    ? 660 : 0,
-    // Sovereign reuses pullTimer for its Subspace Push cycle (inverse pull).
+      config.type === 'fortress'    ? 660 :
+      config.type === 'singularity' ? 540 : 0,
+    // pullTimer reused by multiple bosses for periodic player-affecting
+    // pulses (Marauder: pull, Sovereign: push, Singularity: tractor slow).
     pullTimer:
       config.type === 'gravitymarauder' ? 480 :
-      config.type === 'sovereign'       ? 420 : 0,
+      config.type === 'sovereign'       ? 420 :
+      config.type === 'singularity'     ? 510 : 0,
     pullActive: 0,
   });
   state.bossHp = config.hp;
@@ -3165,6 +3233,68 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
             type: 'comet',
             rotation: Math.random() * Math.PI * 2,
             rotSpeed: 0.15,
+          });
+        }
+        enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── Singularity Dreadnought extras: Tractor Slow Field + Mine spreads ──
+    if (enemy.bossType === 'singularity') {
+      const p = state.player;
+      // Tractor Slow Field — every ~8.5s emits a 2s pulse that slows the
+      // player (reuses the existing tractorSlowTimer the T'VAK tractor
+      // weapon already uses — the player's speedMult drops to 0.4 while
+      // it's hot). pullActive frames mark when the field is up.
+      if (enemy.pullActive && enemy.pullActive > 0) {
+        enemy.pullActive--;
+        if (p.alive) p.tractorSlowTimer = Math.max(p.tractorSlowTimer, 4);
+        // Inward purple-red gravity rings — visual sells the slowing pull
+        if (state.tick % 3 === 0 && state.particles.length < 440) {
+          for (let i = 0; i < 5; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 100 + Math.sin(state.tick * 0.12 + i) * 30;
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * r, y: enemy.pos.y + Math.sin(a) * r },
+              vel: { x: -Math.cos(a) * 1.6, y: -Math.sin(a) * 1.6 },
+              life: 16, maxLife: 16, color: '#ff4488', size: 2 + Math.random(),
+            });
+          }
+        }
+      } else {
+        enemy.pullTimer = (enemy.pullTimer ?? 510) - 1;
+        if (enemy.pullTimer <= 0) {
+          enemy.pullActive = 120;
+          enemy.pullTimer = Math.max(360, 510 - (enemy.phase ?? 0) * 40);
+          state.screenShake = Math.max(state.screenShake, 6);
+          state.screenFlash = Math.max(state.screenFlash, 0.20);
+          state.screenFlashColor = '#ff4488';
+          // Engage burst — outward then collapsing
+          for (let i = 0; i < 24; i++) {
+            const a = (Math.PI * 2 / 24) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 5, y: Math.sin(a) * 5 },
+              life: 26, maxLife: 26, color: '#ff4488', size: 2 + Math.random(),
+            });
+          }
+        }
+      }
+      // Periodic MINE SPREAD — 3 mines fanned out in one drop, harder to
+      // weave around than a single drop. Cadence tightens with phase.
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        for (let i = -1; i <= 1; i++) {
+          const mx = enemy.pos.x + i * enemy.width * 0.30;
+          const my = enemy.pos.y + enemy.height * 0.40;
+          state.obstacles.push({
+            pos: { x: mx, y: my },
+            vel: { x: i * 0.4, y: 0.7 + Math.random() * 0.3 },
+            radius: 16,
+            hp: 4,
+            type: 'mine',
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: 0.04,
           });
         }
         enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
