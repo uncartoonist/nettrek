@@ -5450,49 +5450,224 @@ export class ShmupRenderer {
     trace(); ctx.stroke();
   }
 
-  // ── 11. OMEGA SUPREME — final boss, layered fortress + halo ──────
-  private bossHullOmega(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, dk: string, md: string, tick: number, phase: number) {
-    // Outer halo
-    const halo = ctx.createRadialGradient(0, 0, W * 0.3, 0, 0, W * 0.7);
-    halo.addColorStop(0, 'rgba(255,170,30,0.4)');
+  // ── 11. OMEGA SUPREME — Orion finale, regal layered citadel ──────
+  // The most visually impressive boss. Massive layered hull with a
+  // radiant gold halo, prominent OMEGA SIGIL at the center, and 9
+  // visible weapon mounts arrayed across forward + flank + rear
+  // positions. Distinct from Flagship (pirate amber) and Fortress
+  // (military amber) via royal gold + bright cream tones.
+  private bossHullOmega(ctx: CanvasRenderingContext2D, W: number, H: number, _color: string, _dk: string, _md: string, tick: number, phase: number) {
+    const hullDarkest = '#1a1208';
+    const hullDark    = '#3a2810';
+    const hullMid     = '#5a4018';
+    const hullLight   = '#7c5e28';
+    const hullAccent  = '#d4b25c';
+    const hullGold    = '#ffd060';
+    const conduit     = '#ffd44a';
+    const conduitHot  = '#ffe896';
+    const corePulse = 0.7 + Math.sin(tick * 0.08) * 0.25;
+    const phaseGlow = 0.55 + phase * 0.10;
+
+    // ── Outer radiant halo (gold corona — biggest of any boss) ──
+    const halo = ctx.createRadialGradient(0, 0, W * 0.25, 0, 0, W * 0.75);
+    halo.addColorStop(0, 'rgba(255,200,60,0.55)');
+    halo.addColorStop(0.5, 'rgba(220,150,40,0.30)');
     halo.addColorStop(1, 'transparent');
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.7, 0, Math.PI * 2); ctx.fill();
-    // Outer ring of armor lobes (8-pointed star)
-    ctx.fillStyle = dk;
-    ctx.beginPath();
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.75, 0, Math.PI * 2); ctx.fill();
+
+    // ── Slow rotating outer "crown" ring of light ──
+    {
+      ctx.strokeStyle = hullAccent;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.arc(0, 0, W * 0.62, tick * 0.005, tick * 0.005 + Math.PI * 1.6);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.30;
+      ctx.beginPath();
+      ctx.arc(0, 0, W * 0.66, -tick * 0.003, -tick * 0.003 + Math.PI * 1.4);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Silhouette: 16-pointed star (alternating long/short radii) ──
     const pts = 16;
-    for (let i = 0; i < pts; i++) {
-      const a = (Math.PI * 2 / pts) * i - Math.PI / 2;
-      const r = (i % 2 === 0 ? 0.55 : 0.4) * Math.min(W, H);
-      const x = Math.cos(a) * r;
-      const y = Math.sin(a) * r * (H / W);
+    const trace = () => {
+      ctx.beginPath();
+      for (let i = 0; i < pts; i++) {
+        const a = (Math.PI * 2 / pts) * i - Math.PI / 2;
+        const r = (i % 2 === 0 ? 0.55 : 0.40) * Math.min(W, H);
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r * (H / W);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    };
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = hullDark;
+    trace(); ctx.fill();
+
+    // ── Inner armor octagon — bigger and brighter ──
+    ctx.fillStyle = hullMid;
+    const inner = 8;
+    ctx.beginPath();
+    for (let i = 0; i < inner; i++) {
+      const a = (Math.PI * 2 / inner) * i - Math.PI / 2;
+      const x = Math.cos(a) * W * 0.34;
+      const y = Math.sin(a) * H * 0.32;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath(); ctx.fill();
-    // Inner armored body
-    ctx.fillStyle = md;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.28, 0, Math.PI * 2); ctx.fill();
-    // Command core
-    ctx.fillStyle = '#000000';
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, 0, Math.PI * 2); ctx.fill();
-    // Pulsing omega symbol — concentric rings
-    const op = 0.7 + Math.sin(tick * 0.08) * 0.25;
-    for (let r = 0; r < 3; r++) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5 - r * 0.5;
-      ctx.globalAlpha = op * (1 - r * 0.2);
-      ctx.beginPath(); ctx.arc(0, 0, W * (0.08 + r * 0.04), tick * (0.03 + r * 0.01), tick * (0.03 + r * 0.01) + Math.PI * 1.6); ctx.stroke();
-    }
-    // White-hot core
-    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = op * 0.8;
-    ctx.beginPath(); ctx.arc(0, 0, W * 0.04, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-    // 8 cannons around the outer star points
+
+    // ── Radial spokes from core to each star point ──
+    ctx.strokeStyle = hullDarkest; ctx.lineWidth = 2;
     for (let i = 0; i < 8; i++) {
       const a = (Math.PI * 2 / 8) * i - Math.PI / 2;
-      this.bossPort(ctx, Math.cos(a) * W * 0.5, Math.sin(a) * H * 0.48, 5, color, tick, phase);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * W * 0.18, Math.sin(a) * H * 0.17);
+      ctx.lineTo(Math.cos(a) * W * 0.50, Math.sin(a) * H * 0.46);
+      ctx.stroke();
     }
+
+    // ── Inner accent ring ──
+    ctx.strokeStyle = hullGold; ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.30, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ── Central dark command core ──
+    ctx.fillStyle = '#1a0a00';
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.16, 0, Math.PI * 2); ctx.fill();
+
+    // ── OMEGA SIGIL — three concentric counter-rotating arcs ──
+    const op = corePulse;
+    for (let r = 0; r < 3; r++) {
+      ctx.strokeStyle = r === 0 ? conduitHot : conduit;
+      ctx.lineWidth = 2.5 - r * 0.5;
+      ctx.globalAlpha = phaseGlow * op * (1 - r * 0.18);
+      const dir = r % 2 === 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.arc(0, 0, W * (0.085 + r * 0.025), tick * (0.03 + r * 0.012) * dir,
+              tick * (0.03 + r * 0.012) * dir + Math.PI * 1.6);
+      ctx.stroke();
+    }
+    // White-hot center
+    const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, W * 0.06);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.4, conduitHot);
+    cg.addColorStop(1, 'transparent');
+    ctx.fillStyle = cg;
+    ctx.globalAlpha = phaseGlow * (0.7 + op * 0.3);
+    ctx.beginPath(); ctx.arc(0, 0, W * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── Rear engine glow band (top edge) ──
+    for (let i = -2; i <= 2; i++) {
+      const ex = i * W * 0.10, ey = -H * 0.50;
+      const eg = ctx.createRadialGradient(ex, ey, 1, ex, ey, W * 0.08);
+      eg.addColorStop(0, conduitHot);
+      eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg;
+      ctx.globalAlpha = 0.55 + Math.sin(tick * 0.18 + i) * 0.2;
+      ctx.beginPath(); ctx.arc(ex, ey, W * 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ════ WEAPON SYSTEMS (9 hardpoints) ════
+
+    // 1. CENTRAL OMEGA CANNON — prominent ventral barrel
+    {
+      const mx = 0, my = H * 0.14;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.075, my - H * 0.05, W * 0.150, H * 0.10);
+      ctx.fillStyle = hullGold;
+      ctx.fillRect(mx - W * 0.075, my - H * 0.05, W * 0.150, H * 0.022);
+      // Barrel
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mx - W * 0.05, my, W * 0.10, H * 0.30);
+      // Cooling fins
+      ctx.fillStyle = hullLight;
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(mx - W * 0.065, my + H * 0.05 + i * H * 0.06, W * 0.13, H * 0.014);
+      }
+      ctx.fillStyle = conduitHot;
+      ctx.globalAlpha = phaseGlow * (0.7 + corePulse * 0.3);
+      ctx.beginPath(); ctx.arc(mx, my + H * 0.32, W * 0.038, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. L/R FORWARD DISRUPTORS — inner lower flank
+    for (const s of [1, -1]) {
+      const dx = s * W * 0.16, dy = H * 0.32;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(dx - W * 0.022, dy - H * 0.03, W * 0.044, H * 0.14);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(dx - W * 0.022, dy - H * 0.03, W * 0.044, H * 0.022);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(dx, dy + H * 0.10, W * 0.012, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. L/R MISSILE BAYS — outer lower flank, 3-tube
+    for (const s of [1, -1]) {
+      const mrx = s * W * 0.34, mry = H * 0.18;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(mrx - W * 0.06, mry - H * 0.04, W * 0.12, H * 0.10);
+      ctx.fillStyle = '#3a2a08';
+      for (let t = -1; t <= 1; t++) {
+        ctx.fillRect(mrx + t * W * 0.035 - W * 0.012, mry - H * 0.02, W * 0.024, H * 0.07);
+      }
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let t = -1; t <= 1; t++) {
+        ctx.beginPath();
+        ctx.arc(mrx + t * W * 0.035, mry, W * 0.007, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 4. L/R PLASMA TURRETS — mid-flank, domed
+    for (const s of [1, -1]) {
+      const px = s * W * 0.42, py = -H * 0.04;
+      ctx.fillStyle = hullDarkest;
+      ctx.beginPath();
+      ctx.arc(px, py, W * 0.055, Math.PI, Math.PI * 2);
+      ctx.lineTo(px + W * 0.055, py);
+      ctx.lineTo(px - W * 0.055, py);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = hullLight;
+      ctx.beginPath(); ctx.arc(px, py, W * 0.038, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * (0.55 + corePulse * 0.4);
+      ctx.beginPath(); ctx.arc(px, py - W * 0.010, W * 0.012, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 5. L/R AFT PHASER LANCE ARRAYS — upper shoulders
+    for (const s of [1, -1]) {
+      const ax = s * W * 0.28, ay = -H * 0.38;
+      ctx.fillStyle = hullDarkest;
+      ctx.fillRect(ax - W * 0.040, ay - H * 0.02, W * 0.080, H * 0.05);
+      ctx.fillStyle = hullLight;
+      ctx.fillRect(ax - W * 0.040, ay - H * 0.02, W * 0.080, H * 0.015);
+      ctx.fillStyle = conduit;
+      ctx.globalAlpha = phaseGlow * 0.7;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(ax + i * W * 0.022, ay + H * 0.012, W * 0.007, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Bright contour outline ──
+    ctx.strokeStyle = hullAccent;
+    ctx.lineWidth = 3;
+    trace(); ctx.stroke();
   }
 
   private drawPowerUpIcon(ctx: CanvasRenderingContext2D, x: number, y: number, type: PowerUpType, tick: number): void {

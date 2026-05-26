@@ -609,6 +609,6 @@ export const STAGES: Stage[] = [
         { type: 'elite', faction: 'klingon', x: 0.8, path: zigzag(0.8), dropType: 'star' },
       ]},
     ],
-    boss: { name: 'OMEGA SUPREME', type: 'omega', hp: 2000, width: 240, height: 150, phases: 6, faction: 'orion' },
+    boss: { name: 'OMEGA SUPREME', type: 'omega', hp: 3500, width: 260, height: 160, phases: 6, faction: 'orion' },
   },
 ];

@@ -2435,16 +2435,88 @@ function fireBossPattern(state: ShmupState, boss: Enemy): void {
       break;
     }
 
-    // ── 11. OMEGA SUPREME (finale, orion) ─────────────────────
-    case 'omega':
-      // Final boss combines every pattern across its 6 phases
-      if (phase === 0) wingShots(c, 7, 3);
-      else if (phase === 1) { spiralArms(c, 5, 3, 0.06); aimedSpread(c, 3, 0.3, 4); }
-      else if (phase === 2) { bulletWall(c, 10, 2); aimedSpread(c, 5, 0.6, 4); }
-      else if (phase === 3) { radialBurst(c, 16, 2.8, c.t * 0.04); aimedSpread(c, 3, 0.3, 5); }
-      else if (phase === 4) { spiralArms(c, 8, 3.5, 0.08); bulletWall(c, 12, 1); }
-      else { spiralArms(c, 10, 3.8, 0.1); radialBurst(c, 14, 3, -c.t * 0.06); aimedSpread(c, 5, 0.5, 5); weakPointFire(c); }
+    // ── 11. OMEGA SUPREME (orion finale) — per-hardpoint, ULTIMATE ──
+    // 9 destroyable hardpoints (more than any other boss). Central
+    // OMEGA CANNON alternates BOMBARDMENT (Fortress-style 7-shell salvo)
+    // and BEAM (Flagship-style mass driver) each fire — the player can
+    // see the muzzle telegraph between modes. Triple Field Cycle in
+    // updateEnemy keeps the player off-balance. Weapons quiet during
+    // the field pulse — one breath at a time.
+    case 'omega': {
+      if (!boss.weakPoints) break;
+      if (boss.pullActive && boss.pullActive > 0) break;
+      const speedBoost = phase >= 5 ? 0.7 : phase >= 4 ? 0.4 : phase >= 3 ? 0.2 : 0;
+      const rateBoost = phase >= 5 ? 0.5 : phase >= 4 ? 0.65 : phase >= 3 ? 0.8 : phase >= 2 ? 0.9 : 1;
+      for (const wp of boss.weakPoints) {
+        if (!wp.alive || !wp.weaponType) continue;
+        wp.fireTimer = (wp.fireTimer ?? 0) - 1;
+        if (wp.fireTimer > 0) continue;
+        wp.fireTimer = Math.floor((wp.fireCooldown ?? 100) * rateBoost);
+        const wx = boss.pos.x + wp.offset.x;
+        const wy = boss.pos.y + wp.offset.y;
+        const col = wp.color || c.color;
+
+        if (wp.label === 'OMEGA CANNON') {
+          // ── Signature: alternating BOMBARDMENT / BEAM ──
+          // Mode chosen by phaseTimer: every 360 frames flips between
+          // a wide multi-shell salvo and a giant aimed beam.
+          const bombardmentMode = (((boss.phaseTimer ?? 0) % 720) < 360);
+          if (bombardmentMode) {
+            // BOMBARDMENT — 7-shell wide salvo (like Fortress)
+            const W = state.screenW;
+            for (let i = 0; i < 7; i++) {
+              const sx = W * 0.10 + (i / 6) * W * 0.80 + (Math.random() - 0.5) * 30;
+              const tx = sx;
+              const ty = state.screenH * 0.55 + Math.random() * 80;
+              const dx = tx - wx, dy = ty - wy;
+              const dd = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+              bulletAt(c, wx, wy + 8, (dx / dd) * (2.2 + speedBoost), (dy / dd) * (2.2 + speedBoost),
+                { color: col, r: 8, trail: true, ttl: 200, shape: 'torpedo' });
+            }
+          } else {
+            // BEAM — giant aimed mass driver (like Flagship)
+            const muzzleY = wy + boss.height * 0.34;
+            bulletAt(c, wx, muzzleY, 0, 1.8 + speedBoost,
+              { color: col, r: 24, trail: true, ttl: 160, shape: 'phaserlance' });
+            // Leading escort bolts
+            bulletAt(c, wx - 16, muzzleY, 0, 3.2 + speedBoost,
+              { color: col, r: 5, trail: true, ttl: 110, shape: 'bolt' });
+            bulletAt(c, wx + 16, muzzleY, 0, 3.2 + speedBoost,
+              { color: col, r: 5, trail: true, ttl: 110, shape: 'bolt' });
+          }
+          state.screenShake = Math.max(state.screenShake, 8);
+          state.screenFlash = Math.max(state.screenFlash, 0.22);
+          state.screenFlashColor = '#ffd060';
+        } else if (wp.weaponType === 'disruptor') {
+          // Forward disruptor — fast aimed bolt
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 4, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 5, trail: true, ttl: 95, shape: 'bolt' });
+        } else if (wp.weaponType === 'missile') {
+          // Missile bay — paired homing
+          for (const side of [-1, 1]) {
+            const a = Math.PI / 2 + side * 0.20;
+            bulletAt(c, wx + side * 4, wy + 4, Math.cos(a) * 2.0, Math.sin(a) * 2.6,
+              { color: col, r: 6, trail: true, ttl: 140, shape: 'missile' });
+          }
+        } else if (wp.weaponType === 'plasma') {
+          // Plasma turret — 3-blob fan
+          for (let i = -1; i <= 1; i++) {
+            const a = Math.PI / 2 + i * 0.28;
+            bulletAt(c, wx, wy + 4, Math.cos(a) * 2.4, Math.sin(a) * 2.4,
+              { color: col, r: 6, ttl: 120, shape: 'blob' });
+          }
+        } else if (wp.weaponType === 'phaser') {
+          // Aft phaser lance
+          const a = Math.atan2(state.player.pos.y - wy, state.player.pos.x - wx);
+          bulletAt(c, wx, wy + 2, Math.cos(a) * (4.6 + speedBoost), Math.sin(a) * (4.6 + speedBoost),
+            { color: col, r: 4, trail: true, ttl: 85, shape: 'phaserlance' });
+        }
+      }
+      // Phase 5+ final-form bonus — radial burst from the boss core
+      if (phase >= 5 && pt % 36 === 0) radialBurst(c, 16, 2.6, c.t * 0.05);
       break;
+    }
 
     // ── Fallback for anything we missed ────────────────────────
     default:
@@ -2906,6 +2978,28 @@ function spawnBoss(state: ShmupState, config: any): void {
       hardpoint(-cw * 0.28, -ch * 0.36, 'phaser',    'L PHASER',    '#d8c0ff', 0.11,  90),
       hardpoint( cw * 0.28, -ch * 0.36, 'phaser',    'R PHASER',    '#d8c0ff', 0.11,  90),
     );
+  } else if (config.type === 'omega') {
+    // OMEGA SUPREME — the finale. NINE hardpoints (more than any other
+    // boss). Central OMEGA CANNON alternates BOMBARDMENT and BEAM modes
+    // each cycle. Multiple weapon types layered on every flank.
+    //   central OMEGA CANNON (alternates wide salvo / aimed mass-driver beam)
+    //   L/R FORWARD disruptor pairs
+    //   L/R MISSILE bays
+    //   L/R PLASMA turrets
+    //   L/R AFT PHASER lance arrays
+    // HP per hardpoint is lower than 7-hardpoint bosses since there are
+    // 9 (0.09 each = 81% in subsystems, 19% hull = ~665 HP exposed hull).
+    weakPoints.push(
+      hardpoint( 0,           ch * 0.14, 'torpedo',   'OMEGA CANNON','#ffe066', 0.16, 240),
+      hardpoint(-cw * 0.16,  ch * 0.32, 'disruptor', 'L DISRUPTOR', '#ffd44a', 0.09,  85),
+      hardpoint( cw * 0.16,  ch * 0.32, 'disruptor', 'R DISRUPTOR', '#ffd44a', 0.09,  85),
+      hardpoint(-cw * 0.34,  ch * 0.18, 'missile',   'L MISSILE',   '#ffaa22', 0.09, 130),
+      hardpoint( cw * 0.34,  ch * 0.18, 'missile',   'R MISSILE',   '#ffaa22', 0.09, 130),
+      hardpoint(-cw * 0.42, -ch * 0.04, 'plasma',    'L PLASMA',    '#ffcc44', 0.09, 110),
+      hardpoint( cw * 0.42, -ch * 0.04, 'plasma',    'R PLASMA',    '#ffcc44', 0.09, 110),
+      hardpoint(-cw * 0.28, -ch * 0.38, 'phaser',    'L PHASER',    '#ffe88a', 0.09,  90),
+      hardpoint( cw * 0.28, -ch * 0.38, 'phaser',    'R PHASER',    '#ffe88a', 0.09,  90),
+    );
   } else {
     // Generic boss: ring of evenly-spaced weak points
     const numWP = Math.min(Math.max(phaseCount - 1, 1), 4);
@@ -2930,7 +3024,8 @@ function spawnBoss(state: ShmupState, config: any): void {
     config.type === 'flagship' || config.type === 'gravitymarauder' ||
     config.type === 'guardian' || config.type === 'sovereign' ||
     config.type === 'fortress' || config.type === 'singularity' ||
-    config.type === 'voidtyrant' || config.type === 'wraith';
+    config.type === 'voidtyrant' || config.type === 'wraith' ||
+    config.type === 'omega';
 
   state.enemies.push({
     id: nextEnemyId++,
@@ -2969,15 +3064,18 @@ function spawnBoss(state: ShmupState, config: any): void {
       config.type === 'fortress'    ? 660 :
       config.type === 'singularity' ? 540 :
       config.type === 'voidtyrant'  ? 660 :
-      config.type === 'wraith'      ? 420 : 0,
+      config.type === 'wraith'      ? 420 :
+      config.type === 'omega'       ? 480 : 0,
     // pullTimer reused by multiple bosses for periodic player-affecting
-    // pulses (Marauder: pull, Sovereign: push, Singularity: slow, Voidtyrant: gravity ring).
+    // pulses (Marauder: pull, Sovereign: push, Singularity: slow, Voidtyrant: gravity ring, Omega: random).
     pullTimer:
       config.type === 'gravitymarauder' ? 480 :
       config.type === 'sovereign'       ? 420 :
       config.type === 'singularity'     ? 510 :
-      config.type === 'voidtyrant'      ? 540 : 0,
+      config.type === 'voidtyrant'      ? 540 :
+      config.type === 'omega'           ? 420 : 0,
     pullActive: 0,
+    pullMode: 0,
   });
   state.bossHp = config.hp;
   state.bossMaxHp = config.hp;
@@ -3422,6 +3520,128 @@ function updateEnemy(state: ShmupState, enemy: Enemy, W: number, H: number): voi
           });
         }
         enemy.escortTimer = Math.max(360, 540 - (enemy.phase ?? 0) * 50);
+      }
+    }
+
+    // ── OMEGA SUPREME extras: Triple Field Cycle + escalating hazards ──
+    if (enemy.bossType === 'omega') {
+      const p = state.player;
+      // Triple Field Cycle — each activation randomly picks PULL / PUSH /
+      // SLOW (pullMode 0/1/2). Player never knows which is coming until
+      // the engage burst color shows them. Combines mechanics from the
+      // three prior pullActive bosses into one finale.
+      if (enemy.pullActive && enemy.pullActive > 0) {
+        enemy.pullActive--;
+        if (p.alive) {
+          const mode = enemy.pullMode ?? 0;
+          if (mode === 0) {
+            // PULL — like Marauder
+            const dx = enemy.pos.x - p.pos.x;
+            const dy = enemy.pos.y - p.pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 40) {
+              const f = 0.8 + (enemy.phase ?? 0) * 0.18;
+              p.pos.x += (dx / dist) * f;
+              p.pos.y += (dy / dist) * f;
+            }
+          } else if (mode === 1) {
+            // PUSH — like Sovereign
+            const dx = p.pos.x - enemy.pos.x;
+            const dy = p.pos.y - enemy.pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 5 && dist < 360) {
+              const falloff = 1 - dist / 360;
+              const f = (0.9 + (enemy.phase ?? 0) * 0.2) * falloff;
+              p.pos.x += (dx / dist) * f;
+              p.pos.y += (dy / dist) * f;
+            }
+          } else {
+            // SLOW — like Singularity
+            p.tractorSlowTimer = Math.max(p.tractorSlowTimer, 4);
+          }
+        }
+        // Visual: color by mode (gold=pull, amber=push, red-amber=slow)
+        if (state.tick % 3 === 0 && state.particles.length < 440) {
+          const modeColor = enemy.pullMode === 0 ? '#ffd066' : enemy.pullMode === 1 ? '#ffaa44' : '#ff7733';
+          const inward = enemy.pullMode === 0; // pull = inward; push/slow = outward/static
+          for (let i = 0; i < 5; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 100 + Math.sin(state.tick * 0.12 + i) * 28;
+            state.particles.push({
+              pos: { x: enemy.pos.x + Math.cos(a) * r, y: enemy.pos.y + Math.sin(a) * r },
+              vel: { x: (inward ? -1 : 1) * Math.cos(a) * 1.6, y: (inward ? -1 : 1) * Math.sin(a) * 1.6 },
+              life: 18, maxLife: 18, color: modeColor, size: 2 + Math.random(),
+            });
+          }
+        }
+      } else {
+        enemy.pullTimer = (enemy.pullTimer ?? 420) - 1;
+        if (enemy.pullTimer <= 0) {
+          enemy.pullActive = 120;
+          enemy.pullTimer = Math.max(330, 420 - (enemy.phase ?? 0) * 30);
+          enemy.pullMode = Math.floor(Math.random() * 3); // random each time
+          const modeColor = enemy.pullMode === 0 ? '#ffd066' : enemy.pullMode === 1 ? '#ffaa44' : '#ff7733';
+          state.screenShake = Math.max(state.screenShake, 6);
+          state.screenFlash = Math.max(state.screenFlash, 0.22);
+          state.screenFlashColor = modeColor;
+          // Engage burst — large, in the mode color so the player can read it
+          for (let i = 0; i < 36; i++) {
+            const a = (Math.PI * 2 / 36) * i;
+            state.particles.push({
+              pos: { ...enemy.pos },
+              vel: { x: Math.cos(a) * 5.5, y: Math.sin(a) * 5.5 },
+              life: 28, maxLife: 28, color: modeColor, size: 2 + Math.random(),
+            });
+          }
+        }
+      }
+      // Escalating on-screen hazards — cycles through MINE/BARRIER/COMET
+      // each spawn. By phase 3+ adds an Orion fighter escort pair too.
+      enemy.escortTimer = (enemy.escortTimer ?? 0) - 1;
+      if (enemy.escortTimer <= 0) {
+        const ph = enemy.phase ?? 0;
+        const W2 = state.screenW;
+        // Pick a hazard type by cycle counter
+        const cycleType = Math.floor((state.tick / 60)) % 3;
+        if (cycleType === 0) {
+          // Mine spread (3)
+          for (let i = -1; i <= 1; i++) {
+            state.obstacles.push({
+              pos: { x: enemy.pos.x + i * enemy.width * 0.25, y: enemy.pos.y + enemy.height * 0.4 },
+              vel: { x: i * 0.4, y: 0.7 + Math.random() * 0.3 },
+              radius: 16, hp: 4, type: 'mine',
+              rotation: Math.random() * Math.PI * 2, rotSpeed: 0.04,
+            });
+          }
+        } else if (cycleType === 1) {
+          // Barrier pair
+          for (let i = 0; i < 2; i++) {
+            const side = i === 0 ? -1 : 1;
+            state.obstacles.push({
+              pos: { x: W2 / 2 + side * W2 * (0.18 + Math.random() * 0.08), y: enemy.pos.y + enemy.height * 0.5 + 30 },
+              vel: { x: 0, y: 0.6 + Math.random() * 0.2 },
+              radius: 26, hp: 8, type: 'barrier',
+              rotation: 0, rotSpeed: 0,
+            });
+          }
+        } else {
+          // Comet pair from random sides
+          for (let i = 0; i < 2; i++) {
+            const fromLeft = Math.random() < 0.5;
+            state.obstacles.push({
+              pos: { x: fromLeft ? -20 : W2 + 20, y: enemy.pos.y + 60 + Math.random() * (state.screenH * 0.4) },
+              vel: { x: (fromLeft ? 1 : -1) * (3 + Math.random() * 2), y: 1.5 + Math.random() * 1 },
+              radius: 12, hp: 2, type: 'comet',
+              rotation: Math.random() * Math.PI * 2, rotSpeed: 0.15,
+            });
+          }
+        }
+        // Escort pair once phase >= 2 — Orion fighters at the edges
+        if (ph >= 2) {
+          spawnEnemy(state, 'fighter', enemy.faction, W2 * 0.10);
+          spawnEnemy(state, 'fighter', enemy.faction, W2 * 0.90);
+        }
+        enemy.escortTimer = Math.max(330, 480 - ph * 40);
       }
     }
 

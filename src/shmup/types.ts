@@ -96,6 +96,8 @@ export interface Enemy {
   // Singularity Marauder — gravity pull cycle (pulls the player toward the boss).
   pullTimer?: number;     // frames until next pull pulse begins
   pullActive?: number;    // frames remaining of the current pull (0 = inactive)
+  // OMEGA SUPREME — randomized field mode each cycle (0=pull, 1=push, 2=slow).
+  pullMode?: number;
   // Boss specific
   phase?: number;
   phaseTimer?: number;
