@@ -40,8 +40,8 @@ export const STAGES: Stage[] = [
   // ── Stage 1: Neutral Zone Patrol ──────────────────────────
   {
     id: 1,
-    name: 'NEUTRAL ZONE',
-    subtitle: 'Border Patrol — Klingon Incursion',
+    name: 'ECHO DOCK',
+    subtitle: 'First Light — Escort the Departure',
     faction: 'klingon',
     background: '#0a0812',
     duration: 10800, // 3 minutes — first stage, time to learn the controls
@@ -100,8 +100,8 @@ export const STAGES: Stage[] = [
   // ── Stage 2: Romulan Nebula ───────────────────────────────
   {
     id: 2,
-    name: 'ROMULAN NEBULA',
-    subtitle: 'Deep Cover — Cloaked Ambush',
+    name: 'CINDER CUT',
+    subtitle: 'Cinder Run — Canyon Approach',
     faction: 'romulan',
     background: '#060a12',
     duration: 11400, // 3:10
@@ -152,8 +152,8 @@ export const STAGES: Stage[] = [
   // ── Stage 3: Orion Syndicate ──────────────────────────────
   {
     id: 3,
-    name: 'ORION SYNDICATE',
-    subtitle: 'Smuggler\'s Run — Syndicate Blockade',
+    name: 'GLASSWAKE BELT',
+    subtitle: 'The Missing Freight — Recover the Rig',
     faction: 'orion',
     background: '#0c0806',
     duration: 12000, // 3:20
@@ -203,8 +203,8 @@ export const STAGES: Stage[] = [
   // Music: Gravitational Lull. Ambient, slow, ominous. Signature: vortex_storm.
   {
     id: 4,
-    name: 'GRAVITY WELL',
-    subtitle: 'Caught in the Pull — Singularity Sector',
+    name: 'GLASSWAKE PASSAGE',
+    subtitle: 'Ice Belt — Lead the Freighter Through',
     faction: 'romulan',
     background: '#080510',
     duration: 12000, // 3:20
@@ -223,8 +223,8 @@ export const STAGES: Stage[] = [
   // ── Stage 5: Deep Space Anomaly ───────────────────────────
   {
     id: 5,
-    name: 'DEEP SPACE ANOMALY',
-    subtitle: 'Uncharted Sector — Mixed Hostiles',
+    name: 'VESPER MARKET',
+    subtitle: 'Open the Dock — Perimeter Defense',
     faction: 'klingon',
     background: '#050510',
     duration: 12600, // 3:30
@@ -282,8 +282,8 @@ export const STAGES: Stage[] = [
   // ── Stage 6: Wormhole Transit ─────────────────────────────
   {
     id: 6,
-    name: 'WORMHOLE TRANSIT',
-    subtitle: 'Dimensional Rift — Reality Distortion',
+    name: 'CHOIR REEF',
+    subtitle: 'The Audition — Reef Run',
     faction: 'romulan',
     background: '#0a0020',
     duration: 13200, // 3:40
@@ -330,8 +330,8 @@ export const STAGES: Stage[] = [
   // ── Stage 7: Final Fortress ───────────────────────────────
   {
     id: 7,
-    name: 'FINAL FORTRESS',
-    subtitle: 'Enemy Stronghold — All-Out Assault',
+    name: 'BLACKGLASS REACH',
+    subtitle: 'Split the Wing — Coordinated Convoy',
     faction: 'orion',
     background: '#0c0404',
     duration: 13800, // 3:50
@@ -400,8 +400,8 @@ export const STAGES: Stage[] = [
   // ── Stage 8: Black Hole Perimeter ─────────────────────────
   {
     id: 8,
-    name: 'BLACK HOLE PERIMETER',
-    subtitle: 'Event Horizon — Gravitational Collapse',
+    name: 'QUIET CROSSING',
+    subtitle: 'Sensor Net — Slip the Blockade',
     faction: 'klingon',
     background: '#020008',
     duration: 14400, // 4:00
@@ -461,8 +461,8 @@ export const STAGES: Stage[] = [
   // Music: Gravitational Lull 1. Tension building, reality bending. Signature: vortex_storm.
   {
     id: 9,
-    name: 'SINGULARITY CORE',
-    subtitle: 'Event Horizon — Reality Bends',
+    name: 'RELAY NINE',
+    subtitle: 'Relay Defense — Reconnect the Signal',
     faction: 'klingon',
     background: '#050208',
     duration: 15000, // 4:10
@@ -481,8 +481,8 @@ export const STAGES: Stage[] = [
   // ── Stage 10: Subspace Rift ───────────────────────────────
   {
     id: 10,
-    name: 'SUBSPACE RIFT',
-    subtitle: 'Between Dimensions — Phase Shifted',
+    name: 'ONE MORE VOICE',
+    subtitle: 'Rescue Escort — Hold the Line',
     faction: 'romulan',
     background: '#080014',
     duration: 15600, // 4:20
@@ -542,8 +542,8 @@ export const STAGES: Stage[] = [
   // ── Stage 11: Omega Citadel ───────────────────────────────
   {
     id: 11,
-    name: 'OMEGA CITADEL',
-    subtitle: 'The Final Stand — All Factions United Against You',
+    name: "LANTERN'S END",
+    subtitle: 'The Long Encore — Break the Last Blockade',
     faction: 'orion',
     background: '#0a0000',
     duration: 16800, // 4:40 — final stage

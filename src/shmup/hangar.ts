@@ -14,7 +14,7 @@ const UPGRADES: UpgradeDef[] = [
   { id: 'wingGun', name: 'WING GUNS', maxLevel: 4, costs: [8, 20, 40, 80], description: ['Basic wings', 'Rapid wings', 'Spread wings', 'Homing wings'] },
   { id: 'missile', name: 'MISSILES', maxLevel: 3, costs: [12, 30, 60], description: ['Homing missile', 'Dual missile', 'Swarm missiles'] },
   { id: 'laser', name: 'LASER BEAM', maxLevel: 2, costs: [20, 50], description: ['Beam emitter', 'Heavy beam'] },
-  { id: 'phaser', name: 'PHASER ARRAY', maxLevel: 3, costs: [15, 35, 70], description: ['Phaser sweep', 'Wide phaser', 'Heavy phaser'] },
+  { id: 'phaser', name: 'PULSE ARRAY', maxLevel: 3, costs: [15, 35, 70], description: ['Pulse sweep', 'Wide pulse', 'Heavy pulse'] },
   { id: 'shield', name: 'SHIELDS', maxLevel: 4, costs: [10, 25, 50, 100], description: ['+1 shield', '+2 shields', '+3 shields', '+4 shields'] },
   { id: 'bomb', name: 'BOMB PAYLOAD', maxLevel: 3, costs: [8, 20, 40], description: ['+1 bomb', '+2 bombs', '+3 bombs'] },
 ];
@@ -71,11 +71,11 @@ export class HangarScreen {
 
       // ── Helper: draw line at given opacity ──
       const wl = (x1: number, y1: number, x2: number, y2: number, alpha: number = 1, w: number = 0.5) => {
-        ctx.strokeStyle = '#0cc'; ctx.globalAlpha = alpha * 0.9; ctx.lineWidth = w;
+        ctx.strokeStyle = '#5c7cff'; ctx.globalAlpha = alpha * 0.9; ctx.lineWidth = w;
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
       };
       const we = (cx: number, cy: number, rx: number, ry: number, alpha: number = 1, w: number = 0.5) => {
-        ctx.strokeStyle = '#0cc'; ctx.globalAlpha = alpha * 0.9; ctx.lineWidth = w;
+        ctx.strokeStyle = '#5c7cff'; ctx.globalAlpha = alpha * 0.9; ctx.lineWidth = w;
         ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
       };
 
@@ -99,7 +99,7 @@ export class HangarScreen {
         wl(ix, sy + iy, ox, sy + oy, 0.12);
       }
       // Phaser strip (arc on rim)
-      ctx.strokeStyle = '#0cc'; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#5c7cff'; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.ellipse(0, sy, sr * 0.92, sry * 0.92, 0, -0.5, 0.5); ctx.stroke();
       ctx.beginPath(); ctx.ellipse(0, sy, sr * 0.92, sry * 0.92, 0, Math.PI - 0.5, Math.PI + 0.5); ctx.stroke();
       // Bridge module
@@ -109,11 +109,11 @@ export class HangarScreen {
       for (let i = -3; i <= 3; i++) {
         const wx = i * 5;
         ctx.globalAlpha = 0.2;
-        ctx.fillStyle = '#0cc';
+        ctx.fillStyle = '#5c7cff';
         ctx.fillRect(wx - 1, sy - 12, 2, 2);
       }
       // Impulse engines (rear of saucer)
-      ctx.globalAlpha = 0.35; ctx.fillStyle = '#0cc';
+      ctx.globalAlpha = 0.35; ctx.fillStyle = '#5c7cff';
       ctx.fillRect(-15, sy + sry - 5, 30, 4);
 
       // ── Neck / dorsal connector ──
@@ -129,7 +129,7 @@ export class HangarScreen {
       // ── Engineering hull (secondary hull) ──
       const ey = 110; // engineering center
       // Main body — tapered shape
-      ctx.strokeStyle = '#0cc'; ctx.globalAlpha = 0.5; ctx.lineWidth = 0.6;
+      ctx.strokeStyle = '#5c7cff'; ctx.globalAlpha = 0.5; ctx.lineWidth = 0.6;
       ctx.beginPath();
       ctx.moveTo(-12, 50);
       ctx.quadraticCurveTo(-35, 70, -38, ey);
@@ -145,7 +145,7 @@ export class HangarScreen {
       }
       // Shuttle bay (rear)
       we(0, ey + 55, 10, 6, 0.25);
-      ctx.globalAlpha = 0.1; ctx.fillStyle = '#0cc';
+      ctx.globalAlpha = 0.1; ctx.fillStyle = '#5c7cff';
       ctx.fillRect(-8, ey + 50, 16, 10);
 
       // ── Deflector dish ──
@@ -169,7 +169,7 @@ export class HangarScreen {
       for (const side of [-1, 1]) {
         const nx = side * pyS;
         // Nacelle body
-        ctx.strokeStyle = '#0cc'; ctx.globalAlpha = 0.5; ctx.lineWidth = 0.6;
+        ctx.strokeStyle = '#5c7cff'; ctx.globalAlpha = 0.5; ctx.lineWidth = 0.6;
         ctx.beginPath();
         ctx.moveTo(nx - nw, ny + nl * 0.45);
         ctx.quadraticCurveTo(nx - nw, ny - nl * 0.35, nx - nw * 0.6, ny - nl * 0.45);
@@ -183,7 +183,7 @@ export class HangarScreen {
           wl(nx - nw + 2, gy, nx + nw - 2, gy, 0.08);
         }
         // Warp field emitter (blue strip along nacelle)
-        ctx.strokeStyle = '#0cc'; ctx.globalAlpha = 0.2; ctx.lineWidth = 2;
+        ctx.strokeStyle = '#5c7cff'; ctx.globalAlpha = 0.2; ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(nx, ny - nl * 0.4);
         ctx.lineTo(nx, ny + nl * 0.4);
@@ -205,7 +205,7 @@ export class HangarScreen {
 
       // ── Registration markings (very faint) ──
       ctx.globalAlpha = 0.08;
-      ctx.fillStyle = '#0cc';
+      ctx.fillStyle = '#5c7cff';
       ctx.font = '10px Courier New';
       ctx.textAlign = 'center';
       ctx.fillText('NCC-1701', 0, sy + 10);
@@ -224,7 +224,7 @@ export class HangarScreen {
 
     this.container.innerHTML = `
       <div class="hangar-panel">
-        <h1 class="hangar-title">FEDERATION HANGAR</h1>
+        <h1 class="hangar-title">FLIGHT DECK</h1>
         <div class="hangar-stars">⚡ ${stars} COINS AVAILABLE</div>
 
         <div class="hangar-upgrades">
@@ -323,7 +323,7 @@ export class HangarScreen {
         .upgrade-desc { font-size: 10px !important; }
         .bar-seg { width: 10px !important; height: 8px !important; }
       }
-      .hangar-title { color: #0cc; font-size: 42px; letter-spacing: 6px; margin-bottom: 6px; text-shadow: 0 0 30px rgba(0,204,255,0.3); }
+      .hangar-title { color: #5c7cff; font-size: 42px; letter-spacing: 6px; margin-bottom: 6px; text-shadow: 0 0 30px rgba(92,124,255,0.3); }
       .hangar-stars { color: #ffdd00; font-size: 18px; margin-bottom: 28px; }
       .hangar-upgrades { text-align: left; margin-bottom: 30px; }
       .upgrade-row {
@@ -331,13 +331,13 @@ export class HangarScreen {
         border-bottom: 1px solid rgba(255,255,255,0.06);
       }
       .upgrade-info { flex: 1; }
-      .upgrade-name { display: block; font-size: 14px; color: #0cc; font-weight: bold; }
+      .upgrade-name { display: block; font-size: 14px; color: #5c7cff; font-weight: bold; }
       .upgrade-level { font-size: 11px; color: #667; }
       .upgrade-desc { display: block; font-size: 11px; color: #888; margin-top: 3px; }
       .upgrade-desc.maxed { color: #4a4; }
       .upgrade-bar { display: flex; gap: 4px; }
       .bar-seg { width: 16px; height: 10px; border: 1px solid #334; border-radius: 2px; }
-      .bar-seg.filled { background: #0cc; border-color: #0cc; }
+      .bar-seg.filled { background: #5c7cff; border-color: #5c7cff; }
       .upgrade-btn {
         padding: 6px 14px; border: 1px solid #ffdd00; border-radius: 4px;
         background: rgba(255,221,0,0.1); color: #ffdd00; cursor: pointer;
@@ -351,11 +351,11 @@ export class HangarScreen {
       .stage-list { display: flex; flex-direction: column; gap: 10px; }
       .stage-btn {
         padding: 14px 18px; border: 1px solid #334; border-radius: 6px;
-        background: rgba(0,204,255,0.04); cursor: pointer; text-align: left;
+        background: rgba(92,124,255,0.04); cursor: pointer; text-align: left;
         font-family: 'Courier New'; transition: all 0.2s;
       }
-      .stage-btn:hover { border-color: #0cc; background: rgba(0,204,255,0.1); }
-      .stage-name { display: block; color: #0cc; font-size: 16px; font-weight: bold; }
+      .stage-btn:hover { border-color: #5c7cff; background: rgba(92,124,255,0.1); }
+      .stage-name { display: block; color: #5c7cff; font-size: 16px; font-weight: bold; }
       .stage-sub { display: block; color: #667; font-size: 12px; margin-top: 3px; }
     `;
     document.head.appendChild(style);
