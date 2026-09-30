@@ -24,8 +24,8 @@ export class MenuRenderer {
   private buildHTML(): string {
     return `
       <div class="menu-panel">
-        <h1 class="menu-title">NETTREK</h1>
-        <p class="menu-subtitle">TACTICAL SPACE COMBAT — BETA</p>
+        <h1 class="menu-title">OUTER WING</h1>
+        <p class="menu-subtitle">TEST FLIGHT — PROVING GROUNDS</p>
 
         <div class="menu-section">
           <h2>SELECT FACTION</h2>
@@ -87,8 +87,8 @@ export class MenuRenderer {
         text-align: center; max-width: 600px; padding: 40px;
       }
       .menu-title {
-        font-size: 48px; color: #0cc; margin: 0;
-        text-shadow: 0 0 20px rgba(0,204,255,0.4);
+        font-size: 48px; color: #8fa6ff; margin: 0;
+        text-shadow: 0 0 24px rgba(92,124,255,0.5);
         letter-spacing: 8px;
       }
       .menu-subtitle {

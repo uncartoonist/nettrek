@@ -290,19 +290,9 @@ menuOverlay.style.cssText = `
   font-family:'Courier New',monospace;color:#ccc;flex-direction:column;
 `;
 menuOverlay.innerHTML = `
-  <h1 style="color:#0cc;font-size:clamp(28px,8vw,48px);letter-spacing:clamp(4px,1.5vw,8px);text-shadow:0 0 20px rgba(0,204,255,0.4);margin:0;">NETTREK</h1>
-  <p style="color:#556;font-size:clamp(9px,2.5vw,11px);letter-spacing:clamp(1px,0.8vw,3px);margin:8px 0 clamp(20px,5vw,40px);">TACTICAL ASSAULT — BETA</p>
-  <button id="start-btn" style="padding:clamp(10px,3vw,14px) clamp(24px,6vw,40px);font-size:clamp(13px,3.5vw,16px);font-weight:bold;background:rgba(0,204,255,0.1);border:2px solid #0cc;color:#0cc;cursor:pointer;font-family:'Courier New';border-radius:4px;letter-spacing:clamp(1px,0.5vw,3px);width:auto;max-width:90vw;">START MISSION</button>
-  <div style="margin-top:30px;font-size:10px;color:#445;text-align:center;line-height:1.8;">
-    <p>Mouse: move & auto-fire | Right-click: special weapons</p>
-    <p>X/B: bomb | Shift: special (keyboard) | ESC: exit</p>
-    <p>Touch: drag to move, auto-fire enabled</p>
-  </div>
-  <div style="margin-top:24px;">
-    <input type="email" id="menu-email" placeholder="your@email.com" style="padding:8px 12px;border:1px solid #333;border-radius:4px;background:rgba(255,255,255,0.03);color:#ccc;font-family:'Courier New';font-size:12px;width:200px;outline:none;" />
-    <button id="menu-signup" style="padding:8px 12px;border:1px solid #0a6;border-radius:4px;background:rgba(0,170,100,0.1);color:#0a6;cursor:pointer;font-family:'Courier New';font-size:11px;margin-left:6px;">BETA SIGNUP</button>
-    <div id="menu-signup-status" style="margin-top:6px;font-size:10px;color:#0a6;min-height:14px;"></div>
-  </div>
+  <h1 style="color:#8fa6ff;font-size:clamp(28px,8vw,48px);letter-spacing:clamp(4px,1.5vw,8px);text-shadow:0 0 24px rgba(92,124,255,0.5);margin:0;">OUTER WING</h1>
+  <p style="color:#667;font-size:clamp(9px,2.5vw,11px);letter-spacing:clamp(1px,0.8vw,3px);margin:8px 0 clamp(20px,5vw,40px);">TEST FLIGHT — PROVING GROUNDS</p>
+  <button id="start-btn" style="padding:clamp(10px,3vw,14px) clamp(24px,6vw,40px);font-size:clamp(13px,3.5vw,16px);font-weight:bold;background:rgba(92,124,255,0.12);border:2px solid #5c7cff;color:#c4ceff;cursor:pointer;font-family:'Courier New';border-radius:4px;letter-spacing:clamp(1px,0.5vw,3px);width:auto;max-width:90vw;">START TEST FLIGHT</button>
 `;
 document.body.appendChild(menuOverlay);
 
@@ -363,44 +353,6 @@ document.getElementById('start-btn')!.addEventListener('click', () => {
   menuOverlay.style.display = 'none';
   state.phase = 'hangar';
   hangar.show(); const _pb = document.getElementById("pause-btn"); if (_pb) _pb.style.display = "none";
-});
-
-document.getElementById('menu-signup')!.addEventListener('click', async () => {
-  const emailInput = document.getElementById('menu-email') as HTMLInputElement;
-  const status = document.getElementById('menu-signup-status')!;
-  const email = emailInput.value.trim();
-  if (!email || !email.includes('@')) { status.textContent = 'Enter valid email'; status.style.color = '#f55'; return; }
-  // Resolve API base. Precedence:
-  //   1) VITE_API_BASE_URL — set at build time (preferred)
-  //   2) localhost dev → http://localhost:4301
-  //   3) production → same-origin /api (HTTPS-safe; the CloudFront origin
-  //      should be configured to forward /api/* to the backend)
-  // The old hard-coded http://54.224.95.1:4301 was blocked as mixed content
-  // on the HTTPS CloudFront site, so every signup silently failed and the
-  // catch path lied about "Saved locally" without saving anything.
-  const apiBase =
-    (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-    (window.location.hostname === 'localhost' ? 'http://localhost:4301' : `${window.location.origin}/api`);
-  try {
-    const res = await fetch(`${apiBase}/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || 'Signup failed');
-    status.textContent = data.message || 'Signed up!'; status.style.color = '#0a6'; emailInput.value = '';
-  } catch (err) {
-    // Actually persist locally so the user's email is recoverable. Queues
-    // pending signups in localStorage; a background sync (future) can flush.
-    try {
-      const key = 'nettrek-pending-signups';
-      const queue = JSON.parse(localStorage.getItem(key) || '[]');
-      if (Array.isArray(queue) && !queue.includes(email)) {
-        queue.push(email);
-        localStorage.setItem(key, JSON.stringify(queue.slice(-50)));
-      }
-      status.textContent = 'Saved locally — will retry later'; status.style.color = '#fa0';
-    } catch {
-      status.textContent = 'Signup failed'; status.style.color = '#f55';
-    }
-  }
 });
 
 // ── Pause state ──
